@@ -201,6 +201,7 @@ export default function AdminPage() {
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                   <span style={{ fontFamily: "'JetBrains Mono'", fontSize: 11, color: '#3b82f6', background: 'rgba(59,130,246,.12)', padding: '3px 8px', borderRadius: 4, fontWeight: 600 }}>{site.code}</span>
                   <button onClick={() => { navigator.clipboard.writeText(getSiteUrl(site.code)); setToast('URL copiada') }} style={{ padding: '5px 10px', borderRadius: 5, border: '1px solid #1e2a45', background: 'transparent', color: '#8892a8', fontSize: 10, cursor: 'pointer', fontFamily: 'inherit' }}>Copiar URL</button>
+                  <button onClick={() => setModal({ type: 'qr', data: site })} style={{ padding: '5px 10px', borderRadius: 5, border: '1px solid rgba(59,130,246,.25)', background: 'rgba(59,130,246,.12)', color: '#3b82f6', fontSize: 10, cursor: 'pointer', fontFamily: 'inherit', fontWeight: 600 }}>Ver QR</button>
                   <button onClick={() => setModal({ type: 'site', data: site })} style={{ background: 'none', border: 'none', color: '#8892a8', cursor: 'pointer', fontSize: 11, fontFamily: 'inherit' }}>Editar</button>
                   <button onClick={() => { if (confirm('Eliminar ' + site.name + '?')) delSite(site.id) }} style={{ background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer', fontSize: 11, fontFamily: 'inherit' }}>Eliminar</button>
                 </div>
@@ -214,6 +215,7 @@ export default function AdminPage() {
       {/* Employee Modal */}
       {modal?.type === 'emp' && <EmpModal data={modal.data} sites={sites} onSave={saveEmp} onClose={() => setModal(null)} />}
       {modal?.type === 'site' && <SiteModal data={modal.data} onSave={saveSite} onClose={() => setModal(null)} />}
+      {modal?.type === 'qr' && <QrModal site={modal.data} url={getSiteUrl(modal.data.code)} onClose={() => setModal(null)} />}
 
       {/* Toast */}
       {toast && <div style={{ position: 'fixed', bottom: 20, right: 20, background: '#1a2035', border: '1px solid rgba(16,185,129,.25)', borderRadius: 8, padding: '10px 16px', fontSize: 12, fontWeight: 500, zIndex: 200, color: '#10b981' }}>{toast}</div>}
@@ -284,6 +286,59 @@ function SiteModal({ data, onSave, onClose }) {
         <div style={{ display: 'flex', gap: 8 }}>
           <button disabled={!valid} onClick={() => onSave(f)} style={{ flex: 1, padding: '10px 16px', borderRadius: 7, border: 'none', background: valid ? '#3b82f6' : '#1e2a45', color: '#fff', fontSize: 12, fontWeight: 600, cursor: valid ? 'pointer' : 'not-allowed', fontFamily: 'inherit' }}>Guardar</button>
           <button onClick={onClose} style={{ padding: '10px 16px', borderRadius: 7, border: '1px solid #1e2a45', background: 'transparent', color: '#8892a8', fontSize: 12, cursor: 'pointer', fontFamily: 'inherit' }}>Cancelar</button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function QrModal({ site, url, onClose }) {
+  const qrImgUrl = `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(url)}`
+  
+  function printQR() {
+    const w = window.open('', '_blank')
+    w.document.write(`
+      <html><head><title>QR - ${site.name}</title>
+      <style>
+        body { font-family: Arial, sans-serif; text-align: center; padding: 40px; }
+        img { width: 300px; height: 300px; margin: 20px 0; }
+        h1 { font-size: 24px; margin-bottom: 4px; }
+        .code { font-family: monospace; font-size: 20px; letter-spacing: 3px; font-weight: bold; margin: 10px 0; }
+        .addr { color: #666; font-size: 14px; }
+        .url { color: #999; font-size: 10px; margin-top: 10px; word-break: break-all; }
+        .logo { width: 60px; margin-bottom: 10px; }
+        @media print { button { display: none; } }
+      </style></head><body>
+        <img class="logo" src="/logo.jpeg" alt="GM" />
+        <h1>${site.name}</h1>
+        <div class="addr">${site.address || ''}</div>
+        <img src="${qrImgUrl}" alt="QR Code" />
+        <div class="code">${site.code}</div>
+        <div>Escanea para registrar asistencia</div>
+        <div class="url">${url}</div>
+        <br><button onclick="window.print()" style="padding:10px 30px;font-size:16px;cursor:pointer">Imprimir</button>
+      </body></html>
+    `)
+    w.document.close()
+  }
+
+  return (
+    <div onClick={onClose} style={{ position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', background: 'rgba(0,0,0,.7)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100, backdropFilter: 'blur(4px)' }}>
+      <div onClick={e => e.stopPropagation()} style={{ background: '#1a2035', border: '1px solid #1e2a45', borderRadius: 14, padding: 24, width: '100%', maxWidth: 380, textAlign: 'center' }}>
+        <h3 style={{ fontSize: 16, fontWeight: 700, marginBottom: 4 }}>{site.name}</h3>
+        <p style={{ fontSize: 12, color: '#8892a8', marginBottom: 16 }}>{site.address}</p>
+        
+        <div style={{ background: '#fff', borderRadius: 12, padding: 20, display: 'inline-block', marginBottom: 16 }}>
+          <img src={qrImgUrl} alt="QR Code" style={{ width: 220, height: 220, display: 'block' }} />
+        </div>
+        
+        <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 18, fontWeight: 700, letterSpacing: 3, marginBottom: 4 }}>{site.code}</div>
+        <div style={{ fontSize: 11, color: '#4a5568', marginBottom: 16, wordBreak: 'break-all' }}>{url}</div>
+        
+        <div style={{ display: 'flex', gap: 8, justifyContent: 'center' }}>
+          <button onClick={printQR} style={{ padding: '10px 20px', borderRadius: 7, border: 'none', background: '#3b82f6', color: '#fff', fontSize: 12, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}>Imprimir QR</button>
+          <button onClick={() => { navigator.clipboard.writeText(url); }} style={{ padding: '10px 20px', borderRadius: 7, border: '1px solid #1e2a45', background: 'transparent', color: '#8892a8', fontSize: 12, cursor: 'pointer', fontFamily: 'inherit' }}>Copiar URL</button>
+          <button onClick={onClose} style={{ padding: '10px 20px', borderRadius: 7, border: '1px solid #1e2a45', background: 'transparent', color: '#8892a8', fontSize: 12, cursor: 'pointer', fontFamily: 'inherit' }}>Cerrar</button>
         </div>
       </div>
     </div>
