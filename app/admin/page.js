@@ -195,7 +195,7 @@ export default function AdminPage() {
                 <div>
                   <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 2 }}>{site.name}</div>
                   <div style={{ fontSize: 11, color: '#8892a8' }}>{site.address}</div>
-                  <div style={{ fontSize: 9, color: '#4a5568', marginTop: 4 }}>Gracia: {site.grace_mins}min | Falta: {site.absent_mins}min | Radio: {site.radius_m}m</div>
+                  <div style={{ fontSize: 9, color: '#4a5568', marginTop: 4 }}>Tolerancia: {site.grace_mins}min | Radio GPS: {site.radius_m}m</div>
                   <div style={{ fontSize: 10, color: '#3b82f6', marginTop: 4, wordBreak: 'break-all' }}>QR: {getSiteUrl(site.code)}</div>
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -276,12 +276,11 @@ function SiteModal({ data, onSave, onClose }) {
             </div>
           ))}
         </div>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 14 }}>
-          {[['Gracia (min)', 'grace_mins'], ['Falta (min)', 'absent_mins']].map(([l, k]) => (
-            <div key={k}><label style={{ fontSize: 10, fontWeight: 600, color: '#8892a8', display: 'block', marginBottom: 4 }}>{l}</label>
-              <input type="number" value={f[k] || 0} onChange={e => upd(k, parseInt(e.target.value) || 0)} style={{ width: '100%', background: '#0d1220', border: '1px solid #1e2a45', color: '#f1f5f9', fontSize: 12, padding: '8px 10px', borderRadius: 6, outline: 'none', fontFamily: 'inherit' }} />
-            </div>
-          ))}
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: 8, marginBottom: 14 }}>
+          <div><label style={{ fontSize: 10, fontWeight: 600, color: '#8892a8', display: 'block', marginBottom: 4 }}>Tolerancia (minutos despues de la hora de entrada)</label>
+            <input type="number" value={f.grace_mins || 0} onChange={e => upd('grace_mins', parseInt(e.target.value) || 0)} style={{ width: '100%', background: '#0d1220', border: '1px solid #1e2a45', color: '#f1f5f9', fontSize: 12, padding: '8px 10px', borderRadius: 6, outline: 'none', fontFamily: 'inherit' }} />
+            <div style={{ fontSize: 9, color: '#4a5568', marginTop: 4 }}>Ej: Si la entrada es 10:00 y tolerancia 15min, llegar hasta 10:15 = Tolerancia, 10:16+ = Retardo</div>
+          </div>
         </div>
         <div style={{ display: 'flex', gap: 8 }}>
           <button disabled={!valid} onClick={() => onSave(f)} style={{ flex: 1, padding: '10px 16px', borderRadius: 7, border: 'none', background: valid ? '#3b82f6' : '#1e2a45', color: '#fff', fontSize: 12, fontWeight: 600, cursor: valid ? 'pointer' : 'not-allowed', fontFamily: 'inherit' }}>Guardar</button>
