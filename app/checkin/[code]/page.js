@@ -1,7 +1,6 @@
 'use client'
 import { useState, useEffect } from 'react'
 import { supabase } from '../../../lib/supabase'
-
 const S = {
   page: { minHeight: '100vh', background: '#050810', display: 'flex', flexDirection: 'column', alignItems: 'center' },
   bar: { width: '100%', padding: '14px 18px', display: 'flex', alignItems: 'center', justifyContent: 'center', borderBottom: '1px solid #1e2a45', background: '#111827', gap: 10 },
@@ -23,21 +22,89 @@ const S = {
   muted: { fontSize: 11, color: '#4a5568' },
   status: (c, bg) => ({ display: 'inline-flex', padding: '3px 10px', borderRadius: 5, fontSize: 11, fontWeight: 600, color: c, background: bg }),
 }
-
 function haversine(lat1, lng1, lat2, lng2) {
   const R = 6371e3, toR = n => n * Math.PI / 180
   const dLat = toR(lat2 - lat1), dLng = toR(lng2 - lng1)
   const a = Math.sin(dLat / 2) ** 2 + Math.cos(toR(lat1)) * Math.cos(toR(lat2)) * Math.sin(dLng / 2) ** 2
   return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))
 }
-
 function fmtTime(d) { return d.toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit', hour12: false }) }
+
+// ─── Sales Modal ──────────────────────────────────────────────────────────────
+function SalesModal({ onConfirm, onSkip }) {
+  const [amount, setAmount] = useState('')
+  const [err, setErr] = useState('')
+
+  function handleConfirm() {
+    const val = parseFloat(amount.replace(/,/g, ''))
+    if (isNaN(val) || val < 0) { setErr('Ingresa un monto valido'); return }
+    onConfirm(val)
+  }
+
+  function formatDisplay(raw) {
+    const digits = raw.replace(/[^0-9.]/g, '')
+    const num = parseFloat(digits)
+    if (isNaN(num)) return digits
+    return num.toLocaleString('es-MX', { minimumFractionDigits: 0, maximumFractionDigits: 2 })
+  }
+
+  return (
+    <div style={{ position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', background: 'rgba(0,0,0,.8)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 200, backdropFilter: 'blur(6px)', padding: '0 16px' }}>
+      <div style={{ background: '#1a2035', border: '1px solid #1e2a45', borderRadius: 18, padding: 28, width: '100%', maxWidth: 360, textAlign: 'center' }}>
+
+        {/* Icon */}
+        <div style={{ width: 56, height: 56, borderRadius: 16, background: 'rgba(16,185,129,.12)', border: '1px solid rgba(16,185,129,.2)', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 16px', fontSize: 26 }}>
+          💰
+        </div>
+
+        <div style={{ fontSize: 17, fontWeight: 700, marginBottom: 6 }}>Cierre del Dia</div>
+        <div style={{ fontSize: 12, color: '#8892a8', marginBottom: 22 }}>
+          ¿Cuanto vendiste hoy?<br />
+          <span style={{ fontSize: 11, color: '#4a5568' }}>Puedes omitirlo si no aplica.</span>
+        </div>
+
+        {/* Amount input */}
+        <div style={{ position: 'relative', marginBottom: err ? 8 : 20 }}>
+          <span style={{ position: 'absolute', left: 16, top: '50%', transform: 'translateY(-50%)', fontSize: 18, fontWeight: 700, color: '#4a5568', pointerEvents: 'none' }}>$</span>
+          <input
+            type="number"
+            inputMode="decimal"
+            placeholder="0"
+            value={amount}
+            onChange={e => { setAmount(e.target.value); setErr('') }}
+            onKeyDown={e => { if (e.key === 'Enter') handleConfirm() }}
+            autoFocus
+            style={{ width: '100%', background: '#0d1220', border: '1px solid ' + (err ? '#ef4444' : '#1e2a45'), color: '#f1f5f9', fontFamily: "'JetBrains Mono', monospace", fontSize: 28, fontWeight: 700, padding: '16px 16px 16px 36px', borderRadius: 12, outline: 'none', textAlign: 'right', boxSizing: 'border-box' }}
+          />
+        </div>
+
+        {err && <div style={{ fontSize: 11, color: '#ef4444', marginBottom: 16 }}>{err}</div>}
+
+        {/* Buttons */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+          <button
+            onClick={handleConfirm}
+            style={{ width: '100%', padding: '14px', borderRadius: 10, border: 'none', background: '#10b981', color: '#fff', fontFamily: "'DM Sans', sans-serif", fontSize: 14, fontWeight: 700, cursor: 'pointer' }}
+          >
+            Confirmar y Salir
+          </button>
+          <button
+            onClick={onSkip}
+            style={{ width: '100%', padding: '12px', borderRadius: 10, border: '1px solid #1e2a45', background: 'transparent', color: '#4a5568', fontFamily: "'DM Sans', sans-serif", fontSize: 12, cursor: 'pointer' }}
+          >
+            Omitir
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
 
 export default function CheckinPage({ params }) {
   const siteCode = params.code
   const [site, setSite] = useState(null)
   const [emp, setEmp] = useState(null)
-  const [step, setStep] = useState('loading') // loading | email | checkin | error
+  const [step, setStep] = useState('loading')
   const [email, setEmail] = useState('')
   const [emailErr, setEmailErr] = useState('')
   const [gps, setGps] = useState({ status: 'idle' })
@@ -49,8 +116,8 @@ export default function CheckinPage({ params }) {
   const [events, setEvents] = useState([])
   const [todayRecord, setTodayRecord] = useState(null)
   const [schedule, setSchedule] = useState(null)
+  const [showSalesModal, setShowSalesModal] = useState(false)
 
-  // Clock
   useEffect(() => { const t = setInterval(() => setNow(new Date()), 1000); return () => clearInterval(t) }, [])
 
   async function loadSchedule(empId) {
@@ -59,15 +126,11 @@ export default function CheckinPage({ params }) {
     setSchedule(data)
   }
 
-  // Load site and check device
   useEffect(() => {
     async function init() {
-      // Find site by code
       const { data: siteData } = await supabase.from('sites').select('*').eq('code', siteCode).eq('active', true).single()
       if (!siteData) { setStep('error'); return }
       setSite(siteData)
-
-      // Check if device is registered
       const token = localStorage.getItem('gm-device-token')
       if (token) {
         const { data: device } = await supabase.from('devices').select('*, employees(*)').eq('device_token', token).single()
@@ -77,7 +140,6 @@ export default function CheckinPage({ params }) {
           await loadSchedule(device.employees.id)
           checkGPS(siteData)
           setStep('checkin')
-          // Update last used
           await supabase.from('devices').update({ last_used: new Date().toISOString() }).eq('device_token', token)
           return
         }
@@ -120,12 +182,9 @@ export default function CheckinPage({ params }) {
     if (!e) { setEmailErr('Ingresa tu email'); return }
     const { data: empData } = await supabase.from('employees').select('*').eq('email', e).eq('active', true).single()
     if (!empData) { setEmailErr('Email no registrado. Contacta a tu administrador.'); return }
-    
-    // Register device
     const token = crypto.randomUUID()
     localStorage.setItem('gm-device-token', token)
     await supabase.from('devices').insert({ device_token: token, employee_id: empData.id, user_agent: navigator.userAgent })
-    
     setEmp(empData)
     await loadTodayRecord(empData.id, site.id)
     await loadSchedule(empData.id)
@@ -136,34 +195,21 @@ export default function CheckinPage({ params }) {
   async function calcStatus(checkInTime) {
     const dayNum = checkInTime.getDay()
     const grace = site?.grace_mins || 15
-    
-    // Get schedule for today
-    const { data: sched } = await supabase
-      .from('schedules')
-      .select('*')
-      .eq('employee_id', emp.id)
-      .eq('day_of_week', dayNum)
-      .single()
-    
-    if (!sched) return 'on_time' // No schedule found, count as on time
-    
-    // Parse scheduled start time
+    const { data: sched } = await supabase.from('schedules').select('*').eq('employee_id', emp.id).eq('day_of_week', dayNum).single()
+    if (!sched) return 'on_time'
     const [schedH, schedM] = sched.start_time.split(':').map(Number)
     const schedDate = new Date(checkInTime)
     schedDate.setHours(schedH, schedM, 0, 0)
-    
     const diffMins = (checkInTime - schedDate) / 60000
-    
-    if (diffMins <= 0) return 'on_time'           // Llego a la hora o antes
-    if (diffMins <= grace) return 'tolerancia'     // Dentro de tolerancia
-    return 'late'                                   // Retardo
+    if (diffMins <= 0) return 'on_time'
+    if (diffMins <= grace) return 'tolerancia'
+    return 'late'
   }
 
   async function doCheckin() {
     const checkIn = new Date()
     const today = checkIn.toISOString().split('T')[0]
     const status = await calcStatus(checkIn)
-    
     const record = {
       employee_id: emp.id,
       site_id: site.id,
@@ -174,7 +220,6 @@ export default function CheckinPage({ params }) {
       gps_lng: gps.lng || null,
       gps_distance_m: gps.dist || null,
     }
-
     const { data, error } = await supabase.from('attendance').upsert(record, { onConflict: 'employee_id,date' }).select().single()
     if (!error && data) {
       setTodayRecord(data)
@@ -184,7 +229,13 @@ export default function CheckinPage({ params }) {
     }
   }
 
-  async function doCheckout() {
+  // Checkout: show sales modal first
+  function doCheckout() {
+    setShowSalesModal(true)
+  }
+
+  async function finishCheckout(salesAmount) {
+    setShowSalesModal(false)
     if (!todayRecord) return
     const checkOut = new Date()
     const ciDate = new Date(todayRecord.check_in)
@@ -192,10 +243,16 @@ export default function CheckinPage({ params }) {
       ? (new Date(todayRecord.lunch_end) - new Date(todayRecord.lunch_start)) / 60000
       : 0
     const hrs = ((checkOut - ciDate) / 3600000 - lunchMins / 60).toFixed(1)
-
-    await supabase.from('attendance').update({ check_out: checkOut.toISOString(), hours_worked: parseFloat(hrs) }).eq('id', todayRecord.id)
+    await supabase.from('attendance').update({
+      check_out: checkOut.toISOString(),
+      hours_worked: parseFloat(hrs),
+      ...(salesAmount !== null ? { sales_amount: salesAmount } : {})
+    }).eq('id', todayRecord.id)
     setIsIn(false); setOnLunch(false); setOnBreak(false)
     setEvents(prev => [...prev, { type: 'co', time: fmtTime(checkOut) }])
+    if (salesAmount !== null && salesAmount > 0) {
+      setEvents(prev => [...prev, { type: 'sale', time: fmtTime(checkOut), amount: salesAmount }])
+    }
   }
 
   async function doLunch(start) {
@@ -238,17 +295,16 @@ export default function CheckinPage({ params }) {
   const evMeta = {
     ci: ['#10b981', 'Check In'], co: ['#ef4444', 'Check Out'],
     ls: ['#f59e0b', 'Inicio Comida'], le: ['#f59e0b', 'Fin Comida'],
-    bs: ['#3b82f6', 'Inicio Descanso'], be: ['#3b82f6', 'Fin Descanso']
+    bs: ['#3b82f6', 'Inicio Descanso'], be: ['#3b82f6', 'Fin Descanso'],
+    sale: ['#10b981', 'Venta del dia'],
   }
 
-  // ─── Loading ───
   if (step === 'loading') return (
     <div style={S.page}><div style={S.bar}><img src="/logo.jpeg" style={S.logo} alt="GM" /><span style={{ fontSize: 13, fontWeight: 600 }}>G.Montalvo</span></div>
       <div style={{ ...S.container, alignItems: 'center', justifyContent: 'center', flex: 1 }}><p style={S.sub}>Cargando...</p></div>
     </div>
   )
 
-  // ─── Error ───
   if (step === 'error') return (
     <div style={S.page}><div style={S.bar}><img src="/logo.jpeg" style={S.logo} alt="GM" /><span style={{ fontSize: 13, fontWeight: 600 }}>G.Montalvo</span></div>
       <div style={{ ...S.container, alignItems: 'center', justifyContent: 'center', flex: 1 }}>
@@ -257,7 +313,6 @@ export default function CheckinPage({ params }) {
     </div>
   )
 
-  // ─── Email Step ───
   if (step === 'email') return (
     <div style={S.page}>
       <div style={S.bar}><img src="/logo.jpeg" style={S.logo} alt="GM" /><span style={{ fontSize: 13, fontWeight: 600 }}>{site?.name || 'G.Montalvo'}</span></div>
@@ -279,10 +334,17 @@ export default function CheckinPage({ params }) {
     </div>
   )
 
-  // ─── Check-in Step ───
   const gpsOk = gps.status === 'ok'
   return (
     <div style={S.page}>
+      {/* Sales Modal */}
+      {showSalesModal && (
+        <SalesModal
+          onConfirm={(amt) => finishCheckout(amt)}
+          onSkip={() => finishCheckout(null)}
+        />
+      )}
+
       <div style={S.bar}><img src="/logo.jpeg" style={S.logo} alt="GM" /><span style={{ fontSize: 13, fontWeight: 600 }}>{site?.name}</span></div>
       <div style={S.container}>
         <div style={S.card}>
@@ -291,11 +353,10 @@ export default function CheckinPage({ params }) {
           <div style={{ ...S.muted, marginTop: 2 }}>{site?.name}</div>
           <div style={S.clock}>{fmtTime(now)}</div>
           <div style={S.muted}>{now.toLocaleDateString('es-MX', { weekday: 'long', day: 'numeric', month: 'long' })}</div>
-
           <div style={{ marginTop: 14, paddingTop: 14, borderTop: '1px solid #1e2a45', display: 'flex', justifyContent: 'center', gap: 20 }}>
             {schedule && <div style={{ textAlign: 'center' }}>
               <div style={{ fontSize: 9, color: '#4a5568', textTransform: 'uppercase', letterSpacing: '.6px' }}>Horario</div>
-              <div className="mono" style={{ marginTop: 2, fontSize: 12 }}>{schedule.start_time?.slice(0,5)} - {schedule.end_time?.slice(0,5)}</div>
+              <div style={{ marginTop: 2, fontSize: 12, fontFamily: "'JetBrains Mono', monospace" }}>{schedule.start_time?.slice(0,5)} - {schedule.end_time?.slice(0,5)}</div>
             </div>}
             <div style={{ textAlign: 'center' }}>
               <div style={{ fontSize: 9, color: '#4a5568', textTransform: 'uppercase', letterSpacing: '.6px' }}>Estado</div>
@@ -305,7 +366,7 @@ export default function CheckinPage({ params }) {
             </div>
             {ciTime && <div style={{ textAlign: 'center' }}>
               <div style={{ fontSize: 9, color: '#4a5568', textTransform: 'uppercase', letterSpacing: '.6px' }}>Entrada</div>
-              <div className="mono" style={{ marginTop: 2, fontSize: 13 }}>{ciTime}</div>
+              <div style={{ marginTop: 2, fontSize: 13, fontFamily: "'JetBrains Mono', monospace" }}>{ciTime}</div>
             </div>}
             {todayRecord?.status && <div style={{ textAlign: 'center' }}>
               <div style={{ fontSize: 9, color: '#4a5568', textTransform: 'uppercase', letterSpacing: '.6px' }}>Registro</div>
@@ -314,7 +375,6 @@ export default function CheckinPage({ params }) {
           </div>
         </div>
 
-        {/* GPS */}
         <div style={S.gps(gpsOk)}>
           <span>📍</span>
           <span style={{ flex: 1 }}>
@@ -328,7 +388,6 @@ export default function CheckinPage({ params }) {
             <button onClick={() => checkGPS(site)} style={{ background: 'none', border: '1px solid #1e2a45', color: '#f1f5f9', padding: '4px 10px', borderRadius: 5, fontSize: 10, cursor: 'pointer', fontFamily: "'DM Sans'" }}>Reintentar</button>}
         </div>
 
-        {/* Action Buttons */}
         <div style={S.btnGrid}>
           <button style={S.actBtn('var(--gnb)', 'var(--gn)', isIn || (!gpsOk && gps.status !== 'idle'))} disabled={isIn || (!gpsOk && gps.status !== 'idle')} onClick={doCheckin}>
             <div style={S.actIcon('rgba(16,185,129,.12)', '#10b981')}>✓</div>Check In
@@ -344,19 +403,18 @@ export default function CheckinPage({ params }) {
           </button>
         </div>
 
-        {/* Timeline */}
         {events.length > 0 && <div style={S.timeline}>
           <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 10 }}>Registro del Dia</div>
           {events.map((e, i) => (
             <div key={i} style={S.tItem}>
               <span style={S.dot(evMeta[e.type]?.[0] || '#4a5568')} />
-              <span className="mono" style={{ width: 44, color: '#8892a8', fontSize: 11 }}>{e.time}</span>
-              <span style={{ color: '#8892a8' }}>{evMeta[e.type]?.[1] || 'Accion'}</span>
+              <span style={{ width: 44, color: '#8892a8', fontSize: 11, fontFamily: "'JetBrains Mono', monospace" }}>{e.time}</span>
+              <span style={{ color: '#8892a8', flex: 1 }}>{evMeta[e.type]?.[1] || 'Accion'}</span>
+              {e.type === 'sale' && <span style={{ color: '#10b981', fontFamily: "'JetBrains Mono', monospace", fontSize: 12, fontWeight: 700 }}>${Number(e.amount).toLocaleString('es-MX')}</span>}
             </div>
           ))}
         </div>}
 
-        {/* Logout */}
         <button onClick={logout} style={{ background: 'none', border: 'none', color: '#ef4444', fontSize: 11, cursor: 'pointer', textAlign: 'center', padding: 8, fontFamily: "'DM Sans'" }}>
           Cerrar sesion (cambiar dispositivo)
         </button>
