@@ -82,7 +82,7 @@ export default function CheckinPage({ params }) {
 
   async function loadSchedule(empId) {
     const dayNum = new Date().getDay()
-    const { data } = await supabase.from('schedules').select('*').eq('employee_id', empId).eq('day_of_week', dayNum).single()
+    const { data } = await supabase.from('schedules').select('*').eq('employee_id', empId).eq('day_of_week', dayNum).maybeSingle()
     setSchedule(data)
   }
 
@@ -111,7 +111,7 @@ export default function CheckinPage({ params }) {
 
   async function loadTodayRecord(empId, siteId, tz) {
     const today = new Date().toLocaleDateString('en-CA', { timeZone: tz || 'America/Cancun' })
-    const { data } = await supabase.from('attendance').select('*').eq('employee_id', empId).eq('date', today).order('created_at', { ascending: false }).limit(1).single()
+    const { data } = await supabase.from('attendance').select('*').eq('employee_id', empId).eq('date', today).order('created_at', { ascending: false }).limit(1).maybeSingle()
     if (data) {
       setTodayRecord(data)
       if (data.check_in && !data.check_out) {
@@ -156,7 +156,7 @@ export default function CheckinPage({ params }) {
     const tz = site?.timezone || 'America/Cancun'
     const dayNum = new Date(checkInTime.toLocaleDateString('en-CA', { timeZone: tz })).getDay()
     const grace = site?.grace_mins || 15
-    const { data: sched } = await supabase.from('schedules').select('*').eq('employee_id', emp.id).eq('day_of_week', dayNum).single()
+    const { data: sched } = await supabase.from('schedules').select('*').eq('employee_id', emp.id).eq('day_of_week', dayNum).maybeSingle()
     if (!sched) return null
     const [schedH, schedM] = sched.start_time.split(':').map(Number)
     const schedDate = new Date(checkInTime)
