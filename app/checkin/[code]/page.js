@@ -32,7 +32,6 @@ function fmtTime(d, tz) {
   return d.toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: tz || 'America/Cancun' })
 }
 
-// ─── Sales Modal ──────────────────────────────────────────────────────────────
 function SalesModal({ onConfirm, onSkip }) {
   const [amount, setAmount] = useState('')
   const [err, setErr] = useState('')
@@ -112,7 +111,7 @@ export default function CheckinPage({ params }) {
 
   async function loadTodayRecord(empId, siteId, tz) {
     const today = new Date().toLocaleDateString('en-CA', { timeZone: tz || 'America/Cancun' })
-    const { data } = await supabase.from('attendance').select('*').eq('employee_id', empId).eq('date', today).single()
+    const { data } = await supabase.from('attendance').select('*').eq('employee_id', empId).eq('date', today).order('created_at', { ascending: false }).limit(1).single()
     if (data) {
       setTodayRecord(data)
       if (data.check_in && !data.check_out) {
@@ -183,7 +182,7 @@ export default function CheckinPage({ params }) {
       gps_lng: gps.lng || null,
       gps_distance_m: gps.dist || null,
     }
-    const { data, error } = await supabase.from('attendance').upsert(record, { onConflict: 'employee_id,date' }).select().single()
+    const { data, error } = await supabase.from('attendance').insert(record).select().single()
     if (!error && data) {
       setTodayRecord(data)
       setIsIn(true)
