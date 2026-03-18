@@ -6,6 +6,14 @@ const DAYS = ['Dom','Lun','Mar','Mie','Jue','Vie','Sab']
 const stLbl = { on_time: 'Puntual', tolerancia: 'Tolerancia', late: 'Retardo', absent: 'Falta' }
 const stClr = { on_time: '#10b981', tolerancia: '#06b6d4', late: '#f59e0b', absent: '#ef4444' }
 
+function fmtTime(ts) {
+  if (!ts) return '-'
+  return new Date(ts).toLocaleTimeString('es-MX', {
+    hour: '2-digit', minute: '2-digit', hour12: false,
+    timeZone: 'America/Cancun'
+  })
+}
+
 export default function AdminPage() {
   const [sites, setSites] = useState([])
   const [emps, setEmps] = useState([])
@@ -16,13 +24,13 @@ export default function AdminPage() {
   const [toast, setToast] = useState(null)
   const [schedules, setSchedules] = useState([])
 
-  const today = new Date().toISOString().split('T')[0]
+  const today = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Cancun' })
 
   const load = useCallback(async () => {
     const [s, e, a, sc] = await Promise.all([
       supabase.from('sites').select('*').eq('active', true).order('name'),
       supabase.from('employees').select('*').eq('active', true).order('name'),
-      supabase.from('attendance').select('*').order('date', { ascending: false }).limit(500),
+      supabase.from('attendance').select('*').order('date', { ascending: false }),
       supabase.from('schedules').select('*'),
     ])
     setSites(s.data || [])
@@ -111,7 +119,7 @@ export default function AdminPage() {
         <div style={{ padding: '16px 22px', borderBottom: '1px solid #1e2a45', background: '#111827', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
           <div>
             <h1 style={{ fontSize: 17, fontWeight: 700 }}>{{ dashboard: 'Dashboard', attendance: 'Asistencia', employees: 'Empleados', sites: 'Sitios' }[tab]}</h1>
-            <p style={{ fontSize: 11, color: '#8892a8', marginTop: 1 }}>{new Date().toLocaleDateString('es-MX', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}</p>
+            <p style={{ fontSize: 11, color: '#8892a8', marginTop: 1 }}>{new Date().toLocaleDateString('es-MX', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric', timeZone: 'America/Cancun' })}</p>
           </div>
           {tab === 'employees' && <button onClick={() => setModal({ type: 'emp', data: null })} style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '7px 14px', borderRadius: 7, border: 'none', background: '#3b82f6', color: '#fff', fontSize: 12, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}>+ Nuevo Empleado</button>}
           {tab === 'sites' && <button onClick={() => setModal({ type: 'site', data: null })} style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '7px 14px', borderRadius: 7, border: 'none', background: '#3b82f6', color: '#fff', fontSize: 12, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}>+ Nuevo Sitio</button>}
@@ -138,11 +146,11 @@ export default function AdminPage() {
                   return <tr key={r.id} style={{ borderBottom: '1px solid rgba(30,42,69,.3)' }}>
                     <td style={{ padding: '9px 16px', fontSize: 12, fontWeight: 600 }}>{emp?.name || '?'}</td>
                     <td style={{ padding: '9px 16px', fontSize: 11, color: '#8892a8' }}>{site?.name || '?'}</td>
-                    <td style={{ padding: '9px 16px', fontSize: 11, fontFamily: "'JetBrains Mono'" }}>{r.check_in ? new Date(r.check_in).toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit', hour12: false }) : '-'}</td>
-                    <td style={{ padding: '9px 16px', fontSize: 11, fontFamily: "'JetBrains Mono'" }}>{r.check_out ? new Date(r.check_out).toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit', hour12: false }) : '-'}</td>
+                    <td style={{ padding: '9px 16px', fontSize: 11, fontFamily: "'JetBrains Mono'" }}>{fmtTime(r.check_in)}</td>
+                    <td style={{ padding: '9px 16px', fontSize: 11, fontFamily: "'JetBrains Mono'" }}>{fmtTime(r.check_out)}</td>
                     <td style={{ padding: '9px 16px', fontSize: 11, fontFamily: "'JetBrains Mono'" }}>{r.hours_worked > 0 ? r.hours_worked + 'h' : '-'}</td>
                     <td style={{ padding: '9px 16px', fontSize: 11, fontFamily: "'JetBrains Mono'", color: r.sales_amount > 0 ? '#10b981' : '#4a5568' }}>{r.sales_amount > 0 ? '$' + Number(r.sales_amount).toLocaleString('es-MX') : '-'}</td>
-                    <td style={{ padding: '9px 16px' }}><span style={{ padding: '2px 8px', borderRadius: 4, fontSize: 10, fontWeight: 600, color: stClr[r.status] || '#8892a8', background: (stClr[r.status] || '#8892a8') + '1f' }}>{stLbl[r.status] || r.status}</span></td>
+                    <td style={{ padding: '9px 16px' }}><span style={{ padding: '2px 8px', borderRadius: 4, fontSize: 10, fontWeight: 600, color: stClr[r.status] || '#8892a8', background: (stClr[r.status] || '#8892a8') + '1f' }}>{stLbl[r.status] || r.status || '-'}</span></td>
                   </tr>
                 })}</tbody>
               </table>
@@ -155,18 +163,18 @@ export default function AdminPage() {
             <div style={{ padding: '12px 16px', borderBottom: '1px solid #1e2a45', fontWeight: 600, fontSize: 12 }}>Historial ({att.length} registros)</div>
             <table style={{ width: '100%', borderCollapse: 'collapse' }}>
               <thead><tr>{['Fecha', 'Empleado', 'Sitio', 'Entrada', 'Salida', 'Horas', 'Ventas', 'Estado'].map(h => <th key={h} style={{ textAlign: 'left', fontSize: 9, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '.6px', color: '#4a5568', padding: '9px 16px', borderBottom: '1px solid #1e2a45' }}>{h}</th>)}</tr></thead>
-              <tbody>{att.slice(0, 100).map(r => {
+              <tbody>{att.slice(0, 200).map(r => {
                 const emp = emps.find(e => e.id === r.employee_id)
                 const site = sites.find(s => s.id === r.site_id)
                 return <tr key={r.id} style={{ borderBottom: '1px solid rgba(30,42,69,.3)' }}>
                   <td style={{ padding: '9px 16px', fontSize: 11, fontFamily: "'JetBrains Mono'" }}>{r.date}</td>
                   <td style={{ padding: '9px 16px', fontSize: 12, fontWeight: 600 }}>{emp?.name || '?'}</td>
                   <td style={{ padding: '9px 16px', fontSize: 11, color: '#8892a8' }}>{site?.name || '?'}</td>
-                  <td style={{ padding: '9px 16px', fontSize: 11, fontFamily: "'JetBrains Mono'" }}>{r.check_in ? new Date(r.check_in).toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit', hour12: false }) : '-'}</td>
-                  <td style={{ padding: '9px 16px', fontSize: 11, fontFamily: "'JetBrains Mono'" }}>{r.check_out ? new Date(r.check_out).toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit', hour12: false }) : '-'}</td>
+                  <td style={{ padding: '9px 16px', fontSize: 11, fontFamily: "'JetBrains Mono'" }}>{fmtTime(r.check_in)}</td>
+                  <td style={{ padding: '9px 16px', fontSize: 11, fontFamily: "'JetBrains Mono'" }}>{fmtTime(r.check_out)}</td>
                   <td style={{ padding: '9px 16px', fontSize: 11, fontFamily: "'JetBrains Mono'" }}>{r.hours_worked > 0 ? r.hours_worked + 'h' : '-'}</td>
                   <td style={{ padding: '9px 16px', fontSize: 11, fontFamily: "'JetBrains Mono'", color: r.sales_amount > 0 ? '#10b981' : '#4a5568' }}>{r.sales_amount > 0 ? '$' + Number(r.sales_amount).toLocaleString('es-MX') : '-'}</td>
-                  <td style={{ padding: '9px 16px' }}><span style={{ padding: '2px 8px', borderRadius: 4, fontSize: 10, fontWeight: 600, color: stClr[r.status] || '#8892a8', background: (stClr[r.status] || '#8892a8') + '1f' }}>{stLbl[r.status] || r.status}</span></td>
+                  <td style={{ padding: '9px 16px' }}><span style={{ padding: '2px 8px', borderRadius: 4, fontSize: 10, fontWeight: 600, color: stClr[r.status] || '#8892a8', background: (stClr[r.status] || '#8892a8') + '1f' }}>{stLbl[r.status] || r.status || '-'}</span></td>
                 </tr>
               })}</tbody>
             </table>
@@ -187,11 +195,7 @@ export default function AdminPage() {
                 return (
                   <tr key={emp.id} style={{ borderBottom: '1px solid rgba(30,42,69,.3)' }}>
                     <td style={{ padding: '9px 16px' }}>
-                      {/* Clickable name */}
-                      <button
-                        onClick={() => setModal({ type: 'empHistory', data: emp })}
-                        style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', textAlign: 'left', fontFamily: 'inherit' }}
-                      >
+                      <button onClick={() => setModal({ type: 'empHistory', data: emp })} style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', textAlign: 'left', fontFamily: 'inherit' }}>
                         <div style={{ fontSize: 12, fontWeight: 600, color: '#3b82f6', textDecoration: 'underline', textDecorationColor: 'rgba(59,130,246,.3)' }}>{emp.name}</div>
                         <div style={{ fontSize: 10, color: '#4a5568' }}>{emp.phone || ''}</div>
                       </button>
@@ -272,7 +276,6 @@ function EmpHistoryModal({ emp, att, sites, onClose }) {
   const onTime = att.filter(r => r.status === 'on_time').length
   const late = att.filter(r => r.status === 'late').length
   const absent = att.filter(r => r.status === 'absent').length
-  const pct = att.length > 0 ? Math.round((onTime / att.length) * 100) : 0
 
   const stLbl = { on_time: 'Puntual', tolerancia: 'Tolerancia', late: 'Retardo', absent: 'Falta' }
   const stClr = { on_time: '#10b981', tolerancia: '#06b6d4', late: '#f59e0b', absent: '#ef4444' }
@@ -281,7 +284,6 @@ function EmpHistoryModal({ emp, att, sites, onClose }) {
     <div onClick={onClose} style={{ position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', background: 'rgba(0,0,0,.75)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100, backdropFilter: 'blur(4px)' }}>
       <div onClick={e => e.stopPropagation()} style={{ background: '#1a2035', border: '1px solid #1e2a45', borderRadius: 14, width: '100%', maxWidth: 680, maxHeight: '88vh', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
 
-        {/* Header */}
         <div style={{ padding: '18px 22px', borderBottom: '1px solid #1e2a45', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
           <div>
             <div style={{ fontSize: 16, fontWeight: 700 }}>{emp.name}</div>
@@ -290,7 +292,6 @@ function EmpHistoryModal({ emp, att, sites, onClose }) {
           <button onClick={onClose} style={{ background: 'none', border: '1px solid #1e2a45', borderRadius: 6, color: '#8892a8', fontSize: 18, cursor: 'pointer', padding: '2px 10px', lineHeight: 1 }}>×</button>
         </div>
 
-        {/* Stats summary */}
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 0, borderBottom: '1px solid #1e2a45' }}>
           {[
             ['Registros', att.length, '#3b82f6'],
@@ -319,7 +320,6 @@ function EmpHistoryModal({ emp, att, sites, onClose }) {
           </div>
         )}
 
-        {/* Table */}
         <div style={{ overflowY: 'auto', flex: 1 }}>
           <table style={{ width: '100%', borderCollapse: 'collapse' }}>
             <thead style={{ position: 'sticky', top: 0, background: '#1a2035', zIndex: 1 }}>
@@ -337,14 +337,16 @@ function EmpHistoryModal({ emp, att, sites, onClose }) {
                   <tr key={r.id} style={{ borderBottom: '1px solid rgba(30,42,69,.3)' }}>
                     <td style={{ padding: '9px 16px', fontSize: 11, fontFamily: "'JetBrains Mono'" }}>{r.date}</td>
                     <td style={{ padding: '9px 16px', fontSize: 11, color: '#8892a8' }}>{site?.name || '?'}</td>
-                    <td style={{ padding: '9px 16px', fontSize: 11, fontFamily: "'JetBrains Mono'" }}>{r.check_in ? new Date(r.check_in).toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit', hour12: false }) : '-'}</td>
-                    <td style={{ padding: '9px 16px', fontSize: 11, fontFamily: "'JetBrains Mono'" }}>{r.check_out ? new Date(r.check_out).toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit', hour12: false }) : '-'}</td>
+                    <td style={{ padding: '9px 16px', fontSize: 11, fontFamily: "'JetBrains Mono'" }}>{fmtTime(r.check_in)}</td>
+                    <td style={{ padding: '9px 16px', fontSize: 11, fontFamily: "'JetBrains Mono'" }}>{fmtTime(r.check_out)}</td>
                     <td style={{ padding: '9px 16px', fontSize: 11, fontFamily: "'JetBrains Mono'" }}>{r.hours_worked > 0 ? r.hours_worked + 'h' : '-'}</td>
                     <td style={{ padding: '9px 16px', fontSize: 11, fontFamily: "'JetBrains Mono'", color: r.sales_amount > 0 ? '#10b981' : '#4a5568' }}>
                       {r.sales_amount > 0 ? '$' + Number(r.sales_amount).toLocaleString('es-MX') : '-'}
                     </td>
                     <td style={{ padding: '9px 16px' }}>
-                      <span style={{ padding: '2px 8px', borderRadius: 4, fontSize: 10, fontWeight: 600, color: stClr[r.status] || '#8892a8', background: (stClr[r.status] || '#8892a8') + '1f' }}>{stLbl[r.status] || r.status}</span>
+                      {r.status ? (
+                        <span style={{ padding: '2px 8px', borderRadius: 4, fontSize: 10, fontWeight: 600, color: stClr[r.status] || '#8892a8', background: (stClr[r.status] || '#8892a8') + '1f' }}>{stLbl[r.status] || r.status}</span>
+                      ) : <span style={{ fontSize: 10, color: '#4a5568' }}>-</span>}
                     </td>
                   </tr>
                 )
@@ -430,34 +432,11 @@ function SiteModal({ data, onSave, onClose }) {
 // ─── QR Modal ─────────────────────────────────────────────────────────────────
 function QrModal({ site, url, onClose }) {
   const qrImgUrl = `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(url)}`
-
   function printQR() {
     const w = window.open('', '_blank')
-    w.document.write(`
-      <html><head><title>QR - ${site.name}</title>
-      <style>
-        body { font-family: Arial, sans-serif; text-align: center; padding: 40px; }
-        img { width: 300px; height: 300px; margin: 20px 0; }
-        h1 { font-size: 24px; margin-bottom: 4px; }
-        .code { font-family: monospace; font-size: 20px; letter-spacing: 3px; font-weight: bold; margin: 10px 0; }
-        .addr { color: #666; font-size: 14px; }
-        .url { color: #999; font-size: 10px; margin-top: 10px; word-break: break-all; }
-        .logo { width: 60px; margin-bottom: 10px; }
-        @media print { button { display: none; } }
-      </style></head><body>
-        <img class="logo" src="/logo.jpeg" alt="GM" />
-        <h1>${site.name}</h1>
-        <div class="addr">${site.address || ''}</div>
-        <img src="${qrImgUrl}" alt="QR Code" />
-        <div class="code">${site.code}</div>
-        <div>Escanea para registrar asistencia</div>
-        <div class="url">${url}</div>
-        <br><button onclick="window.print()" style="padding:10px 30px;font-size:16px;cursor:pointer">Imprimir</button>
-      </body></html>
-    `)
+    w.document.write(`<html><head><title>QR - ${site.name}</title><style>body{font-family:Arial,sans-serif;text-align:center;padding:40px;}img{width:300px;height:300px;margin:20px 0;}h1{font-size:24px;margin-bottom:4px;}.code{font-family:monospace;font-size:20px;letter-spacing:3px;font-weight:bold;margin:10px 0;}.addr{color:#666;font-size:14px;}.url{color:#999;font-size:10px;margin-top:10px;word-break:break-all;}.logo{width:60px;margin-bottom:10px;}@media print{button{display:none;}}</style></head><body><img class="logo" src="/logo.jpeg" alt="GM"/><h1>${site.name}</h1><div class="addr">${site.address||''}</div><img src="${qrImgUrl}" alt="QR Code"/><div class="code">${site.code}</div><div>Escanea para registrar asistencia</div><div class="url">${url}</div><br><button onclick="window.print()" style="padding:10px 30px;font-size:16px;cursor:pointer">Imprimir</button></body></html>`)
     w.document.close()
   }
-
   return (
     <div onClick={onClose} style={{ position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', background: 'rgba(0,0,0,.7)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100, backdropFilter: 'blur(4px)' }}>
       <div onClick={e => e.stopPropagation()} style={{ background: '#1a2035', border: '1px solid #1e2a45', borderRadius: 14, padding: 24, width: '100%', maxWidth: 380, textAlign: 'center' }}>
@@ -470,7 +449,7 @@ function QrModal({ site, url, onClose }) {
         <div style={{ fontSize: 11, color: '#4a5568', marginBottom: 16, wordBreak: 'break-all' }}>{url}</div>
         <div style={{ display: 'flex', gap: 8, justifyContent: 'center' }}>
           <button onClick={printQR} style={{ padding: '10px 20px', borderRadius: 7, border: 'none', background: '#3b82f6', color: '#fff', fontSize: 12, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}>Imprimir QR</button>
-          <button onClick={() => { navigator.clipboard.writeText(url) }} style={{ padding: '10px 20px', borderRadius: 7, border: '1px solid #1e2a45', background: 'transparent', color: '#8892a8', fontSize: 12, cursor: 'pointer', fontFamily: 'inherit' }}>Copiar URL</button>
+          <button onClick={() => navigator.clipboard.writeText(url)} style={{ padding: '10px 20px', borderRadius: 7, border: '1px solid #1e2a45', background: 'transparent', color: '#8892a8', fontSize: 12, cursor: 'pointer', fontFamily: 'inherit' }}>Copiar URL</button>
           <button onClick={onClose} style={{ padding: '10px 20px', borderRadius: 7, border: '1px solid #1e2a45', background: 'transparent', color: '#8892a8', fontSize: 12, cursor: 'pointer', fontFamily: 'inherit' }}>Cerrar</button>
         </div>
       </div>
@@ -481,15 +460,9 @@ function QrModal({ site, url, onClose }) {
 // ─── Schedule Modal ───────────────────────────────────────────────────────────
 function ScheduleModal({ emp, sites, schedules, onSave, onClose }) {
   const DAYS = [
-    { num: 1, name: 'Lunes' },
-    { num: 2, name: 'Martes' },
-    { num: 3, name: 'Miercoles' },
-    { num: 4, name: 'Jueves' },
-    { num: 5, name: 'Viernes' },
-    { num: 6, name: 'Sabado' },
-    { num: 0, name: 'Domingo' },
+    { num: 1, name: 'Lunes' }, { num: 2, name: 'Martes' }, { num: 3, name: 'Miercoles' },
+    { num: 4, name: 'Jueves' }, { num: 5, name: 'Viernes' }, { num: 6, name: 'Sabado' }, { num: 0, name: 'Domingo' },
   ]
-
   const buildInitial = () => {
     const w = {}
     DAYS.forEach(d => {
@@ -502,45 +475,33 @@ function ScheduleModal({ emp, sites, schedules, onSave, onClose }) {
     })
     return w
   }
-
   const [week, setWeek] = useState(buildInitial)
   const [saving, setSaving] = useState(false)
-
   const toggle = (dayNum) => setWeek(prev => ({ ...prev, [dayNum]: { ...prev[dayNum], on: !prev[dayNum].on } }))
   const upd = (dayNum, key, val) => setWeek(prev => ({ ...prev, [dayNum]: { ...prev[dayNum], [key]: val } }))
-
   const copyToAll = (srcDay) => {
     const src = week[srcDay]
     if (!src?.on) return
     setWeek(prev => {
       const nw = { ...prev }
-      DAYS.forEach(d => {
-        if (nw[d.num]?.on && d.num !== srcDay) {
-          nw[d.num] = { ...nw[d.num], site_id: src.site_id, start_time: src.start_time, end_time: src.end_time, lunch_mins: src.lunch_mins }
-        }
-      })
+      DAYS.forEach(d => { if (nw[d.num]?.on && d.num !== srcDay) nw[d.num] = { ...nw[d.num], site_id: src.site_id, start_time: src.start_time, end_time: src.end_time, lunch_mins: src.lunch_mins } })
       return nw
     })
   }
-
   const save = async () => {
     setSaving(true)
     await supabase.from('schedules').delete().eq('employee_id', emp.id)
     const inserts = []
     DAYS.forEach(d => {
       const day = week[d.num]
-      if (day?.on && day.site_id) {
-        inserts.push({ employee_id: emp.id, day_of_week: d.num, site_id: day.site_id, start_time: day.start_time || '10:00', end_time: day.end_time || '19:00', lunch_mins: day.lunch_mins ?? 60 })
-      }
+      if (day?.on && day.site_id) inserts.push({ employee_id: emp.id, day_of_week: d.num, site_id: day.site_id, start_time: day.start_time || '10:00', end_time: day.end_time || '19:00', lunch_mins: day.lunch_mins ?? 60 })
     })
     if (inserts.length > 0) await supabase.from('schedules').insert(inserts)
     setSaving(false)
     onSave()
   }
-
   const iS = { width: '100%', background: '#0d1220', border: '1px solid #1e2a45', color: '#f1f5f9', fontSize: 11, padding: '6px 8px', borderRadius: 5, outline: 'none', fontFamily: 'inherit' }
   const iSm = { ...iS, width: 75, textAlign: 'center', fontFamily: "'JetBrains Mono', monospace" }
-
   return (
     <div onClick={onClose} style={{ position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', background: 'rgba(0,0,0,.7)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100, backdropFilter: 'blur(4px)' }}>
       <div onClick={e => e.stopPropagation()} style={{ background: '#1a2035', border: '1px solid #1e2a45', borderRadius: 12, padding: 22, width: '100%', maxWidth: 600, maxHeight: '90vh', overflow: 'auto' }}>
@@ -548,14 +509,11 @@ function ScheduleModal({ emp, sites, schedules, onSave, onClose }) {
         <p style={{ fontSize: 11, color: '#8892a8', marginBottom: 16 }}>Palomea los dias que trabaja. Cada dia puede tener diferente sucursal y horario.</p>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
           {DAYS.map(d => {
-            const day = week[d.num]
-            const isOn = day?.on
+            const day = week[d.num]; const isOn = day?.on
             return (
               <div key={d.num} style={{ background: isOn ? '#0d1220' : 'transparent', border: '1px solid ' + (isOn ? '#1e2a45' : 'rgba(30,42,69,.3)'), borderRadius: 8, padding: isOn ? '10px 12px' : '8px 12px', opacity: isOn ? 1 : 0.5 }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                  <button onClick={() => toggle(d.num)} style={{ width: 22, height: 22, borderRadius: 6, flexShrink: 0, cursor: 'pointer', border: '2px solid ' + (isOn ? '#10b981' : '#4a5568'), background: isOn ? '#10b981' : 'transparent', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontSize: 12, fontWeight: 700 }}>
-                    {isOn ? '✓' : ''}
-                  </button>
+                  <button onClick={() => toggle(d.num)} style={{ width: 22, height: 22, borderRadius: 6, flexShrink: 0, cursor: 'pointer', border: '2px solid ' + (isOn ? '#10b981' : '#4a5568'), background: isOn ? '#10b981' : 'transparent', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontSize: 12, fontWeight: 700 }}>{isOn ? '✓' : ''}</button>
                   <span style={{ fontSize: 12, fontWeight: 600, width: 70, flexShrink: 0 }}>{d.name}</span>
                   {isOn ? (
                     <div style={{ display: 'flex', alignItems: 'center', gap: 6, flex: 1, flexWrap: 'wrap' }}>
@@ -570,18 +528,14 @@ function ScheduleModal({ emp, sites, schedules, onSave, onClose }) {
                       </select>
                       <button onClick={() => copyToAll(d.num)} style={{ background: 'none', border: '1px solid #1e2a45', borderRadius: 4, color: '#8892a8', fontSize: 9, padding: '3px 8px', cursor: 'pointer', fontFamily: 'inherit', whiteSpace: 'nowrap' }}>Copiar a todos</button>
                     </div>
-                  ) : (
-                    <span style={{ fontSize: 11, color: '#4a5568' }}>Descansa</span>
-                  )}
+                  ) : <span style={{ fontSize: 11, color: '#4a5568' }}>Descansa</span>}
                 </div>
               </div>
             )
           })}
         </div>
         <div style={{ display: 'flex', gap: 8, marginTop: 16 }}>
-          <button disabled={saving} onClick={save} style={{ flex: 1, padding: '11px 16px', borderRadius: 7, border: 'none', background: '#3b82f6', color: '#fff', fontSize: 13, fontWeight: 600, cursor: saving ? 'wait' : 'pointer', fontFamily: 'inherit' }}>
-            {saving ? 'Guardando...' : 'Guardar Horarios'}
-          </button>
+          <button disabled={saving} onClick={save} style={{ flex: 1, padding: '11px 16px', borderRadius: 7, border: 'none', background: '#3b82f6', color: '#fff', fontSize: 13, fontWeight: 600, cursor: saving ? 'wait' : 'pointer', fontFamily: 'inherit' }}>{saving ? 'Guardando...' : 'Guardar Horarios'}</button>
           <button onClick={onClose} style={{ padding: '11px 16px', borderRadius: 7, border: '1px solid #1e2a45', background: 'transparent', color: '#8892a8', fontSize: 12, cursor: 'pointer', fontFamily: 'inherit' }}>Cancelar</button>
         </div>
       </div>
