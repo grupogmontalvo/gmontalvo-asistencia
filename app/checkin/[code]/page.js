@@ -28,72 +28,33 @@ function haversine(lat1, lng1, lat2, lng2) {
   const a = Math.sin(dLat / 2) ** 2 + Math.cos(toR(lat1)) * Math.cos(toR(lat2)) * Math.sin(dLng / 2) ** 2
   return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))
 }
-function fmtTime(d) { return d.toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit', hour12: false }) }
+function fmtTime(d, tz) {
+  return d.toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: tz || 'America/Cancun' })
+}
 
 // ─── Sales Modal ──────────────────────────────────────────────────────────────
 function SalesModal({ onConfirm, onSkip }) {
   const [amount, setAmount] = useState('')
   const [err, setErr] = useState('')
-
   function handleConfirm() {
     const val = parseFloat(amount.replace(/,/g, ''))
     if (isNaN(val) || val < 0) { setErr('Ingresa un monto valido'); return }
     onConfirm(val)
   }
-
-  function formatDisplay(raw) {
-    const digits = raw.replace(/[^0-9.]/g, '')
-    const num = parseFloat(digits)
-    if (isNaN(num)) return digits
-    return num.toLocaleString('es-MX', { minimumFractionDigits: 0, maximumFractionDigits: 2 })
-  }
-
   return (
     <div style={{ position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', background: 'rgba(0,0,0,.8)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 200, backdropFilter: 'blur(6px)', padding: '0 16px' }}>
       <div style={{ background: '#1a2035', border: '1px solid #1e2a45', borderRadius: 18, padding: 28, width: '100%', maxWidth: 360, textAlign: 'center' }}>
-
-        {/* Icon */}
-        <div style={{ width: 56, height: 56, borderRadius: 16, background: 'rgba(16,185,129,.12)', border: '1px solid rgba(16,185,129,.2)', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 16px', fontSize: 26 }}>
-          💰
-        </div>
-
+        <div style={{ width: 56, height: 56, borderRadius: 16, background: 'rgba(16,185,129,.12)', border: '1px solid rgba(16,185,129,.2)', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 16px', fontSize: 26 }}>💰</div>
         <div style={{ fontSize: 17, fontWeight: 700, marginBottom: 6 }}>Cierre del Dia</div>
-        <div style={{ fontSize: 12, color: '#8892a8', marginBottom: 22 }}>
-          ¿Cuanto vendiste hoy?<br />
-          <span style={{ fontSize: 11, color: '#4a5568' }}>Puedes omitirlo si no aplica.</span>
-        </div>
-
-        {/* Amount input */}
+        <div style={{ fontSize: 12, color: '#8892a8', marginBottom: 22 }}>¿Cuanto vendiste hoy?<br /><span style={{ fontSize: 11, color: '#4a5568' }}>Puedes omitirlo si no aplica.</span></div>
         <div style={{ position: 'relative', marginBottom: err ? 8 : 20 }}>
           <span style={{ position: 'absolute', left: 16, top: '50%', transform: 'translateY(-50%)', fontSize: 18, fontWeight: 700, color: '#4a5568', pointerEvents: 'none' }}>$</span>
-          <input
-            type="number"
-            inputMode="decimal"
-            placeholder="0"
-            value={amount}
-            onChange={e => { setAmount(e.target.value); setErr('') }}
-            onKeyDown={e => { if (e.key === 'Enter') handleConfirm() }}
-            autoFocus
-            style={{ width: '100%', background: '#0d1220', border: '1px solid ' + (err ? '#ef4444' : '#1e2a45'), color: '#f1f5f9', fontFamily: "'JetBrains Mono', monospace", fontSize: 28, fontWeight: 700, padding: '16px 16px 16px 36px', borderRadius: 12, outline: 'none', textAlign: 'right', boxSizing: 'border-box' }}
-          />
+          <input type="number" inputMode="decimal" placeholder="0" value={amount} onChange={e => { setAmount(e.target.value); setErr('') }} onKeyDown={e => { if (e.key === 'Enter') handleConfirm() }} autoFocus style={{ width: '100%', background: '#0d1220', border: '1px solid ' + (err ? '#ef4444' : '#1e2a45'), color: '#f1f5f9', fontFamily: "'JetBrains Mono', monospace", fontSize: 28, fontWeight: 700, padding: '16px 16px 16px 36px', borderRadius: 12, outline: 'none', textAlign: 'right', boxSizing: 'border-box' }} />
         </div>
-
         {err && <div style={{ fontSize: 11, color: '#ef4444', marginBottom: 16 }}>{err}</div>}
-
-        {/* Buttons */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-          <button
-            onClick={handleConfirm}
-            style={{ width: '100%', padding: '14px', borderRadius: 10, border: 'none', background: '#10b981', color: '#fff', fontFamily: "'DM Sans', sans-serif", fontSize: 14, fontWeight: 700, cursor: 'pointer' }}
-          >
-            Confirmar y Salir
-          </button>
-          <button
-            onClick={onSkip}
-            style={{ width: '100%', padding: '12px', borderRadius: 10, border: '1px solid #1e2a45', background: 'transparent', color: '#4a5568', fontFamily: "'DM Sans', sans-serif", fontSize: 12, cursor: 'pointer' }}
-          >
-            Omitir
-          </button>
+          <button onClick={handleConfirm} style={{ width: '100%', padding: '14px', borderRadius: 10, border: 'none', background: '#10b981', color: '#fff', fontFamily: "'DM Sans', sans-serif", fontSize: 14, fontWeight: 700, cursor: 'pointer' }}>Confirmar y Salir</button>
+          <button onClick={onSkip} style={{ width: '100%', padding: '12px', borderRadius: 10, border: '1px solid #1e2a45', background: 'transparent', color: '#4a5568', fontFamily: "'DM Sans', sans-serif", fontSize: 12, cursor: 'pointer' }}>Omitir</button>
         </div>
       </div>
     </div>
@@ -136,7 +97,7 @@ export default function CheckinPage({ params }) {
         const { data: device } = await supabase.from('devices').select('*, employees(*)').eq('device_token', token).single()
         if (device?.employees) {
           setEmp(device.employees)
-          await loadTodayRecord(device.employees.id, siteData.id)
+          await loadTodayRecord(device.employees.id, siteData.id, siteData.timezone)
           await loadSchedule(device.employees.id)
           checkGPS(siteData)
           setStep('checkin')
@@ -149,14 +110,14 @@ export default function CheckinPage({ params }) {
     init()
   }, [siteCode])
 
-  async function loadTodayRecord(empId, siteId) {
-    const today = new Date().toISOString().split('T')[0]
+  async function loadTodayRecord(empId, siteId, tz) {
+    const today = new Date().toLocaleDateString('en-CA', { timeZone: tz || 'America/Cancun' })
     const { data } = await supabase.from('attendance').select('*').eq('employee_id', empId).eq('date', today).single()
     if (data) {
       setTodayRecord(data)
       if (data.check_in && !data.check_out) {
         setIsIn(true)
-        setCiTime(new Date(data.check_in).toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit', hour12: false }))
+        setCiTime(fmtTime(new Date(data.check_in), tz))
       }
       if (data.lunch_start && !data.lunch_end) setOnLunch(true)
       if (data.break_start && !data.break_end) setOnBreak(true)
@@ -186,17 +147,18 @@ export default function CheckinPage({ params }) {
     localStorage.setItem('gm-device-token', token)
     await supabase.from('devices').insert({ device_token: token, employee_id: empData.id, user_agent: navigator.userAgent })
     setEmp(empData)
-    await loadTodayRecord(empData.id, site.id)
+    await loadTodayRecord(empData.id, site.id, site.timezone)
     await loadSchedule(empData.id)
     checkGPS(site)
     setStep('checkin')
   }
 
   async function calcStatus(checkInTime) {
-    const dayNum = checkInTime.getDay()
+    const tz = site?.timezone || 'America/Cancun'
+    const dayNum = new Date(checkInTime.toLocaleDateString('en-CA', { timeZone: tz })).getDay()
     const grace = site?.grace_mins || 15
     const { data: sched } = await supabase.from('schedules').select('*').eq('employee_id', emp.id).eq('day_of_week', dayNum).single()
-    if (!sched) return 'on_time'
+    if (!sched) return null
     const [schedH, schedM] = sched.start_time.split(':').map(Number)
     const schedDate = new Date(checkInTime)
     schedDate.setHours(schedH, schedM, 0, 0)
@@ -208,7 +170,8 @@ export default function CheckinPage({ params }) {
 
   async function doCheckin() {
     const checkIn = new Date()
-    const today = checkIn.toISOString().split('T')[0]
+    const tz = site?.timezone || 'America/Cancun'
+    const today = checkIn.toLocaleDateString('en-CA', { timeZone: tz })
     const status = await calcStatus(checkIn)
     const record = {
       employee_id: emp.id,
@@ -224,24 +187,21 @@ export default function CheckinPage({ params }) {
     if (!error && data) {
       setTodayRecord(data)
       setIsIn(true)
-      setCiTime(fmtTime(checkIn))
-      setEvents(prev => [...prev, { type: 'ci', time: fmtTime(checkIn) }])
+      setCiTime(fmtTime(checkIn, tz))
+      setEvents(prev => [...prev, { type: 'ci', time: fmtTime(checkIn, tz) }])
     }
   }
 
-  // Checkout: show sales modal first
-  function doCheckout() {
-    setShowSalesModal(true)
-  }
+  function doCheckout() { setShowSalesModal(true) }
 
   async function finishCheckout(salesAmount) {
     setShowSalesModal(false)
     if (!todayRecord) return
+    const tz = site?.timezone || 'America/Cancun'
     const checkOut = new Date()
     const ciDate = new Date(todayRecord.check_in)
     const lunchMins = todayRecord.lunch_start && todayRecord.lunch_end
-      ? (new Date(todayRecord.lunch_end) - new Date(todayRecord.lunch_start)) / 60000
-      : 0
+      ? (new Date(todayRecord.lunch_end) - new Date(todayRecord.lunch_start)) / 60000 : 0
     const hrs = ((checkOut - ciDate) / 3600000 - lunchMins / 60).toFixed(1)
     await supabase.from('attendance').update({
       check_out: checkOut.toISOString(),
@@ -249,38 +209,40 @@ export default function CheckinPage({ params }) {
       ...(salesAmount !== null ? { sales_amount: salesAmount } : {})
     }).eq('id', todayRecord.id)
     setIsIn(false); setOnLunch(false); setOnBreak(false)
-    setEvents(prev => [...prev, { type: 'co', time: fmtTime(checkOut) }])
+    setEvents(prev => [...prev, { type: 'co', time: fmtTime(checkOut, tz) }])
     if (salesAmount !== null && salesAmount > 0) {
-      setEvents(prev => [...prev, { type: 'sale', time: fmtTime(checkOut), amount: salesAmount }])
+      setEvents(prev => [...prev, { type: 'sale', time: fmtTime(checkOut, tz), amount: salesAmount }])
     }
   }
 
   async function doLunch(start) {
     if (!todayRecord) return
+    const tz = site?.timezone || 'America/Cancun'
     const t = new Date()
     if (start) {
       await supabase.from('attendance').update({ lunch_start: t.toISOString() }).eq('id', todayRecord.id)
       setOnLunch(true)
-      setEvents(prev => [...prev, { type: 'ls', time: fmtTime(t) }])
+      setEvents(prev => [...prev, { type: 'ls', time: fmtTime(t, tz) }])
     } else {
       await supabase.from('attendance').update({ lunch_end: t.toISOString() }).eq('id', todayRecord.id)
       setOnLunch(false)
-      setEvents(prev => [...prev, { type: 'le', time: fmtTime(t) }])
+      setEvents(prev => [...prev, { type: 'le', time: fmtTime(t, tz) }])
     }
     setTodayRecord(prev => ({ ...prev, [start ? 'lunch_start' : 'lunch_end']: t.toISOString() }))
   }
 
   async function doBreak(start) {
     if (!todayRecord) return
+    const tz = site?.timezone || 'America/Cancun'
     const t = new Date()
     if (start) {
       await supabase.from('attendance').update({ break_start: t.toISOString() }).eq('id', todayRecord.id)
       setOnBreak(true)
-      setEvents(prev => [...prev, { type: 'bs', time: fmtTime(t) }])
+      setEvents(prev => [...prev, { type: 'bs', time: fmtTime(t, tz) }])
     } else {
       await supabase.from('attendance').update({ break_end: t.toISOString() }).eq('id', todayRecord.id)
       setOnBreak(false)
-      setEvents(prev => [...prev, { type: 'be', time: fmtTime(t) }])
+      setEvents(prev => [...prev, { type: 'be', time: fmtTime(t, tz) }])
     }
     setTodayRecord(prev => ({ ...prev, [start ? 'break_start' : 'break_end']: t.toISOString() }))
   }
@@ -298,6 +260,8 @@ export default function CheckinPage({ params }) {
     bs: ['#3b82f6', 'Inicio Descanso'], be: ['#3b82f6', 'Fin Descanso'],
     sale: ['#10b981', 'Venta del dia'],
   }
+
+  const tz = site?.timezone || 'America/Cancun'
 
   if (step === 'loading') return (
     <div style={S.page}><div style={S.bar}><img src="/logo.jpeg" style={S.logo} alt="GM" /><span style={{ fontSize: 13, fontWeight: 600 }}>G.Montalvo</span></div>
@@ -321,12 +285,7 @@ export default function CheckinPage({ params }) {
           <div style={{ fontSize: 16, fontWeight: 700, marginBottom: 4 }}>Bienvenido</div>
           <p style={S.sub}>Ingresa el email con el que te registraron. Solo se pide una vez en este dispositivo.</p>
         </div>
-        <input
-          style={S.input} type="email" value={email}
-          onChange={e => { setEmail(e.target.value); setEmailErr('') }}
-          onKeyDown={e => { if (e.key === 'Enter') tryEmail() }}
-          placeholder="tu@email.com" autoFocus
-        />
+        <input style={S.input} type="email" value={email} onChange={e => { setEmail(e.target.value); setEmailErr('') }} onKeyDown={e => { if (e.key === 'Enter') tryEmail() }} placeholder="tu@email.com" autoFocus />
         {emailErr && <div style={S.err}>{emailErr}</div>}
         <button style={S.btnP} onClick={tryEmail}>Continuar</button>
         <p style={{ ...S.muted, textAlign: 'center' }}>Si no conoces tu email, pregunta a tu administrador.</p>
@@ -337,22 +296,15 @@ export default function CheckinPage({ params }) {
   const gpsOk = gps.status === 'ok'
   return (
     <div style={S.page}>
-      {/* Sales Modal */}
-      {showSalesModal && (
-        <SalesModal
-          onConfirm={(amt) => finishCheckout(amt)}
-          onSkip={() => finishCheckout(null)}
-        />
-      )}
-
+      {showSalesModal && <SalesModal onConfirm={(amt) => finishCheckout(amt)} onSkip={() => finishCheckout(null)} />}
       <div style={S.bar}><img src="/logo.jpeg" style={S.logo} alt="GM" /><span style={{ fontSize: 13, fontWeight: 600 }}>{site?.name}</span></div>
       <div style={S.container}>
         <div style={S.card}>
           <div style={{ fontSize: 16, fontWeight: 700 }}>{emp?.name}</div>
           <div style={S.sub}>{emp?.role}</div>
           <div style={{ ...S.muted, marginTop: 2 }}>{site?.name}</div>
-          <div style={S.clock}>{fmtTime(now)}</div>
-          <div style={S.muted}>{now.toLocaleDateString('es-MX', { weekday: 'long', day: 'numeric', month: 'long' })}</div>
+          <div style={S.clock}>{fmtTime(now, tz)}</div>
+          <div style={S.muted}>{now.toLocaleDateString('es-MX', { weekday: 'long', day: 'numeric', month: 'long', timeZone: tz })}</div>
           <div style={{ marginTop: 14, paddingTop: 14, borderTop: '1px solid #1e2a45', display: 'flex', justifyContent: 'center', gap: 20 }}>
             {schedule && <div style={{ textAlign: 'center' }}>
               <div style={{ fontSize: 9, color: '#4a5568', textTransform: 'uppercase', letterSpacing: '.6px' }}>Horario</div>
@@ -370,7 +322,11 @@ export default function CheckinPage({ params }) {
             </div>}
             {todayRecord?.status && <div style={{ textAlign: 'center' }}>
               <div style={{ fontSize: 9, color: '#4a5568', textTransform: 'uppercase', letterSpacing: '.6px' }}>Registro</div>
-              <div style={{ marginTop: 2 }}><span style={{ padding: '2px 8px', borderRadius: 4, fontSize: 10, fontWeight: 600, color: todayRecord.status === 'on_time' ? '#10b981' : todayRecord.status === 'tolerancia' ? '#06b6d4' : '#f59e0b', background: todayRecord.status === 'on_time' ? 'rgba(16,185,129,.12)' : todayRecord.status === 'tolerancia' ? 'rgba(6,182,212,.12)' : 'rgba(245,158,11,.12)' }}>{todayRecord.status === 'on_time' ? 'Puntual' : todayRecord.status === 'tolerancia' ? 'Tolerancia' : 'Retardo'}</span></div>
+              <div style={{ marginTop: 2 }}>
+                <span style={{ padding: '2px 8px', borderRadius: 4, fontSize: 10, fontWeight: 600, color: todayRecord.status === 'on_time' ? '#10b981' : todayRecord.status === 'tolerancia' ? '#06b6d4' : '#f59e0b', background: todayRecord.status === 'on_time' ? 'rgba(16,185,129,.12)' : todayRecord.status === 'tolerancia' ? 'rgba(6,182,212,.12)' : 'rgba(245,158,11,.12)' }}>
+                  {todayRecord.status === 'on_time' ? 'Puntual' : todayRecord.status === 'tolerancia' ? 'Tolerancia' : 'Retardo'}
+                </span>
+              </div>
             </div>}
           </div>
         </div>
