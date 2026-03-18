@@ -6,11 +6,11 @@ const DAYS = ['Dom','Lun','Mar','Mie','Jue','Vie','Sab']
 const stLbl = { on_time: 'Puntual', tolerancia: 'Tolerancia', late: 'Retardo', absent: 'Falta' }
 const stClr = { on_time: '#10b981', tolerancia: '#06b6d4', late: '#f59e0b', absent: '#ef4444' }
 
-function fmtTime(ts) {
+function fmtTime(ts, tz) {
   if (!ts) return '-'
   return new Date(ts).toLocaleTimeString('es-MX', {
     hour: '2-digit', minute: '2-digit', hour12: false,
-    timeZone: 'America/Cancun'
+    timeZone: tz || 'America/Cancun'
   })
 }
 
