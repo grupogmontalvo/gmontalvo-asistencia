@@ -284,7 +284,7 @@ export default function AdminPage() {
                   </div>
                   <table style={{ width: '100%', borderCollapse: 'collapse' }}>
                     <thead>
-                      <tr>{['Empleado', 'Horario', 'Entrada', 'Salida', 'Estado'].map(h => (
+                      <tr>{['Empleado', 'Horario', 'Entrada', 'Salida', 'Venta', 'Estado'].map(h => (
                         <th key={h} style={{ textAlign: 'left', fontSize: 9, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '.6px', color: '#4a5568', padding: '8px 16px', borderBottom: '1px solid #1e2a45' }}>{h}</th>
                       ))}</tr>
                     </thead>
@@ -307,6 +307,9 @@ export default function AdminPage() {
                           </td>
                           <td style={{ padding: '10px 16px', fontSize: 11, fontFamily: "'JetBrains Mono'" }}>
                             {record?.check_out ? fmtTime(record.check_out, site.timezone) : '–'}
+                          </td>
+                          <td style={{ padding: '10px 16px', fontSize: 11, fontFamily: "'JetBrains Mono'", color: record?.sales_amount > 0 ? '#10b981' : '#4a5568' }}>
+                            {record?.sales_amount > 0 ? '$' + Number(record.sales_amount).toLocaleString('es-MX') : '–'}
                           </td>
                           <td style={{ padding: '10px 16px' }}>
                             <span style={{ padding: '3px 10px', borderRadius: 5, fontSize: 10, fontWeight: 600, color, background: bg }}>
@@ -663,8 +666,8 @@ function EmpModal({ data, onSave, onClose }) {
             No pedir monto de ventas al hacer Check Out
           </label>
           <label style={{ ...chkStyle, marginBottom: 14 }}>
-            <input type='checkbox' checked={!!f.fixed_week} onChange={e => upd('fixed_week', e.target.checked)} />
-            Semana fija — su horario se repite igual cada semana
+            <input type='checkbox' checked={!!f.skip_sales} onChange={e => upd('skip_sales', e.target.checked)} />
+            No pedir monto de ventas al hacer Check Out
           </label>
         </div>
         <div style={{ display: 'flex', gap: 8 }}>
@@ -747,6 +750,12 @@ function ScheduleModal({ emp, sites, schedules, onSave, onClose }) {
   const [weekStart, setWeekStart] = useState(() => getWeekStart(new Date()))
   const [week, setWeek] = useState({})
   const [saving, setSaving] = useState(false)
+  const [fixedWeek, setFixedWeek] = useState(!!emp.fixed_week)
+
+  async function toggleFixedWeek(val) {
+    setFixedWeek(val)
+    await supabase.from('employees').update({ fixed_week: val }).eq('id', emp.id)
+  }
 
   // Build 7 dates for current week view
   const weekDates = Array.from({ length: 7 }, (_, i) => {
@@ -764,7 +773,7 @@ function ScheduleModal({ emp, sites, schedules, onSave, onClose }) {
       const existing = schedules.find(s => s.date === date)
       if (existing) {
         w[date] = { on: true, site_id: existing.site_id, start_time: existing.start_time?.slice(0,5) || '10:00', end_time: existing.end_time?.slice(0,5) || '19:00', lunch_mins: existing.lunch_mins ?? 60 }
-      } else if (emp.fixed_week && !hasAnyThisWeek) {
+      } else if (fixedWeek && !hasAnyThisWeek) {
         // Try to find matching day from previous week
         const prevDate = dateStr(addDays(weekStart, i - 7))
         const prevExisting = schedules.find(s => s.date === prevDate)
@@ -830,7 +839,10 @@ function ScheduleModal({ emp, sites, schedules, onSave, onClose }) {
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             <h3 style={{ fontSize: 15, fontWeight: 700 }}>Horarios — {emp.name}</h3>
-            {emp.fixed_week && <span style={{ fontSize: 9, fontWeight: 700, color: '#10b981', background: 'rgba(16,185,129,.12)', border: '1px solid rgba(16,185,129,.2)', padding: '2px 8px', borderRadius: 4, textTransform: 'uppercase', letterSpacing: '.5px' }}>Semana fija</span>}
+            <label style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer', fontSize: 11, color: fixedWeek ? '#10b981' : '#8892a8', background: fixedWeek ? 'rgba(16,185,129,.1)' : 'rgba(30,42,69,.4)', border: '1px solid ' + (fixedWeek ? 'rgba(16,185,129,.3)' : '#1e2a45'), padding: '3px 10px', borderRadius: 5, userSelect: 'none' }}>
+              <input type='checkbox' checked={fixedWeek} onChange={e => toggleFixedWeek(e.target.checked)} style={{ accentColor: '#10b981' }} />
+              Semana fija
+            </label>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 6, background: '#0d1220', border: '1px solid #1e2a45', borderRadius: 8, padding: '4px 6px' }}>
             <button onClick={prevWeek} style={{ background: 'rgba(59,130,246,.15)', border: 'none', borderRadius: 5, color: '#3b82f6', padding: '5px 12px', cursor: 'pointer', fontFamily: 'inherit', fontSize: 15, fontWeight: 700, lineHeight: 1 }}>‹</button>
