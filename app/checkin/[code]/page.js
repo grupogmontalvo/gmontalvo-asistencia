@@ -1,5 +1,5 @@
 'use client'
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { supabase } from '../../../lib/supabase'
 
 const S = {
@@ -62,6 +62,107 @@ function SalesModal({ onConfirm, onSkip }) {
   )
 }
 
+function CameraModal({ onCapture, onClose }) {
+  const videoRef  = useRef(null)
+  const canvasRef = useRef(null)
+  const streamRef = useRef(null)
+  const [preview, setPreview] = useState(null)
+  const [blob, setBlob]       = useState(null)
+  const [err, setErr]         = useState('')
+  const [camReady, setCamReady] = useState(false)
+
+  useEffect(() => {
+    async function startCam() {
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({
+          video: { facingMode: 'user', width: { ideal: 640 }, height: { ideal: 480 } },
+          audio: false,
+        })
+        streamRef.current = stream
+        if (videoRef.current) {
+          videoRef.current.srcObject = stream
+          videoRef.current.onloadedmetadata = () => setCamReady(true)
+        }
+      } catch (e) {
+        setErr('No se pudo acceder a la cámara. Verifica los permisos del navegador.')
+      }
+    }
+    startCam()
+    return () => { streamRef.current?.getTracks().forEach(t => t.stop()) }
+  }, [])
+
+  function capture() {
+    const video  = videoRef.current
+    const canvas = canvasRef.current
+    if (!video || !canvas) return
+    canvas.width  = video.videoWidth
+    canvas.height = video.videoHeight
+    const ctx = canvas.getContext('2d')
+    ctx.drawImage(video, 0, 0)
+    canvas.toBlob(b => {
+      if (!b) return
+      setBlob(b)
+      setPreview(URL.createObjectURL(b))
+      streamRef.current?.getTracks().forEach(t => t.stop())
+    }, 'image/jpeg', 0.85)
+  }
+
+  function retake() {
+    setPreview(null)
+    setBlob(null)
+    async function startCam() {
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user' }, audio: false })
+        streamRef.current = stream
+        if (videoRef.current) { videoRef.current.srcObject = stream; setCamReady(true) }
+      } catch { setErr('No se pudo reiniciar la cámara.') }
+    }
+    startCam()
+  }
+
+  return (
+    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.92)', zIndex: 400, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: 16 }}>
+      <div style={{ width: '100%', maxWidth: 380, background: '#1a2035', border: '1px solid #1e2a45', borderRadius: 18, overflow: 'hidden' }}>
+        <div style={{ padding: '14px 18px', borderBottom: '1px solid #1e2a45', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <div style={{ fontSize: 14, fontWeight: 700 }}>📸 Foto de entrada</div>
+          <button onClick={onClose} style={{ background: 'none', border: 'none', color: '#8892a8', fontSize: 20, cursor: 'pointer', lineHeight: 1 }}>×</button>
+        </div>
+        <div style={{ padding: 16 }}>
+          {err ? (
+            <div style={{ background: 'rgba(239,68,68,.12)', border: '1px solid rgba(239,68,68,.25)', borderRadius: 10, padding: 16, textAlign: 'center', fontSize: 13, color: '#ef4444', marginBottom: 14 }}>
+              {err}
+              <div style={{ marginTop: 12 }}>
+                <button onClick={() => onCapture(null)} style={{ padding: '10px 20px', borderRadius: 8, border: 'none', background: '#3b82f6', color: '#fff', fontSize: 13, fontWeight: 600, cursor: 'pointer', fontFamily: "'DM Sans', sans-serif" }}>
+                  Continuar sin foto
+                </button>
+              </div>
+            </div>
+          ) : preview ? (
+            <>
+              <img src={preview} alt='preview' style={{ width: '100%', borderRadius: 12, display: 'block', marginBottom: 14 }} />
+              <div style={{ display: 'flex', gap: 8 }}>
+                <button onClick={retake} style={{ flex: 1, padding: '12px', borderRadius: 10, border: '1px solid #1e2a45', background: 'transparent', color: '#8892a8', fontFamily: "'DM Sans', sans-serif", fontSize: 13, cursor: 'pointer' }}>Repetir</button>
+                <button onClick={() => onCapture(blob)} style={{ flex: 2, padding: '12px', borderRadius: 10, border: 'none', background: '#10b981', color: '#fff', fontFamily: "'DM Sans', sans-serif", fontSize: 13, fontWeight: 700, cursor: 'pointer' }}>✓ Usar esta foto</button>
+              </div>
+            </>
+          ) : (
+            <>
+              <div style={{ position: 'relative', borderRadius: 12, overflow: 'hidden', background: '#0d1220', aspectRatio: '4/3', marginBottom: 14, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <video ref={videoRef} autoPlay playsInline muted style={{ width: '100%', display: 'block', transform: 'scaleX(-1)' }} />
+                {!camReady && <div style={{ position: 'absolute', color: '#4a5568', fontSize: 13 }}>Iniciando cámara...</div>}
+              </div>
+              <canvas ref={canvasRef} style={{ display: 'none' }} />
+              <button onClick={capture} disabled={!camReady} style={{ width: '100%', padding: '14px', borderRadius: 10, border: 'none', background: camReady ? '#10b981' : '#1e2a45', color: '#fff', fontFamily: "'DM Sans', sans-serif", fontSize: 14, fontWeight: 700, cursor: camReady ? 'pointer' : 'not-allowed' }}>
+                📷 Tomar foto
+              </button>
+            </>
+          )}
+        </div>
+      </div>
+    </div>
+  )
+}
+
 export default function CheckinPage({ params }) {
   const siteCode = params.code
   const [site, setSite]               = useState(null)
@@ -82,6 +183,12 @@ export default function CheckinPage({ params }) {
   const [schedule, setSchedule]       = useState(null)
   const [showSalesModal, setShowSalesModal] = useState(false)
   const [loading, setLoading]         = useState(false)
+  // Selfie / photo capture
+  const [showCamera, setShowCamera]   = useState(false)
+  const [photoBlob, setPhotoBlob]     = useState(null)
+  const [photoPreview, setPhotoPreview] = useState(null)
+  // Confirmation modal for non-checkin actions
+  const [confirmAction, setConfirmAction] = useState(null) // { label, onConfirm }
 
   useEffect(() => { const t = setInterval(() => setNow(new Date()), 1000); return () => clearInterval(t) }, [])
 
@@ -192,15 +299,41 @@ export default function CheckinPage({ params }) {
 
   async function doCheckin() {
     if (isIn || isDone || loading) return
+    // Show camera to capture selfie first
+    setShowCamera(true)
+  }
+
+  async function doCheckinWithPhoto(blob) {
+    setShowCamera(false)
     setLoading(true)
     const checkIn = new Date()
     const tz      = site?.timezone || 'America/Cancun'
     const today   = checkIn.toLocaleDateString('en-CA', { timeZone: tz })
     const status  = await calcStatus(checkIn)
+
+    // Upload selfie to Supabase Storage
+    let photoUrl = null
+    if (blob) {
+      try {
+        const fileName = `${emp.id}_${today}_${Date.now()}.jpg`
+        const { data: uploadData, error: uploadErr } = await supabase.storage
+          .from('checkin-photos')
+          .upload(fileName, blob, { contentType: 'image/jpeg', upsert: false })
+        if (!uploadErr && uploadData) {
+          const { data: urlData } = supabase.storage.from('checkin-photos').getPublicUrl(fileName)
+          photoUrl = urlData?.publicUrl || null
+        }
+      } catch (e) {
+        // Photo upload failed — continue check-in anyway
+        console.warn('Photo upload failed:', e)
+      }
+    }
+
     const record  = {
       employee_id: emp.id, site_id: site.id, date: today, status,
       check_in: checkIn.toISOString(),
       gps_lat: gps.lat || null, gps_lng: gps.lng || null, gps_distance_m: gps.dist || null,
+      ...(photoUrl ? { photo_url: photoUrl } : {}),
     }
     const { data, error } = await supabase.from('attendance').insert(record).select().single()
     if (!error && data) {
@@ -212,7 +345,42 @@ export default function CheckinPage({ params }) {
     setLoading(false)
   }
 
-  function doCheckout() { setShowSalesModal(true) }
+  function doCheckout() {
+    setConfirmAction({
+      label: 'Registrar Salida',
+      desc: '¿Confirmas que estás terminando tu turno?',
+      icon: '✕',
+      color: '#ef4444',
+      onConfirm: () => {
+        setConfirmAction(null)
+        if (emp?.skip_sales) {
+          finishCheckout(null)
+        } else {
+          setShowSalesModal(true)
+        }
+      }
+    })
+  }
+
+  function requestLunch(start) {
+    setConfirmAction({
+      label: start ? 'Inicio de Comida' : 'Regreso de Comida',
+      desc: start ? '¿Vas a tomar tu tiempo de comida?' : '¿Confirmas que regresas de la comida?',
+      icon: '☕',
+      color: '#f59e0b',
+      onConfirm: () => { setConfirmAction(null); doLunch(start) }
+    })
+  }
+
+  function requestBreak(start) {
+    setConfirmAction({
+      label: start ? 'Inicio de Descanso' : 'Regreso de Descanso',
+      desc: start ? '¿Vas a tomar un descanso?' : '¿Confirmas que regresas del descanso?',
+      icon: '⏸',
+      color: '#3b82f6',
+      onConfirm: () => { setConfirmAction(null); doBreak(start) }
+    })
+  }
 
   async function finishCheckout(salesAmount) {
     setShowSalesModal(false)
@@ -361,6 +529,22 @@ export default function CheckinPage({ params }) {
 
   return (
     <div style={S.page}>
+      {showCamera && <CameraModal onCapture={doCheckinWithPhoto} onClose={() => setShowCamera(false)} />}
+
+      {confirmAction && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.8)', zIndex: 300, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '0 16px', backdropFilter: 'blur(6px)' }}>
+          <div style={{ background: '#1a2035', border: '1px solid #1e2a45', borderRadius: 18, padding: 28, width: '100%', maxWidth: 340, textAlign: 'center' }}>
+            <div style={{ fontSize: 36, marginBottom: 12 }}>{confirmAction.icon}</div>
+            <div style={{ fontSize: 16, fontWeight: 700, marginBottom: 8 }}>{confirmAction.label}</div>
+            <div style={{ fontSize: 13, color: '#8892a8', marginBottom: 24 }}>{confirmAction.desc}</div>
+            <div style={{ display: 'flex', gap: 10 }}>
+              <button onClick={() => setConfirmAction(null)} style={{ flex: 1, padding: '13px', borderRadius: 10, border: '1px solid #1e2a45', background: 'transparent', color: '#8892a8', fontFamily: "'DM Sans', sans-serif", fontSize: 13, cursor: 'pointer' }}>Cancelar</button>
+              <button onClick={confirmAction.onConfirm} style={{ flex: 1, padding: '13px', borderRadius: 10, border: 'none', background: confirmAction.color, color: '#fff', fontFamily: "'DM Sans', sans-serif", fontSize: 13, fontWeight: 700, cursor: 'pointer' }}>Confirmar</button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {showSalesModal && <SalesModal onConfirm={(amt) => finishCheckout(amt)} onSkip={() => finishCheckout(null)} />}
 
       {loading && (
@@ -438,10 +622,10 @@ export default function CheckinPage({ params }) {
           <button style={S.actBtn(!isIn || onLunch || onBreak)} disabled={!isIn || onLunch || onBreak} onClick={doCheckout}>
             <div style={S.actIcon('rgba(239,68,68,.12)', '#ef4444')}>✕</div>Check Out
           </button>
-          <button style={S.actBtn(!isIn || onBreak)} disabled={!isIn || onBreak} onClick={() => doLunch(!onLunch)}>
+          <button style={S.actBtn(!isIn || onBreak)} disabled={!isIn || onBreak} onClick={() => requestLunch(!onLunch)}>
             <div style={S.actIcon('rgba(245,158,11,.12)', '#f59e0b')}>☕</div>{onLunch ? 'Fin Comida' : 'Comida'}
           </button>
-          <button style={S.actBtn(!isIn || onLunch)} disabled={!isIn || onLunch} onClick={() => doBreak(!onBreak)}>
+          <button style={S.actBtn(!isIn || onLunch)} disabled={!isIn || onLunch} onClick={() => requestBreak(!onBreak)}>
             <div style={S.actIcon('rgba(59,130,246,.12)', '#3b82f6')}>⏸</div>{onBreak ? 'Fin Descanso' : 'Descanso'}
           </button>
         </div>
