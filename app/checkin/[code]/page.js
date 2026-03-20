@@ -72,18 +72,20 @@ export default function CheckinPage({ params }) {
   const [gps, setGps]               = useState({ status: 'idle' })
   const [now, setNow]               = useState(new Date())
   const [isIn, setIsIn]             = useState(false)
-  const [isDone, setIsDone]         = useState(false)   // ← NEW: turno completado hoy
+  const [isDone, setIsDone]         = useState(false)
   const [onLunch, setOnLunch]       = useState(false)
   const [onBreak, setOnBreak]       = useState(false)
   const [ciTime, setCiTime]         = useState(null)
-  const [coTime, setCoTime]         = useState(null)    // ← NEW
+  const [coTime, setCoTime]         = useState(null)
   const [events, setEvents]         = useState([])
   const [todayRecord, setTodayRecord] = useState(null)
   const [schedule, setSchedule]     = useState(null)
   const [showSalesModal, setShowSalesModal] = useState(false)
-  const [photoStep, setPhotoStep] = useState(false)
-  const [photoData, setPhotoData] = useState(null)
-  const [cameraErr, setCameraErr] = useState('')
+  const [photoStep, setPhotoStep]   = useState(false)
+  const [photoData, setPhotoData]   = useState(null)
+  const [cameraErr, setCameraErr]   = useState('')
+  // ✅ FIX: estado de procesando para bloquear doble tap
+  const [checkinLoading, setCheckinLoading] = useState(false)
   const videoRef = useRef(null)
   const canvasRef = useRef(null)
 
@@ -127,11 +129,9 @@ export default function CheckinPage({ params }) {
         setCiTime(fmtTime(new Date(data.check_in), tz))
       }
       if (data.check_out) {
-        // Turno completado — marcar como done, NO permitir nuevo check-in
         setIsDone(true)
         setIsIn(false)
         setCoTime(fmtTime(new Date(data.check_out), tz))
-        // Reconstruir eventos desde el registro
         const evs = []
         if (data.check_in)    evs.push({ type: 'ci', time: fmtTime(new Date(data.check_in), tz) })
         if (data.lunch_start) evs.push({ type: 'ls', time: fmtTime(new Date(data.lunch_start), tz) })
@@ -145,7 +145,6 @@ export default function CheckinPage({ params }) {
         setIsIn(true)
         if (data.lunch_start && !data.lunch_end) setOnLunch(true)
         if (data.break_start && !data.break_end) setOnBreak(true)
-        // Reconstruir eventos parciales
         const evs = []
         evs.push({ type: 'ci', time: fmtTime(new Date(data.check_in), tz) })
         if (data.lunch_start) evs.push({ type: 'ls', time: fmtTime(new Date(data.lunch_start), tz) })
@@ -205,7 +204,6 @@ export default function CheckinPage({ params }) {
     setCameraErr('')
     setPhotoData(null)
     setPhotoStep(true)
-    // slight delay so the video element mounts
     setTimeout(async () => {
       try {
         const s = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user' }, audio: false })
@@ -244,14 +242,22 @@ export default function CheckinPage({ params }) {
   }
 
   async function confirmCheckinWithPhoto() {
-    if (!photoData) return
+    if (!photoData || checkinLoading) return
+
+    // ✅ FIX: Bloquear inmediatamente para evitar doble ejecución
+    setCheckinLoading(true)
     setPhotoStep(false)
+    stopCamera()
+
     const checkIn = new Date()
     const tz      = site?.timezone || 'America/Cancun'
     const today   = checkIn.toLocaleDateString('en-CA', { timeZone: tz })
     const status  = await calcStatus(checkIn)
 
-    // Upload photo to Supabase Storage
+    // ✅ FIX: Marcar isIn=true ANTES del upload para que el botón quede deshabilitado
+    setIsIn(true)
+    setCiTime(fmtTime(checkIn, tz))
+
     let photoUrl = null
     try {
       const blob = await (await fetch(photoData)).blob()
@@ -264,7 +270,6 @@ export default function CheckinPage({ params }) {
         photoUrl = urlData?.publicUrl || null
       }
     } catch (e) {
-      // If upload fails, proceed anyway — don't block check-in
       console.error('Photo upload error:', e)
     }
 
@@ -277,14 +282,20 @@ export default function CheckinPage({ params }) {
     const { data, error } = await supabase.from('attendance').insert(record).select().single()
     if (!error && data) {
       setTodayRecord(data)
-      setIsIn(true)
-      setCiTime(fmtTime(checkIn, tz))
       setEvents(prev => [...prev, { type: 'ci', time: fmtTime(checkIn, tz) }])
+    } else if (error) {
+      // ✅ FIX: Si falla el insert, revertir el estado para que el empleado pueda reintentar
+      console.error('Checkin insert error:', error)
+      setIsIn(false)
+      setCiTime(null)
     }
+
+    setCheckinLoading(false)
   }
 
   async function doCheckin() {
-    if (isDone) return
+    // ✅ FIX: Bloquear si ya está procesando, ya entró, o ya terminó el turno
+    if (isDone || isIn || checkinLoading) return
     openCamera()
   }
 
@@ -398,7 +409,6 @@ export default function CheckinPage({ params }) {
     </div>
   )
 
-  // ── Check-in completado hoy ───────────────────────────────────────────────
   if (isDone) return (
     <div style={S.page}>
       <div style={S.bar}><img src='/logo.jpeg' style={S.logo} alt='GM' /><span style={{ fontSize: 13, fontWeight: 600 }}>{site?.name}</span></div>
@@ -447,7 +457,6 @@ export default function CheckinPage({ params }) {
     </div>
   )
 
-  // ── Pantalla principal de check-in ────────────────────────────────────────
   return (
     <div style={S.page}>
       {showSalesModal && <SalesModal onConfirm={(amt) => finishCheckout(amt)} onSkip={() => finishCheckout(null)} />}
@@ -472,7 +481,13 @@ export default function CheckinPage({ params }) {
                 <img src={photoData} alt="Foto" style={{ width: '100%', maxWidth: 380, borderRadius: 14, border: '2px solid #10b981', marginBottom: 16 }} />
                 <div style={{ display: 'flex', gap: 10 }}>
                   <button onClick={retakePhoto} style={{ flex: 1, padding: '13px', borderRadius: 10, border: '1px solid #1e2a45', background: 'transparent', color: '#8892a8', fontSize: 13, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}>Repetir</button>
-                  <button onClick={confirmCheckinWithPhoto} style={{ flex: 2, padding: '13px', borderRadius: 10, border: 'none', background: '#10b981', color: '#fff', fontSize: 14, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>✓ Confirmar entrada</button>
+                  <button
+                    onClick={confirmCheckinWithPhoto}
+                    disabled={checkinLoading}
+                    style={{ flex: 2, padding: '13px', borderRadius: 10, border: 'none', background: checkinLoading ? '#1e2a45' : '#10b981', color: checkinLoading ? '#4a5568' : '#fff', fontSize: 14, fontWeight: 700, cursor: checkinLoading ? 'not-allowed' : 'pointer', fontFamily: 'inherit' }}
+                  >
+                    {checkinLoading ? 'Registrando...' : '✓ Confirmar entrada'}
+                  </button>
                 </div>
               </div>
             ) : (
@@ -490,6 +505,16 @@ export default function CheckinPage({ params }) {
           </div>
         </div>
       )}
+
+      {/* ── Loading overlay mientras se registra ── */}
+      {checkinLoading && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(5,8,16,0.85)', zIndex: 400, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 16 }}>
+          <div style={{ width: 48, height: 48, border: '3px solid #1e2a45', borderTop: '3px solid #10b981', borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
+          <div style={{ fontSize: 14, color: '#8892a8' }}>Registrando entrada...</div>
+          <style>{`@keyframes spin { to { transform: rotate(360deg) } }`}</style>
+        </div>
+      )}
+
       <div style={S.bar}><img src='/logo.jpeg' style={S.logo} alt='GM' /><span style={{ fontSize: 13, fontWeight: 600 }}>{site?.name}</span></div>
       <div style={S.container}>
         <div style={S.card}>
@@ -550,8 +575,8 @@ export default function CheckinPage({ params }) {
 
         <div style={S.btnGrid}>
           <button
-            style={S.actBtn(isIn || isDone || (!gpsOk && gps.status !== 'idle'))}
-            disabled={isIn || isDone || (!gpsOk && gps.status !== 'idle')}
+            style={S.actBtn(isIn || isDone || checkinLoading || (!gpsOk && gps.status !== 'idle'))}
+            disabled={isIn || isDone || checkinLoading || (!gpsOk && gps.status !== 'idle')}
             onClick={doCheckin}
           >
             <div style={S.actIcon('rgba(16,185,129,.12)', '#10b981')}>✓</div>Check In
