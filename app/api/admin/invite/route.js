@@ -1,0 +1,37 @@
+import { createClient } from '@supabase/supabase-js'
+import { NextResponse } from 'next/server'
+
+export async function POST(request) {
+  try {
+    const { email, name, role, site_ids } = await request.json()
+
+    // Use service role key to invite user (bypasses RLS)
+    const supabaseAdmin = createClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL,
+      process.env.SUPABASE_SERVICE_ROLE_KEY
+    )
+
+    // Invite user — sends email with setup link
+    const { data: inviteData, error: inviteErr } = await supabaseAdmin.auth.admin.inviteUserByEmail(email, {
+      redirectTo: `${process.env.NEXT_PUBLIC_SITE_URL || 'https://gmontalvo-asistencia.vercel.app'}/admin`,
+    })
+
+    if (inviteErr) return NextResponse.json({ error: inviteErr.message }, { status: 400 })
+
+    const userId = inviteData.user.id
+
+    // Create admin_users row
+    await supabaseAdmin.from('admin_users').insert({ id: userId, name, email, role })
+
+    // Assign site permissions if manager
+    if (role !== 'superadmin' && site_ids?.length > 0) {
+      await supabaseAdmin.from('admin_site_permissions').insert(
+        site_ids.map(site_id => ({ admin_user_id: userId, site_id }))
+      )
+    }
+
+    return NextResponse.json({ ok: true })
+  } catch (e) {
+    return NextResponse.json({ error: e.message }, { status: 500 })
+  }
+}
