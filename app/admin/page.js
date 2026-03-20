@@ -1,6 +1,7 @@
 'use client'
 import { useState, useEffect, useCallback } from 'react'
 import { supabase } from '../../lib/supabase'
+import { useRouter } from 'next/navigation'
 
 const stLbl = { on_time: 'Puntual', tolerancia: 'Tolerancia', late: 'Retardo', absent: 'Falta' }
 const stClr = { on_time: '#10b981', tolerancia: '#f59e0b', late: '#ef4444', absent: '#ef4444' }
@@ -48,10 +49,16 @@ function addDays(date, n) {
 const DAY_NAMES = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom']
 
 export default function AdminPage() {
+  const router = useRouter()
+  const [authUser,  setAuthUser]  = useState(null)  // Supabase auth user
+  const [adminUser, setAdminUser] = useState(null)  // admin_users row (role, name)
+  const [authLoading, setAuthLoading] = useState(true)
+
   const [sites, setSites]     = useState([])
   const [emps, setEmps]       = useState([])
   const [att, setAtt]         = useState([])
   const [schedules, setSchedules] = useState([])
+  const [adminUsers, setAdminUsers] = useState([]) // for Usuarios tab
   const [tab, setTab]         = useState('dashboard')
   const [modal, setModal]     = useState(null)
   const [sideEmp, setSideEmp] = useState(null)
@@ -69,9 +76,39 @@ export default function AdminPage() {
 
   const today = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Cancun' })
 
+  // ── Auth ──
+  useEffect(() => {
+    supabase.auth.getUser().then(async ({ data: { user } }) => {
+      if (!user) { router.push('/admin/login'); return }
+      setAuthUser(user)
+      // Load admin_users row to get role
+      const { data: au } = await supabase.from('admin_users').select('*').eq('id', user.id).single()
+      setAdminUser(au)
+      setAuthLoading(false)
+    })
+  }, [])
+
+  const isSuperAdmin = adminUser?.role === 'superadmin'
+
+  async function handleLogout() {
+    await supabase.auth.signOut()
+    router.push('/admin/login')
+  }
+
   const load = useCallback(async () => {
+    if (!adminUser) return
+    let sitesQuery = supabase.from('sites').select('*').eq('active', true).order('name')
+
+    // If not superadmin, filter to permitted sites only
+    if (!isSuperAdmin) {
+      const { data: perms } = await supabase.from('admin_site_permissions').select('site_id').eq('admin_user_id', adminUser.id)
+      const permSiteIds = (perms || []).map(p => p.site_id)
+      if (permSiteIds.length === 0) { setSites([]); setEmps([]); setAtt([]); setSchedules([]); setLoading(false); return }
+      sitesQuery = sitesQuery.in('id', permSiteIds)
+    }
+
     const [s, e, a, sc] = await Promise.all([
-      supabase.from('sites').select('*').eq('active', true).order('name'),
+      sitesQuery,
       supabase.from('employees').select('*').eq('active', true).order('name'),
       supabase.from('attendance').select('*').order('date', { ascending: false }),
       supabase.from('schedules').select('*'),
@@ -80,20 +117,35 @@ export default function AdminPage() {
     setEmps(e.data || [])
     setAtt(a.data || [])
     setSchedules(sc.data || [])
-    setLoading(false)
-  }, [])
 
-  useEffect(() => { load() }, [load])
+    // Load admin users if superadmin
+    if (isSuperAdmin) {
+      const { data: au } = await supabase.from('admin_users').select('*, admin_site_permissions(site_id)').order('created_at')
+      setAdminUsers(au || [])
+    }
+
+    setLoading(false)
+  }, [adminUser, isSuperAdmin])
+
+  useEffect(() => { if (adminUser) load() }, [adminUser, load])
   useEffect(() => {
     if (toast) { const t = setTimeout(() => setToast(null), 2500); return () => clearTimeout(t) }
   }, [toast])
+
+  // Auto-refresh data when switching tabs
+  useEffect(() => { if (adminUser) load() }, [tab])
+
+  if (authLoading) return (
+    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100vh', background: '#0a0e1a', color: '#8892a8', fontFamily: "'DM Sans'" }}>
+      Cargando...
+    </div>
+  )
 
   // ── Dashboard helpers ──────────────────────────────────────────────────────
   const todaySchedules = schedules.filter(s => s.date === today)
   const todayAtt       = att.filter(r => r.date === today)
 
   // Build dashboard rows: one per employee scheduled today
-  const scheduledEmpIds = new Set(todaySchedules.map(s => s.employee_id))
   const dashRows = todaySchedules.map(sc => {
     const emp     = emps.find(e => e.id === sc.employee_id)
     const site    = sites.find(s => s.id === sc.site_id)
@@ -134,30 +186,10 @@ export default function AdminPage() {
     return { sc, emp, site, record, color, bg, statusLabel }
   })
 
-  // Also include employees who checked in today WITHOUT a scheduled shift
-  const unscheduledRows = todayAtt
-    .filter(record => !scheduledEmpIds.has(record.employee_id))
-    .map(record => {
-      const emp  = emps.find(e => e.id === record.employee_id)
-      const site = sites.find(s => s.id === record.site_id)
-      let color, bg, statusLabel
-      if (record.check_out) {
-        color = '#3b82f6'; bg = 'rgba(59,130,246,.12)'; statusLabel = 'Completó turno'
-      } else {
-        color = '#06b6d4'; bg = 'rgba(6,182,212,.12)'; statusLabel = 'Sin horario asignado'
-      }
-      // Fake a minimal sc object so the render code works
-      const sc = { id: 'unscheduled-' + record.id, site_id: record.site_id, start_time: null, end_time: null, employee_id: record.employee_id }
-      return { sc, emp, site, record, color, bg, statusLabel, unscheduled: true }
-    })
-
-  // All rows combined for stats
-  const allDashRows = [...dashRows, ...unscheduledRows]
-
   // Stats
-  const statOnTime  = allDashRows.filter(r => r.record && !r.record.check_out && r.record.status === 'on_time').length
-  const statTol     = allDashRows.filter(r => r.record && !r.record.check_out && (r.record.status === 'tolerancia' || r.record.status === 'late')).length
-  const statDone    = allDashRows.filter(r => r.record?.check_out).length
+  const statOnTime  = dashRows.filter(r => r.record && !r.record.check_out && r.record.status === 'on_time').length
+  const statTol     = dashRows.filter(r => r.record && !r.record.check_out && (r.record.status === 'tolerancia' || r.record.status === 'late')).length
+  const statDone    = dashRows.filter(r => r.record?.check_out).length
   const statMissing = dashRows.filter(r => !r.record && r.statusLabel === 'No se presentó').length
   const statPending = dashRows.filter(r => !r.record && r.statusLabel !== 'No se presentó').length
 
@@ -178,7 +210,6 @@ export default function AdminPage() {
     setToast('Sitio guardado'); setModal(null); load()
   }
   async function saveEmp(data) {
-    if (data.email) data.email = data.email.trim().toLowerCase()
     if (data.id) { await supabase.from('employees').update(data).eq('id', data.id) }
     else { delete data.id; await supabase.from('employees').insert(data) }
     setToast('Empleado guardado'); setModal(null); load()
@@ -231,7 +262,15 @@ export default function AdminPage() {
             {[{ id: 'employees', lb: 'Empleados' }, { id: 'sites', lb: 'Sitios' }].map(n => (
               <button key={n.id} onClick={() => { setTab(n.id); if (window.innerWidth < 768) setSidebarOpen(false) }} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 10px', borderRadius: 6, cursor: 'pointer', fontSize: 12, fontWeight: 500, color: tab === n.id ? '#3b82f6' : '#8892a8', background: tab === n.id ? 'rgba(59,130,246,.12)' : 'transparent', border: 'none', width: '100%', textAlign: 'left', fontFamily: 'inherit' }}>{n.lb}</button>
             ))}
+            {isSuperAdmin && <>
+              <div style={{ fontSize: 9, fontWeight: 600, textTransform: 'uppercase', letterSpacing: 1, color: '#4a5568', padding: '12px 8px 4px' }}>Admin</div>
+              <button onClick={() => { setTab('users'); if (window.innerWidth < 768) setSidebarOpen(false) }} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 10px', borderRadius: 6, cursor: 'pointer', fontSize: 12, fontWeight: 500, color: tab === 'users' ? '#3b82f6' : '#8892a8', background: tab === 'users' ? 'rgba(59,130,246,.12)' : 'transparent', border: 'none', width: '100%', textAlign: 'left', fontFamily: 'inherit' }}>Usuarios</button>
+            </>}
           </nav>
+          <div style={{ padding: '12px 8px', borderTop: '1px solid #1e2a45' }}>
+            <div style={{ fontSize: 10, color: '#4a5568', padding: '0 8px 6px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{adminUser?.name || authUser?.email}</div>
+            <button onClick={handleLogout} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 10px', borderRadius: 6, cursor: 'pointer', fontSize: 12, color: '#ef4444', background: 'transparent', border: 'none', width: '100%', textAlign: 'left', fontFamily: 'inherit' }}>Cerrar sesión</button>
+          </div>
         </div>
       </div>
 
@@ -242,7 +281,7 @@ export default function AdminPage() {
           <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
             <button onClick={() => setSidebarOpen(o => !o)} style={{ background: 'none', border: '1px solid #1e2a45', borderRadius: 6, color: '#8892a8', cursor: 'pointer', padding: '5px 9px', fontSize: 16, lineHeight: 1, fontFamily: 'inherit' }}>☰</button>
             <div>
-              <h1 style={{ fontSize: 17, fontWeight: 700 }}>{{ dashboard: 'Dashboard', attendance: 'Asistencia', employees: 'Empleados', sites: 'Sitios' }[tab]}</h1>
+              <h1 style={{ fontSize: 17, fontWeight: 700 }}>{{ dashboard: 'Dashboard', attendance: 'Asistencia', employees: 'Empleados', sites: 'Sitios', users: 'Usuarios' }[tab]}</h1>
               <p style={{ fontSize: 11, color: '#8892a8', marginTop: 1 }}>
                 {new Date().toLocaleDateString('es-MX', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric', timeZone: 'America/Cancun' })}
               </p>
@@ -250,6 +289,7 @@ export default function AdminPage() {
           </div>
           {tab === 'employees' && <button onClick={() => setModal({ type: 'emp', data: null })} style={{ padding: '7px 14px', borderRadius: 7, border: 'none', background: '#3b82f6', color: '#fff', fontSize: 12, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}>+ Nuevo Empleado</button>}
           {tab === 'sites'     && <button onClick={() => setModal({ type: 'site', data: null })} style={{ padding: '7px 14px', borderRadius: 7, border: 'none', background: '#3b82f6', color: '#fff', fontSize: 12, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}>+ Nuevo Sitio</button>}
+          {tab === 'users'     && isSuperAdmin && <button onClick={() => setModal({ type: 'adminUser', data: null })} style={{ padding: '7px 14px', borderRadius: 7, border: 'none', background: '#3b82f6', color: '#fff', fontSize: 12, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}>+ Nuevo Usuario</button>}
         </div>
 
         <div style={{ flex: 1, padding: '18px 22px', overflow: 'auto' }}>
@@ -274,22 +314,22 @@ export default function AdminPage() {
 
             {/* Per-site groups */}
             {sites.map(site => {
-              const siteRows = allDashRows.filter(r => r.sc.site_id === site.id)
+              const siteRows = dashRows.filter(r => r.sc.site_id === site.id)
               if (siteRows.length === 0) return null
               return (
                 <div key={site.id} style={{ background: '#1a2035', border: '1px solid #1e2a45', borderRadius: 10, overflow: 'hidden', marginBottom: 14 }}>
                   <div style={{ padding: '10px 16px', borderBottom: '1px solid #1e2a45', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                     <div style={{ fontWeight: 600, fontSize: 13 }}>{site.name}</div>
-                    <div style={{ fontSize: 10, color: '#4a5568' }}>{siteRows.length} persona{siteRows.length !== 1 ? 's' : ''} hoy</div>
+                    <div style={{ fontSize: 10, color: '#4a5568' }}>{siteRows.length} esperado{siteRows.length !== 1 ? 's' : ''} hoy</div>
                   </div>
                   <table style={{ width: '100%', borderCollapse: 'collapse' }}>
                     <thead>
-                      <tr>{['Empleado', 'Horario', 'Entrada', 'Salida', 'Venta', 'Estado'].map(h => (
+                      <tr>{['Empleado', 'Horario', 'Entrada', 'Salida', 'Estado'].map(h => (
                         <th key={h} style={{ textAlign: 'left', fontSize: 9, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '.6px', color: '#4a5568', padding: '8px 16px', borderBottom: '1px solid #1e2a45' }}>{h}</th>
                       ))}</tr>
                     </thead>
                     <tbody>
-                      {siteRows.map(({ sc, emp, record, color, bg, statusLabel, unscheduled }) => (
+                      {siteRows.map(({ sc, emp, record, color, bg, statusLabel }) => (
                         <tr key={sc.id} style={{ borderBottom: '1px solid rgba(30,42,69,.3)' }}>
                           <td style={{ padding: '10px 16px' }}>
                             <button onClick={() => setSideEmp(emp)} style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', textAlign: 'left', fontFamily: 'inherit' }}>
@@ -298,18 +338,13 @@ export default function AdminPage() {
                             </button>
                           </td>
                           <td style={{ padding: '10px 16px', fontSize: 11, fontFamily: "'JetBrains Mono'", color: '#8892a8' }}>
-                            {unscheduled
-                              ? <span style={{ color: '#f59e0b', fontSize: 10, fontFamily: 'inherit' }}>Sin horario</span>
-                              : `${sc.start_time?.slice(0,5)} – ${sc.end_time?.slice(0,5)}`}
+                            {sc.start_time?.slice(0,5)} – {sc.end_time?.slice(0,5)}
                           </td>
                           <td style={{ padding: '10px 16px', fontSize: 11, fontFamily: "'JetBrains Mono'" }}>
                             {record?.check_in ? fmtTime(record.check_in, site.timezone) : '–'}
                           </td>
                           <td style={{ padding: '10px 16px', fontSize: 11, fontFamily: "'JetBrains Mono'" }}>
                             {record?.check_out ? fmtTime(record.check_out, site.timezone) : '–'}
-                          </td>
-                          <td style={{ padding: '10px 16px', fontSize: 11, fontFamily: "'JetBrains Mono'", color: record?.sales_amount > 0 ? '#10b981' : '#4a5568' }}>
-                            {record?.sales_amount > 0 ? '$' + Number(record.sales_amount).toLocaleString('es-MX') : '–'}
                           </td>
                           <td style={{ padding: '10px 16px' }}>
                             <span style={{ padding: '3px 10px', borderRadius: 5, fontSize: 10, fontWeight: 600, color, background: bg }}>
@@ -323,7 +358,7 @@ export default function AdminPage() {
                 </div>
               )
             })}
-            {allDashRows.length === 0 && (
+            {dashRows.length === 0 && (
               <div style={{ padding: 32, textAlign: 'center', color: '#4a5568', fontSize: 13, background: '#1a2035', borderRadius: 10, border: '1px solid #1e2a45' }}>
                 No hay horarios cargados para hoy.
               </div>
@@ -490,6 +525,49 @@ export default function AdminPage() {
               {sites.length === 0 && <div style={{ padding: 20, textAlign: 'center', color: '#4a5568', fontSize: 12, background: '#1a2035', borderRadius: 10, border: '1px solid #1e2a45' }}>No hay sitios. Agrega el primero.</div>}
             </div>
           )}
+
+          {/* ══ USUARIOS ══ */}
+          {tab === 'users' && isSuperAdmin && (
+            <div style={{ background: '#1a2035', border: '1px solid #1e2a45', borderRadius: 10, overflow: 'hidden' }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                <thead>
+                  <tr>{['Usuario', 'Email', 'Rol', 'Sucursales', ''].map(h => (
+                    <th key={h} style={{ textAlign: 'left', fontSize: 9, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '.6px', color: '#4a5568', padding: '9px 16px', borderBottom: '1px solid #1e2a45' }}>{h}</th>
+                  ))}</tr>
+                </thead>
+                <tbody>
+                  {adminUsers.map(au => {
+                    const auSites = (au.admin_site_permissions || []).map(p => sites.find(s => s.id === p.site_id)?.name).filter(Boolean)
+                    return (
+                      <tr key={au.id} style={{ borderBottom: '1px solid rgba(30,42,69,.3)' }}>
+                        <td style={{ padding: '9px 16px' }}>
+                          <div style={{ fontSize: 12, fontWeight: 600 }}>{au.name}</div>
+                        </td>
+                        <td style={{ padding: '9px 16px', fontSize: 11, color: '#8892a8' }}>{au.email}</td>
+                        <td style={{ padding: '9px 16px' }}>
+                          <span style={{ padding: '2px 8px', borderRadius: 4, fontSize: 10, fontWeight: 600, color: au.role === 'superadmin' ? '#3b82f6' : '#10b981', background: au.role === 'superadmin' ? 'rgba(59,130,246,.12)' : 'rgba(16,185,129,.12)' }}>
+                            {au.role === 'superadmin' ? 'Super Admin' : 'Gerente'}
+                          </span>
+                        </td>
+                        <td style={{ padding: '9px 16px', fontSize: 11, color: '#8892a8' }}>
+                          {au.role === 'superadmin' ? <span style={{ color: '#4a5568' }}>Todas</span> : auSites.length > 0 ? auSites.join(', ') : <span style={{ color: '#ef4444' }}>Sin asignar</span>}
+                        </td>
+                        <td style={{ padding: '9px 16px' }}>
+                          <div style={{ display: 'flex', gap: 6 }}>
+                            <button onClick={() => setModal({ type: 'adminUser', data: au })} style={{ background: 'none', border: 'none', color: '#8892a8', cursor: 'pointer', fontSize: 11, fontFamily: 'inherit' }}>Editar</button>
+                            {au.id !== authUser?.id && (
+                              <button onClick={async () => { if (confirm('Desactivar ' + au.name + '?')) { await supabase.from('admin_users').update({ active: false }).eq('id', au.id); load(); setToast('Usuario desactivado') } }} style={{ background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer', fontSize: 11, fontFamily: 'inherit' }}>Desactivar</button>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                    )
+                  })}
+                  {adminUsers.length === 0 && <tr><td colSpan={5} style={{ padding: 24, textAlign: 'center', color: '#4a5568', fontSize: 12 }}>No hay usuarios admin.</td></tr>}
+                </tbody>
+              </table>
+            </div>
+          )}
         </div>
       </div>
 
@@ -504,10 +582,11 @@ export default function AdminPage() {
       )}
 
       {/* ── Modals ── */}
-      {modal?.type === 'emp'      && <EmpModal      data={modal.data} onSave={saveEmp} onClose={() => setModal(null)} />}
-      {modal?.type === 'site'     && <SiteModal     data={modal.data} onSave={saveSite} onClose={() => setModal(null)} />}
-      {modal?.type === 'qr'       && <QrModal       site={modal.data} url={getSiteUrl(modal.data.code)} onClose={() => setModal(null)} />}
-      {modal?.type === 'schedule' && <ScheduleModal emp={modal.data} sites={sites} schedules={schedules.filter(s => s.employee_id === modal.data.id)} onSave={async () => { await load(); setToast('Horarios guardados'); setModal(null) }} onClose={() => setModal(null)} />}
+      {modal?.type === 'emp'       && <EmpModal       data={modal.data} onSave={saveEmp} onClose={() => setModal(null)} />}
+      {modal?.type === 'site'      && <SiteModal      data={modal.data} onSave={saveSite} onClose={() => setModal(null)} />}
+      {modal?.type === 'qr'        && <QrModal        site={modal.data} url={getSiteUrl(modal.data.code)} onClose={() => setModal(null)} />}
+      {modal?.type === 'schedule'  && <ScheduleModal  emp={modal.data} sites={sites} schedules={schedules.filter(s => s.employee_id === modal.data.id)} onSave={async () => { await load(); setToast('Horarios guardados'); setModal(null) }} onClose={() => setModal(null)} />}
+      {modal?.type === 'adminUser' && <AdminUserModal data={modal.data} sites={sites} onSave={async () => { await load(); setToast('Usuario guardado'); setModal(null) }} onClose={() => setModal(null)} />}
 
       {/* Toast */}
       {toast && (
@@ -596,13 +675,13 @@ function EmpSidePanel({ emp, att, sites, onClose }) {
       <div style={{ flex: 1, overflowY: 'auto' }}>
         <table style={{ width: '100%', borderCollapse: 'collapse' }}>
           <thead style={{ position: 'sticky', top: 0, background: '#111827', zIndex: 1 }}>
-            <tr>{['Fecha', 'Sucursal', 'Entrada', 'Salida', 'Horas', 'Venta', 'Estado'].map(h => (
+            <tr>{['Fecha', 'Sucursal', 'Entrada', 'Salida', 'Horas', 'Venta', 'Foto', 'Estado'].map(h => (
               <th key={h} style={{ textAlign: 'left', fontSize: 9, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '.6px', color: '#4a5568', padding: '8px 14px', borderBottom: '1px solid #1e2a45' }}>{h}</th>
             ))}</tr>
           </thead>
           <tbody>
             {filtered.length === 0 && (
-              <tr><td colSpan={7} style={{ padding: 24, textAlign: 'center', color: '#4a5568', fontSize: 12 }}>Sin registros</td></tr>
+              <tr><td colSpan={8} style={{ padding: 24, textAlign: 'center', color: '#4a5568', fontSize: 12 }}>Sin registros</td></tr>
             )}
             {filtered.map(r => {
               const site = sites.find(s => s.id === r.site_id)
@@ -615,6 +694,13 @@ function EmpSidePanel({ emp, att, sites, onClose }) {
                   <td style={{ padding: '8px 14px', fontSize: 11, fontFamily: "'JetBrains Mono'" }}>{fmtHours(r.hours_worked)}</td>
                   <td style={{ padding: '8px 14px', fontSize: 11, fontFamily: "'JetBrains Mono'", color: r.sales_amount > 0 ? '#10b981' : '#4a5568' }}>
                     {r.sales_amount > 0 ? '$' + Number(r.sales_amount).toLocaleString('es-MX') : '–'}
+                  </td>
+                  <td style={{ padding: '8px 14px' }}>
+                    {r.photo_url
+                      ? <a href={r.photo_url} target='_blank' rel='noopener noreferrer'>
+                          <img src={r.photo_url} alt='foto' style={{ width: 32, height: 32, borderRadius: 6, objectFit: 'cover', display: 'block', border: '1px solid #1e2a45' }} />
+                        </a>
+                      : <span style={{ fontSize: 10, color: '#4a5568' }}>–</span>}
                   </td>
                   <td style={{ padding: '8px 14px' }}>
                     {r.status ? (
@@ -635,10 +721,11 @@ function EmpSidePanel({ emp, att, sites, onClose }) {
 
 // ─── Emp Modal ────────────────────────────────────────────────────────────────
 function EmpModal({ data, onSave, onClose }) {
-  const [f, setF] = useState(data || { name: '', email: '', phone: '', role: 'Vendedor(a)', free_roam: false, skip_sales: false, fixed_week: false })
+  // skip_sales=true means DO NOT ask for sales. We invert for the "is vendor" checkbox.
+  const [f, setF] = useState(data || { name: '', email: '', phone: '', role: 'Vendedor(a)', skip_sales: false })
   const upd = (k, v) => setF(p => ({ ...p, [k]: v }))
   const valid = f.name?.trim() && f.email?.trim()
-  const chkStyle = { display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, cursor: 'pointer', marginBottom: 10, color: '#f1f5f9' }
+  const isVendor = !f.skip_sales  // vendor = asks for sales = skip_sales is false
   return (
     <div onClick={onClose} style={{ position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', background: 'rgba(0,0,0,.7)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 200 }}>
       <div onClick={e => e.stopPropagation()} style={{ background: '#1a2035', border: '1px solid #1e2a45', borderRadius: 12, padding: 22, width: '100%', maxWidth: 440, maxHeight: '85vh', overflow: 'auto' }}>
@@ -649,26 +736,19 @@ function EmpModal({ data, onSave, onClose }) {
             <input type={t} value={f[k] || ''} onChange={e => upd(k, e.target.value)} style={{ width: '100%', background: '#0d1220', border: '1px solid #1e2a45', color: '#f1f5f9', fontSize: 12, padding: '8px 10px', borderRadius: 6, outline: 'none', fontFamily: 'inherit' }} />
           </div>
         ))}
-        <div style={{ marginBottom: 10 }}>
+        <div style={{ marginBottom: 14 }}>
           <label style={{ fontSize: 10, fontWeight: 600, color: '#8892a8', display: 'block', marginBottom: 4 }}>Rol</label>
           <select value={f.role || 'Vendedor(a)'} onChange={e => upd('role', e.target.value)} style={{ width: '100%', background: '#0d1220', border: '1px solid #1e2a45', color: '#f1f5f9', fontSize: 12, padding: '8px 10px', borderRadius: 6, fontFamily: 'inherit' }}>
             <option>Vendedor(a)</option><option>Encargado(a)</option><option>Gerente Regional</option><option>Supervisor(a)</option>
           </select>
         </div>
-        <div style={{ borderTop: '1px solid #1e2a45', paddingTop: 12, marginBottom: 4 }}>
-          <div style={{ fontSize: 10, fontWeight: 600, color: '#4a5568', textTransform: 'uppercase', letterSpacing: '.5px', marginBottom: 10 }}>Permisos y comportamiento</div>
-          <label style={chkStyle}>
-            <input type='checkbox' checked={!!f.free_roam} onChange={e => upd('free_roam', e.target.checked)} />
-            Acceso libre a cualquier sucursal
+        <div style={{ borderTop: '1px solid #1e2a45', paddingTop: 12, marginBottom: 14 }}>
+          <div style={{ fontSize: 10, fontWeight: 600, color: '#4a5568', textTransform: 'uppercase', letterSpacing: '.5px', marginBottom: 10 }}>Comportamiento</div>
+          <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, cursor: 'pointer', color: '#f1f5f9' }}>
+            <input type='checkbox' checked={isVendor} onChange={e => upd('skip_sales', !e.target.checked)} />
+            Vendedor — pedir monto de ventas al hacer Check Out
           </label>
-          <label style={chkStyle}>
-            <input type='checkbox' checked={!!f.skip_sales} onChange={e => upd('skip_sales', e.target.checked)} />
-            No pedir monto de ventas al hacer Check Out
-          </label>
-          <label style={{ ...chkStyle, marginBottom: 14 }}>
-            <input type='checkbox' checked={!!f.skip_sales} onChange={e => upd('skip_sales', e.target.checked)} />
-            No pedir monto de ventas al hacer Check Out
-          </label>
+          <div style={{ fontSize: 10, color: '#4a5568', marginTop: 4, marginLeft: 20 }}>Desmarca si es bodega, admin u otro rol sin ventas directas</div>
         </div>
         <div style={{ display: 'flex', gap: 8 }}>
           <button disabled={!valid} onClick={() => onSave(f)} style={{ flex: 1, padding: '10px 16px', borderRadius: 7, border: 'none', background: valid ? '#3b82f6' : '#1e2a45', color: '#fff', fontSize: 12, fontWeight: 600, cursor: valid ? 'pointer' : 'not-allowed', fontFamily: 'inherit' }}>Guardar</button>
@@ -750,12 +830,6 @@ function ScheduleModal({ emp, sites, schedules, onSave, onClose }) {
   const [weekStart, setWeekStart] = useState(() => getWeekStart(new Date()))
   const [week, setWeek] = useState({})
   const [saving, setSaving] = useState(false)
-  const [fixedWeek, setFixedWeek] = useState(!!emp.fixed_week)
-
-  async function toggleFixedWeek(val) {
-    setFixedWeek(val)
-    await supabase.from('employees').update({ fixed_week: val }).eq('id', emp.id)
-  }
 
   // Build 7 dates for current week view
   const weekDates = Array.from({ length: 7 }, (_, i) => {
@@ -764,25 +838,13 @@ function ScheduleModal({ emp, sites, schedules, onSave, onClose }) {
   })
 
   // Load existing schedules into week state when weekStart changes
-  // If employee has fixed_week and current week has no schedules, auto-copy from previous week
   useEffect(() => {
     const w = {}
-    const hasAnyThisWeek = weekDates.some(({ date }) => schedules.find(s => s.date === date))
-
-    weekDates.forEach(({ date }, i) => {
+    weekDates.forEach(({ date }) => {
       const existing = schedules.find(s => s.date === date)
-      if (existing) {
-        w[date] = { on: true, site_id: existing.site_id, start_time: existing.start_time?.slice(0,5) || '10:00', end_time: existing.end_time?.slice(0,5) || '19:00', lunch_mins: existing.lunch_mins ?? 60 }
-      } else if (fixedWeek && !hasAnyThisWeek) {
-        // Try to find matching day from previous week
-        const prevDate = dateStr(addDays(weekStart, i - 7))
-        const prevExisting = schedules.find(s => s.date === prevDate)
-        w[date] = prevExisting
-          ? { on: true, site_id: prevExisting.site_id, start_time: prevExisting.start_time?.slice(0,5) || '10:00', end_time: prevExisting.end_time?.slice(0,5) || '19:00', lunch_mins: prevExisting.lunch_mins ?? 60 }
-          : { on: false, site_id: sites[0]?.id || '', start_time: '10:00', end_time: '19:00', lunch_mins: 60 }
-      } else {
-        w[date] = { on: false, site_id: sites[0]?.id || '', start_time: '10:00', end_time: '19:00', lunch_mins: 60 }
-      }
+      w[date] = existing
+        ? { on: true, site_id: existing.site_id, start_time: existing.start_time?.slice(0,5) || '10:00', end_time: existing.end_time?.slice(0,5) || '19:00', lunch_mins: existing.lunch_mins ?? 60 }
+        : { on: false, site_id: sites[0]?.id || '', start_time: '10:00', end_time: '19:00', lunch_mins: 60 }
     })
     setWeek(w)
   }, [weekStart, schedules])
@@ -831,19 +893,13 @@ function ScheduleModal({ emp, sites, schedules, onSave, onClose }) {
   })()
 
   const iS  = { width: '100%', background: '#0d1220', border: '1px solid #1e2a45', color: '#f1f5f9', fontSize: 11, padding: '6px 8px', borderRadius: 5, outline: 'none', fontFamily: 'inherit' }
-  const iSm = { ...iS, width: 74, textAlign: 'center', fontFamily: "'JetBrains Mono', monospace" }
+  const iSm = { ...iS, width: 90, textAlign: 'center', fontFamily: "'JetBrains Mono', monospace" }
 
   return (
     <div onClick={onClose} style={{ position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', background: 'rgba(0,0,0,.7)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 200, backdropFilter: 'blur(4px)' }}>
       <div onClick={e => e.stopPropagation()} style={{ background: '#1a2035', border: '1px solid #1e2a45', borderRadius: 12, padding: 22, width: '100%', maxWidth: 640, maxHeight: '92vh', overflow: 'auto' }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <h3 style={{ fontSize: 15, fontWeight: 700 }}>Horarios — {emp.name}</h3>
-            <label style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer', fontSize: 11, color: fixedWeek ? '#10b981' : '#8892a8', background: fixedWeek ? 'rgba(16,185,129,.1)' : 'rgba(30,42,69,.4)', border: '1px solid ' + (fixedWeek ? 'rgba(16,185,129,.3)' : '#1e2a45'), padding: '3px 10px', borderRadius: 5, userSelect: 'none' }}>
-              <input type='checkbox' checked={fixedWeek} onChange={e => toggleFixedWeek(e.target.checked)} style={{ accentColor: '#10b981' }} />
-              Semana fija
-            </label>
-          </div>
+          <h3 style={{ fontSize: 15, fontWeight: 700 }}>Horarios — {emp.name}</h3>
           <div style={{ display: 'flex', alignItems: 'center', gap: 6, background: '#0d1220', border: '1px solid #1e2a45', borderRadius: 8, padding: '4px 6px' }}>
             <button onClick={prevWeek} style={{ background: 'rgba(59,130,246,.15)', border: 'none', borderRadius: 5, color: '#3b82f6', padding: '5px 12px', cursor: 'pointer', fontFamily: 'inherit', fontSize: 15, fontWeight: 700, lineHeight: 1 }}>‹</button>
             <span style={{ fontSize: 12, color: '#f1f5f9', fontWeight: 600, minWidth: 170, textAlign: 'center' }}>{weekLabel}</span>
@@ -868,9 +924,13 @@ function ScheduleModal({ emp, sites, schedules, onSave, onClose }) {
                       <select value={day.site_id || ''} onChange={e => upd(date, 'site_id', e.target.value)} style={{ ...iS, flex: '1 1 120px', minWidth: 100, padding: '6px 8px' }}>
                         {sites.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
                       </select>
-                      <input type='time' value={day.start_time || '10:00'} onChange={e => upd(date, 'start_time', e.target.value)} style={iSm} />
+                      <select value={day.start_time || '10:00'} onChange={e => upd(date, 'start_time', e.target.value)} style={{ ...iS, width: 80, padding: '6px 6px', fontFamily: "'JetBrains Mono', monospace" }}>
+                        {Array.from({length: 24}, (_, h) => ['00','30'].map(m => `${String(h).padStart(2,'0')}:${m}`)).flat().map(t => <option key={t} value={t}>{t}</option>)}
+                      </select>
                       <span style={{ fontSize: 11, color: '#4a5568' }}>a</span>
-                      <input type='time' value={day.end_time || '19:00'} onChange={e => upd(date, 'end_time', e.target.value)} style={iSm} />
+                      <select value={day.end_time || '19:00'} onChange={e => upd(date, 'end_time', e.target.value)} style={{ ...iS, width: 80, padding: '6px 6px', fontFamily: "'JetBrains Mono', monospace" }}>
+                        {Array.from({length: 24}, (_, h) => ['00','30'].map(m => `${String(h).padStart(2,'0')}:${m}`)).flat().map(t => <option key={t} value={t}>{t}</option>)}
+                      </select>
                       <select value={day.lunch_mins ?? 60} onChange={e => upd(date, 'lunch_mins', parseInt(e.target.value))} style={{ ...iS, width: 'auto', padding: '6px 8px' }}>
                         <option value={0}>Sin comida</option><option value={30}>30m</option><option value={45}>45m</option><option value={60}>60m</option><option value={90}>90m</option>
                       </select>
@@ -886,6 +946,106 @@ function ScheduleModal({ emp, sites, schedules, onSave, onClose }) {
         <div style={{ display: 'flex', gap: 8, marginTop: 16 }}>
           <button disabled={saving} onClick={save} style={{ flex: 1, padding: '11px 16px', borderRadius: 7, border: 'none', background: '#3b82f6', color: '#fff', fontSize: 13, fontWeight: 600, cursor: saving ? 'wait' : 'pointer', fontFamily: 'inherit' }}>{saving ? 'Guardando...' : 'Guardar Semana'}</button>
           <button onClick={onClose} style={{ padding: '11px 16px', borderRadius: 7, border: '1px solid #1e2a45', background: 'transparent', color: '#8892a8', fontSize: 12, cursor: 'pointer', fontFamily: 'inherit' }}>Cancelar</button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ─── Admin User Modal ─────────────────────────────────────────────────────────
+function AdminUserModal({ data, sites, onSave, onClose }) {
+  const [name,     setName]     = useState(data?.name || '')
+  const [email,    setEmail]    = useState(data?.email || '')
+  const [role,     setRole]     = useState(data?.role || 'manager')
+  const [selSites, setSelSites] = useState(
+    (data?.admin_site_permissions || []).map(p => p.site_id)
+  )
+  const [saving, setSaving] = useState(false)
+  const [err,    setErr]    = useState('')
+
+  const valid = name.trim() && email.trim()
+
+  function toggleSite(id) {
+    setSelSites(p => p.includes(id) ? p.filter(x => x !== id) : [...p, id])
+  }
+
+  async function handleSave() {
+    setSaving(true); setErr('')
+    try {
+      if (data?.id) {
+        // Update existing admin user
+        await supabase.from('admin_users').update({ name, role }).eq('id', data.id)
+        // Re-sync site permissions
+        await supabase.from('admin_site_permissions').delete().eq('admin_user_id', data.id)
+        if (role !== 'superadmin' && selSites.length > 0) {
+          await supabase.from('admin_site_permissions').insert(
+            selSites.map(site_id => ({ admin_user_id: data.id, site_id }))
+          )
+        }
+      } else {
+        // Invite new user via Supabase Auth admin invite
+        const res = await fetch('/api/admin/invite', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email: email.trim().toLowerCase(), name, role, site_ids: selSites }),
+        })
+        const json = await res.json()
+        if (!res.ok) { setErr(json.error || 'Error al invitar usuario'); setSaving(false); return }
+      }
+      onSave()
+    } catch (e) {
+      setErr('Error inesperado. Intenta de nuevo.')
+      setSaving(false)
+    }
+  }
+
+  const iS = { width: '100%', background: '#0d1220', border: '1px solid #1e2a45', color: '#f1f5f9', fontSize: 12, padding: '8px 10px', borderRadius: 6, outline: 'none', fontFamily: 'inherit' }
+
+  return (
+    <div onClick={onClose} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.7)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 200 }}>
+      <div onClick={e => e.stopPropagation()} style={{ background: '#1a2035', border: '1px solid #1e2a45', borderRadius: 12, padding: 22, width: '100%', maxWidth: 460, maxHeight: '85vh', overflow: 'auto' }}>
+        <h3 style={{ fontSize: 15, fontWeight: 700, marginBottom: 14 }}>{data ? 'Editar Usuario' : 'Invitar Usuario Admin'}</h3>
+
+        {err && <div style={{ background: 'rgba(239,68,68,.1)', border: '1px solid rgba(239,68,68,.25)', borderRadius: 7, padding: '10px 14px', fontSize: 12, color: '#ef4444', marginBottom: 14 }}>{err}</div>}
+
+        <div style={{ marginBottom: 10 }}>
+          <label style={{ fontSize: 10, fontWeight: 600, color: '#8892a8', display: 'block', marginBottom: 4 }}>Nombre</label>
+          <input value={name} onChange={e => setName(e.target.value)} style={iS} />
+        </div>
+        {!data && (
+          <div style={{ marginBottom: 10 }}>
+            <label style={{ fontSize: 10, fontWeight: 600, color: '#8892a8', display: 'block', marginBottom: 4 }}>Email</label>
+            <input type='email' value={email} onChange={e => setEmail(e.target.value)} style={iS} />
+            <div style={{ fontSize: 10, color: '#4a5568', marginTop: 4 }}>Recibirá un email para crear su contraseña</div>
+          </div>
+        )}
+        <div style={{ marginBottom: 14 }}>
+          <label style={{ fontSize: 10, fontWeight: 600, color: '#8892a8', display: 'block', marginBottom: 4 }}>Rol</label>
+          <select value={role} onChange={e => setRole(e.target.value)} style={iS}>
+            <option value='manager'>Gerente</option>
+            <option value='superadmin'>Super Admin</option>
+          </select>
+        </div>
+
+        {role !== 'superadmin' && (
+          <div style={{ marginBottom: 16 }}>
+            <div style={{ fontSize: 10, fontWeight: 600, color: '#8892a8', textTransform: 'uppercase', letterSpacing: '.5px', marginBottom: 8 }}>Sucursales que puede ver</div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+              {sites.map(s => (
+                <label key={s.id} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, cursor: 'pointer', color: '#f1f5f9', padding: '6px 10px', borderRadius: 6, background: selSites.includes(s.id) ? 'rgba(59,130,246,.1)' : 'transparent', border: '1px solid ' + (selSites.includes(s.id) ? 'rgba(59,130,246,.3)' : '#1e2a45') }}>
+                  <input type='checkbox' checked={selSites.includes(s.id)} onChange={() => toggleSite(s.id)} style={{ accentColor: '#3b82f6' }} />
+                  {s.name}
+                </label>
+              ))}
+            </div>
+          </div>
+        )}
+
+        <div style={{ display: 'flex', gap: 8 }}>
+          <button disabled={!valid || saving} onClick={handleSave} style={{ flex: 1, padding: '10px 16px', borderRadius: 7, border: 'none', background: valid && !saving ? '#3b82f6' : '#1e2a45', color: '#fff', fontSize: 12, fontWeight: 600, cursor: valid && !saving ? 'pointer' : 'not-allowed', fontFamily: 'inherit' }}>
+            {saving ? 'Guardando...' : data ? 'Guardar' : 'Enviar invitación'}
+          </button>
+          <button onClick={onClose} style={{ padding: '10px 16px', borderRadius: 7, border: '1px solid #1e2a45', background: 'transparent', color: '#8892a8', fontSize: 12, cursor: 'pointer', fontFamily: 'inherit' }}>Cancelar</button>
         </div>
       </div>
     </div>
