@@ -1,12 +1,11 @@
 'use client'
 import { useState } from 'react'
 import { supabase } from '../../../lib/supabase'
-import { useRouter } from 'next/navigation'
 
 export default function LoginPage() {
-  const router = useRouter()
   const [email,    setEmail]    = useState('')
   const [password, setPassword] = useState('')
+  const [showPw,   setShowPw]   = useState(false)
   const [err,      setErr]      = useState('')
   const [loading,  setLoading]  = useState(false)
 
@@ -18,7 +17,7 @@ export default function LoginPage() {
       setLoading(false)
       return
     }
-    router.push('/admin')
+    window.location.href = '/admin'
   }
 
   const S = {
@@ -58,11 +57,16 @@ export default function LoginPage() {
         </div>
         <div style={{ marginBottom: 22 }}>
           <label style={S.label}>Contraseña</label>
-          <input
-            style={S.input} type='password' value={password} placeholder='••••••••'
-            onChange={e => { setPassword(e.target.value); setErr('') }}
-            onKeyDown={e => e.key === 'Enter' && handleLogin()}
-          />
+          <div style={{ position: 'relative' }}>
+            <input
+              style={{ ...S.input, paddingRight: 44 }} type={showPw ? 'text' : 'password'} value={password} placeholder='••••••••'
+              onChange={e => { setPassword(e.target.value); setErr('') }}
+              onKeyDown={e => e.key === 'Enter' && handleLogin()}
+            />
+            <button onClick={() => setShowPw(p => !p)} type='button' style={{ position: 'absolute', right: 12, top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', color: '#4a5568', cursor: 'pointer', fontSize: 16, lineHeight: 1, padding: 0 }}>
+              {showPw ? '🙈' : '👁'}
+            </button>
+          </div>
         </div>
 
         <button onClick={handleLogin} disabled={!valid || loading} style={S.btn(valid && !loading)}>
