@@ -93,6 +93,7 @@ export default function AdminPage() {
   const todayAtt       = att.filter(r => r.date === today)
 
   // Build dashboard rows: one per employee scheduled today
+  const scheduledEmpIds = new Set(todaySchedules.map(s => s.employee_id))
   const dashRows = todaySchedules.map(sc => {
     const emp     = emps.find(e => e.id === sc.employee_id)
     const site    = sites.find(s => s.id === sc.site_id)
@@ -133,10 +134,30 @@ export default function AdminPage() {
     return { sc, emp, site, record, color, bg, statusLabel }
   })
 
+  // Also include employees who checked in today WITHOUT a scheduled shift
+  const unscheduledRows = todayAtt
+    .filter(record => !scheduledEmpIds.has(record.employee_id))
+    .map(record => {
+      const emp  = emps.find(e => e.id === record.employee_id)
+      const site = sites.find(s => s.id === record.site_id)
+      let color, bg, statusLabel
+      if (record.check_out) {
+        color = '#3b82f6'; bg = 'rgba(59,130,246,.12)'; statusLabel = 'Completó turno'
+      } else {
+        color = '#06b6d4'; bg = 'rgba(6,182,212,.12)'; statusLabel = 'Sin horario asignado'
+      }
+      // Fake a minimal sc object so the render code works
+      const sc = { id: 'unscheduled-' + record.id, site_id: record.site_id, start_time: null, end_time: null, employee_id: record.employee_id }
+      return { sc, emp, site, record, color, bg, statusLabel, unscheduled: true }
+    })
+
+  // All rows combined for stats
+  const allDashRows = [...dashRows, ...unscheduledRows]
+
   // Stats
-  const statOnTime  = dashRows.filter(r => r.record && !r.record.check_out && r.record.status === 'on_time').length
-  const statTol     = dashRows.filter(r => r.record && !r.record.check_out && (r.record.status === 'tolerancia' || r.record.status === 'late')).length
-  const statDone    = dashRows.filter(r => r.record?.check_out).length
+  const statOnTime  = allDashRows.filter(r => r.record && !r.record.check_out && r.record.status === 'on_time').length
+  const statTol     = allDashRows.filter(r => r.record && !r.record.check_out && (r.record.status === 'tolerancia' || r.record.status === 'late')).length
+  const statDone    = allDashRows.filter(r => r.record?.check_out).length
   const statMissing = dashRows.filter(r => !r.record && r.statusLabel === 'No se presentó').length
   const statPending = dashRows.filter(r => !r.record && r.statusLabel !== 'No se presentó').length
 
@@ -157,6 +178,7 @@ export default function AdminPage() {
     setToast('Sitio guardado'); setModal(null); load()
   }
   async function saveEmp(data) {
+    if (data.email) data.email = data.email.trim().toLowerCase()
     if (data.id) { await supabase.from('employees').update(data).eq('id', data.id) }
     else { delete data.id; await supabase.from('employees').insert(data) }
     setToast('Empleado guardado'); setModal(null); load()
@@ -252,13 +274,13 @@ export default function AdminPage() {
 
             {/* Per-site groups */}
             {sites.map(site => {
-              const siteRows = dashRows.filter(r => r.sc.site_id === site.id)
+              const siteRows = allDashRows.filter(r => r.sc.site_id === site.id)
               if (siteRows.length === 0) return null
               return (
                 <div key={site.id} style={{ background: '#1a2035', border: '1px solid #1e2a45', borderRadius: 10, overflow: 'hidden', marginBottom: 14 }}>
                   <div style={{ padding: '10px 16px', borderBottom: '1px solid #1e2a45', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                     <div style={{ fontWeight: 600, fontSize: 13 }}>{site.name}</div>
-                    <div style={{ fontSize: 10, color: '#4a5568' }}>{siteRows.length} esperado{siteRows.length !== 1 ? 's' : ''} hoy</div>
+                    <div style={{ fontSize: 10, color: '#4a5568' }}>{siteRows.length} persona{siteRows.length !== 1 ? 's' : ''} hoy</div>
                   </div>
                   <table style={{ width: '100%', borderCollapse: 'collapse' }}>
                     <thead>
@@ -267,7 +289,7 @@ export default function AdminPage() {
                       ))}</tr>
                     </thead>
                     <tbody>
-                      {siteRows.map(({ sc, emp, record, color, bg, statusLabel }) => (
+                      {siteRows.map(({ sc, emp, record, color, bg, statusLabel, unscheduled }) => (
                         <tr key={sc.id} style={{ borderBottom: '1px solid rgba(30,42,69,.3)' }}>
                           <td style={{ padding: '10px 16px' }}>
                             <button onClick={() => setSideEmp(emp)} style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', textAlign: 'left', fontFamily: 'inherit' }}>
@@ -276,7 +298,9 @@ export default function AdminPage() {
                             </button>
                           </td>
                           <td style={{ padding: '10px 16px', fontSize: 11, fontFamily: "'JetBrains Mono'", color: '#8892a8' }}>
-                            {sc.start_time?.slice(0,5)} – {sc.end_time?.slice(0,5)}
+                            {unscheduled
+                              ? <span style={{ color: '#f59e0b', fontSize: 10, fontFamily: 'inherit' }}>Sin horario</span>
+                              : `${sc.start_time?.slice(0,5)} – ${sc.end_time?.slice(0,5)}`}
                           </td>
                           <td style={{ padding: '10px 16px', fontSize: 11, fontFamily: "'JetBrains Mono'" }}>
                             {record?.check_in ? fmtTime(record.check_in, site.timezone) : '–'}
@@ -296,7 +320,7 @@ export default function AdminPage() {
                 </div>
               )
             })}
-            {dashRows.length === 0 && (
+            {allDashRows.length === 0 && (
               <div style={{ padding: 32, textAlign: 'center', color: '#4a5568', fontSize: 13, background: '#1a2035', borderRadius: 10, border: '1px solid #1e2a45' }}>
                 No hay horarios cargados para hoy.
               </div>
@@ -569,13 +593,13 @@ function EmpSidePanel({ emp, att, sites, onClose }) {
       <div style={{ flex: 1, overflowY: 'auto' }}>
         <table style={{ width: '100%', borderCollapse: 'collapse' }}>
           <thead style={{ position: 'sticky', top: 0, background: '#111827', zIndex: 1 }}>
-            <tr>{['Fecha', 'Sucursal', 'Entrada', 'Salida', 'Horas', 'Estado'].map(h => (
+            <tr>{['Fecha', 'Sucursal', 'Entrada', 'Salida', 'Horas', 'Venta', 'Estado'].map(h => (
               <th key={h} style={{ textAlign: 'left', fontSize: 9, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '.6px', color: '#4a5568', padding: '8px 14px', borderBottom: '1px solid #1e2a45' }}>{h}</th>
             ))}</tr>
           </thead>
           <tbody>
             {filtered.length === 0 && (
-              <tr><td colSpan={6} style={{ padding: 24, textAlign: 'center', color: '#4a5568', fontSize: 12 }}>Sin registros</td></tr>
+              <tr><td colSpan={7} style={{ padding: 24, textAlign: 'center', color: '#4a5568', fontSize: 12 }}>Sin registros</td></tr>
             )}
             {filtered.map(r => {
               const site = sites.find(s => s.id === r.site_id)
@@ -586,6 +610,9 @@ function EmpSidePanel({ emp, att, sites, onClose }) {
                   <td style={{ padding: '8px 14px', fontSize: 11, fontFamily: "'JetBrains Mono'" }}>{fmtTime(r.check_in, site?.timezone)}</td>
                   <td style={{ padding: '8px 14px', fontSize: 11, fontFamily: "'JetBrains Mono'" }}>{fmtTime(r.check_out, site?.timezone)}</td>
                   <td style={{ padding: '8px 14px', fontSize: 11, fontFamily: "'JetBrains Mono'" }}>{fmtHours(r.hours_worked)}</td>
+                  <td style={{ padding: '8px 14px', fontSize: 11, fontFamily: "'JetBrains Mono'", color: r.sales_amount > 0 ? '#10b981' : '#4a5568' }}>
+                    {r.sales_amount > 0 ? '$' + Number(r.sales_amount).toLocaleString('es-MX') : '–'}
+                  </td>
                   <td style={{ padding: '8px 14px' }}>
                     {r.status ? (
                       <span style={{ padding: '2px 8px', borderRadius: 4, fontSize: 10, fontWeight: 600, color: stClr[r.status] || '#8892a8', background: stBg[r.status] || 'rgba(136,146,168,.1)' }}>
@@ -605,9 +632,10 @@ function EmpSidePanel({ emp, att, sites, onClose }) {
 
 // ─── Emp Modal ────────────────────────────────────────────────────────────────
 function EmpModal({ data, onSave, onClose }) {
-  const [f, setF] = useState(data || { name: '', email: '', phone: '', role: 'Vendedor(a)', free_roam: false })
+  const [f, setF] = useState(data || { name: '', email: '', phone: '', role: 'Vendedor(a)', free_roam: false, skip_sales: false, fixed_week: false })
   const upd = (k, v) => setF(p => ({ ...p, [k]: v }))
   const valid = f.name?.trim() && f.email?.trim()
+  const chkStyle = { display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, cursor: 'pointer', marginBottom: 10, color: '#f1f5f9' }
   return (
     <div onClick={onClose} style={{ position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', background: 'rgba(0,0,0,.7)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 200 }}>
       <div onClick={e => e.stopPropagation()} style={{ background: '#1a2035', border: '1px solid #1e2a45', borderRadius: 12, padding: 22, width: '100%', maxWidth: 440, maxHeight: '85vh', overflow: 'auto' }}>
@@ -624,9 +652,21 @@ function EmpModal({ data, onSave, onClose }) {
             <option>Vendedor(a)</option><option>Encargado(a)</option><option>Gerente Regional</option><option>Supervisor(a)</option>
           </select>
         </div>
-        <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, cursor: 'pointer', marginBottom: 14 }}>
-          <input type='checkbox' checked={!!f.free_roam} onChange={e => upd('free_roam', e.target.checked)} /> Acceso libre a cualquier sucursal
-        </label>
+        <div style={{ borderTop: '1px solid #1e2a45', paddingTop: 12, marginBottom: 4 }}>
+          <div style={{ fontSize: 10, fontWeight: 600, color: '#4a5568', textTransform: 'uppercase', letterSpacing: '.5px', marginBottom: 10 }}>Permisos y comportamiento</div>
+          <label style={chkStyle}>
+            <input type='checkbox' checked={!!f.free_roam} onChange={e => upd('free_roam', e.target.checked)} />
+            Acceso libre a cualquier sucursal
+          </label>
+          <label style={chkStyle}>
+            <input type='checkbox' checked={!!f.skip_sales} onChange={e => upd('skip_sales', e.target.checked)} />
+            No pedir monto de ventas al hacer Check Out
+          </label>
+          <label style={{ ...chkStyle, marginBottom: 14 }}>
+            <input type='checkbox' checked={!!f.fixed_week} onChange={e => upd('fixed_week', e.target.checked)} />
+            Semana fija — su horario se repite igual cada semana
+          </label>
+        </div>
         <div style={{ display: 'flex', gap: 8 }}>
           <button disabled={!valid} onClick={() => onSave(f)} style={{ flex: 1, padding: '10px 16px', borderRadius: 7, border: 'none', background: valid ? '#3b82f6' : '#1e2a45', color: '#fff', fontSize: 12, fontWeight: 600, cursor: valid ? 'pointer' : 'not-allowed', fontFamily: 'inherit' }}>Guardar</button>
           <button onClick={onClose} style={{ padding: '10px 16px', borderRadius: 7, border: '1px solid #1e2a45', background: 'transparent', color: '#8892a8', fontSize: 12, cursor: 'pointer', fontFamily: 'inherit' }}>Cancelar</button>
@@ -715,13 +755,25 @@ function ScheduleModal({ emp, sites, schedules, onSave, onClose }) {
   })
 
   // Load existing schedules into week state when weekStart changes
+  // If employee has fixed_week and current week has no schedules, auto-copy from previous week
   useEffect(() => {
     const w = {}
-    weekDates.forEach(({ date }) => {
+    const hasAnyThisWeek = weekDates.some(({ date }) => schedules.find(s => s.date === date))
+
+    weekDates.forEach(({ date }, i) => {
       const existing = schedules.find(s => s.date === date)
-      w[date] = existing
-        ? { on: true, site_id: existing.site_id, start_time: existing.start_time?.slice(0,5) || '10:00', end_time: existing.end_time?.slice(0,5) || '19:00', lunch_mins: existing.lunch_mins ?? 60 }
-        : { on: false, site_id: sites[0]?.id || '', start_time: '10:00', end_time: '19:00', lunch_mins: 60 }
+      if (existing) {
+        w[date] = { on: true, site_id: existing.site_id, start_time: existing.start_time?.slice(0,5) || '10:00', end_time: existing.end_time?.slice(0,5) || '19:00', lunch_mins: existing.lunch_mins ?? 60 }
+      } else if (emp.fixed_week && !hasAnyThisWeek) {
+        // Try to find matching day from previous week
+        const prevDate = dateStr(addDays(weekStart, i - 7))
+        const prevExisting = schedules.find(s => s.date === prevDate)
+        w[date] = prevExisting
+          ? { on: true, site_id: prevExisting.site_id, start_time: prevExisting.start_time?.slice(0,5) || '10:00', end_time: prevExisting.end_time?.slice(0,5) || '19:00', lunch_mins: prevExisting.lunch_mins ?? 60 }
+          : { on: false, site_id: sites[0]?.id || '', start_time: '10:00', end_time: '19:00', lunch_mins: 60 }
+      } else {
+        w[date] = { on: false, site_id: sites[0]?.id || '', start_time: '10:00', end_time: '19:00', lunch_mins: 60 }
+      }
     })
     setWeek(w)
   }, [weekStart, schedules])
@@ -776,7 +828,10 @@ function ScheduleModal({ emp, sites, schedules, onSave, onClose }) {
     <div onClick={onClose} style={{ position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', background: 'rgba(0,0,0,.7)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 200, backdropFilter: 'blur(4px)' }}>
       <div onClick={e => e.stopPropagation()} style={{ background: '#1a2035', border: '1px solid #1e2a45', borderRadius: 12, padding: 22, width: '100%', maxWidth: 640, maxHeight: '92vh', overflow: 'auto' }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
-          <h3 style={{ fontSize: 15, fontWeight: 700 }}>Horarios — {emp.name}</h3>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <h3 style={{ fontSize: 15, fontWeight: 700 }}>Horarios — {emp.name}</h3>
+            {emp.fixed_week && <span style={{ fontSize: 9, fontWeight: 700, color: '#10b981', background: 'rgba(16,185,129,.12)', border: '1px solid rgba(16,185,129,.2)', padding: '2px 8px', borderRadius: 4, textTransform: 'uppercase', letterSpacing: '.5px' }}>Semana fija</span>}
+          </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 6, background: '#0d1220', border: '1px solid #1e2a45', borderRadius: 8, padding: '4px 6px' }}>
             <button onClick={prevWeek} style={{ background: 'rgba(59,130,246,.15)', border: 'none', borderRadius: 5, color: '#3b82f6', padding: '5px 12px', cursor: 'pointer', fontFamily: 'inherit', fontSize: 15, fontWeight: 700, lineHeight: 1 }}>‹</button>
             <span style={{ fontSize: 12, color: '#f1f5f9', fontWeight: 600, minWidth: 170, textAlign: 'center' }}>{weekLabel}</span>
