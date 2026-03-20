@@ -1,5 +1,5 @@
 'use client'
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { supabase } from '../../../lib/supabase'
 
 const S = {
@@ -81,6 +81,11 @@ export default function CheckinPage({ params }) {
   const [todayRecord, setTodayRecord] = useState(null)
   const [schedule, setSchedule]     = useState(null)
   const [showSalesModal, setShowSalesModal] = useState(false)
+  const [photoStep, setPhotoStep] = useState(false)
+  const [photoData, setPhotoData] = useState(null)
+  const [cameraErr, setCameraErr] = useState('')
+  const videoRef = useRef(null)
+  const canvasRef = useRef(null)
 
   useEffect(() => { const t = setInterval(() => setNow(new Date()), 1000); return () => clearInterval(t) }, [])
 
@@ -196,16 +201,78 @@ export default function CheckinPage({ params }) {
     return 'late'
   }
 
-  async function doCheckin() {
-    if (isDone) return  // bloqueo extra: turno ya completado
+  async function openCamera() {
+    setCameraErr('')
+    setPhotoData(null)
+    setPhotoStep(true)
+    // slight delay so the video element mounts
+    setTimeout(async () => {
+      try {
+        const s = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user' }, audio: false })
+        if (videoRef.current) {
+          videoRef.current.srcObject = s
+          videoRef.current.play()
+        }
+      } catch (e) {
+        setCameraErr('No se pudo acceder a la cámara. Verifica los permisos.')
+      }
+    }, 200)
+  }
+
+  function stopCamera() {
+    if (videoRef.current?.srcObject) {
+      videoRef.current.srcObject.getTracks().forEach(t => t.stop())
+      videoRef.current.srcObject = null
+    }
+  }
+
+  function capturePhoto() {
+    const video  = videoRef.current
+    const canvas = canvasRef.current
+    if (!video || !canvas) return
+    canvas.width  = video.videoWidth  || 640
+    canvas.height = video.videoHeight || 480
+    canvas.getContext('2d').drawImage(video, 0, 0)
+    const data = canvas.toDataURL('image/jpeg', 0.6)
+    setPhotoData(data)
+    stopCamera()
+  }
+
+  function retakePhoto() {
+    setPhotoData(null)
+    openCamera()
+  }
+
+  async function confirmCheckinWithPhoto() {
+    if (!photoData) return
+    setPhotoStep(false)
     const checkIn = new Date()
     const tz      = site?.timezone || 'America/Cancun'
     const today   = checkIn.toLocaleDateString('en-CA', { timeZone: tz })
     const status  = await calcStatus(checkIn)
-    const record  = {
+
+    // Upload photo to Supabase Storage
+    let photoUrl = null
+    try {
+      const blob = await (await fetch(photoData)).blob()
+      const fileName = `checkin/${emp.id}/${today}_${Date.now()}.jpg`
+      const { data: uploadData, error: uploadErr } = await supabase.storage
+        .from('checkin-photos')
+        .upload(fileName, blob, { contentType: 'image/jpeg', upsert: false })
+      if (!uploadErr) {
+        const { data: urlData } = supabase.storage.from('checkin-photos').getPublicUrl(fileName)
+        photoUrl = urlData?.publicUrl || null
+      }
+    } catch (e) {
+      // If upload fails, proceed anyway — don't block check-in
+      console.error('Photo upload error:', e)
+    }
+
+    const record = {
       employee_id: emp.id, site_id: site.id, date: today, status,
       check_in: checkIn.toISOString(),
       gps_lat: gps.lat || null, gps_lng: gps.lng || null, gps_distance_m: gps.dist || null,
+      photo_url: photoUrl,
     }
     const { data, error } = await supabase.from('attendance').insert(record).select().single()
     if (!error && data) {
@@ -214,6 +281,11 @@ export default function CheckinPage({ params }) {
       setCiTime(fmtTime(checkIn, tz))
       setEvents(prev => [...prev, { type: 'ci', time: fmtTime(checkIn, tz) }])
     }
+  }
+
+  async function doCheckin() {
+    if (isDone) return
+    openCamera()
   }
 
   function doCheckout() { setShowSalesModal(true) }
@@ -379,6 +451,45 @@ export default function CheckinPage({ params }) {
   return (
     <div style={S.page}>
       {showSalesModal && <SalesModal onConfirm={(amt) => finishCheckout(amt)} onSkip={() => finishCheckout(null)} />}
+
+      {/* ── Camera overlay ── */}
+      {photoStep && (
+        <div style={{ position: 'fixed', inset: 0, background: '#050810', zIndex: 300, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
+          <div style={{ width: '100%', maxWidth: 400 }}>
+            <div style={{ textAlign: 'center', marginBottom: 16 }}>
+              <div style={{ fontSize: 16, fontWeight: 700, marginBottom: 4 }}>Foto de Check In</div>
+              <div style={{ fontSize: 12, color: '#8892a8' }}>Mira a la cámara y toma tu foto para registrar tu entrada.</div>
+            </div>
+
+            {cameraErr ? (
+              <div style={{ background: 'rgba(239,68,68,.12)', border: '1px solid rgba(239,68,68,.25)', borderRadius: 10, padding: 20, textAlign: 'center', marginBottom: 16 }}>
+                <div style={{ fontSize: 28, marginBottom: 8 }}>📷</div>
+                <div style={{ fontSize: 13, color: '#ef4444', marginBottom: 12 }}>{cameraErr}</div>
+                <button onClick={() => { setPhotoStep(false); setCameraErr('') }} style={{ padding: '10px 20px', borderRadius: 8, border: 'none', background: '#3b82f6', color: '#fff', fontSize: 13, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}>Volver</button>
+              </div>
+            ) : photoData ? (
+              <div style={{ textAlign: 'center' }}>
+                <img src={photoData} alt="Foto" style={{ width: '100%', maxWidth: 380, borderRadius: 14, border: '2px solid #10b981', marginBottom: 16 }} />
+                <div style={{ display: 'flex', gap: 10 }}>
+                  <button onClick={retakePhoto} style={{ flex: 1, padding: '13px', borderRadius: 10, border: '1px solid #1e2a45', background: 'transparent', color: '#8892a8', fontSize: 13, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}>Repetir</button>
+                  <button onClick={confirmCheckinWithPhoto} style={{ flex: 2, padding: '13px', borderRadius: 10, border: 'none', background: '#10b981', color: '#fff', fontSize: 14, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>✓ Confirmar entrada</button>
+                </div>
+              </div>
+            ) : (
+              <div style={{ textAlign: 'center' }}>
+                <div style={{ background: '#1a2035', borderRadius: 14, overflow: 'hidden', marginBottom: 16, aspectRatio: '4/3', display: 'flex', alignItems: 'center', justifyContent: 'center', border: '1px solid #1e2a45' }}>
+                  <video ref={videoRef} autoPlay playsInline muted style={{ width: '100%', height: '100%', objectFit: 'cover', transform: 'scaleX(-1)' }} />
+                </div>
+                <canvas ref={canvasRef} style={{ display: 'none' }} />
+                <div style={{ display: 'flex', gap: 10 }}>
+                  <button onClick={() => { stopCamera(); setPhotoStep(false) }} style={{ flex: 1, padding: '13px', borderRadius: 10, border: '1px solid #1e2a45', background: 'transparent', color: '#8892a8', fontSize: 13, cursor: 'pointer', fontFamily: 'inherit' }}>Cancelar</button>
+                  <button onClick={capturePhoto} style={{ flex: 2, padding: '13px', borderRadius: 10, border: 'none', background: '#3b82f6', color: '#fff', fontSize: 14, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>📷 Tomar foto</button>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
       <div style={S.bar}><img src='/logo.jpeg' style={S.logo} alt='GM' /><span style={{ fontSize: 13, fontWeight: 600 }}>{site?.name}</span></div>
       <div style={S.container}>
         <div style={S.card}>
