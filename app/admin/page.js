@@ -11,6 +11,15 @@ function fmtTime(ts, tz) {
   return new Date(ts).toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: tz || 'America/Cancun' })
 }
 
+function fmtHours(h) {
+  if (!h || h <= 0) return '–'
+  const totalMins = Math.round(h * 60)
+  const hrs = Math.floor(totalMins / 60)
+  const mins = totalMins % 60
+  if (mins === 0) return `${hrs}h`
+  return `${hrs}h ${mins}m`
+}
+
 function fmtDate(d) {
   if (!d) return '-'
   const [y, m, day] = d.split('-')
@@ -55,6 +64,8 @@ export default function AdminPage() {
   const [filterFrom,   setFilterFrom]   = useState('')
   const [filterTo,     setFilterTo]     = useState('')
   const [filterStatus, setFilterStatus] = useState('')
+
+  const [sidebarOpen, setSidebarOpen] = useState(true)
 
   const today = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Cancun' })
 
@@ -176,36 +187,44 @@ export default function AdminPage() {
   return (
     <div style={{ display: 'flex', height: '100vh', overflow: 'hidden', fontFamily: "'DM Sans', sans-serif", background: '#0a0e1a', color: '#f1f5f9' }}>
 
+      {/* ── Mobile overlay ── */}
+      {sidebarOpen && <div onClick={() => setSidebarOpen(false)} style={{ display: 'none', position: 'fixed', inset: 0, background: 'rgba(0,0,0,.5)', zIndex: 99, '@media(maxWidth:768px)': { display: 'block' } }} className="sidebar-overlay" />}
+
       {/* ── Sidebar ── */}
-      <div style={{ width: 210, background: '#111827', borderRight: '1px solid #1e2a45', display: 'flex', flexDirection: 'column', flexShrink: 0 }}>
-        <div style={{ padding: 16, borderBottom: '1px solid #1e2a45', display: 'flex', alignItems: 'center', gap: 10 }}>
-          <img src="/logo.jpeg" style={{ width: 32, height: 32, borderRadius: 8 }} alt="GM" />
-          <div>
-            <div style={{ fontSize: 13, fontWeight: 700 }}>G.Montalvo</div>
-            <div style={{ fontSize: 9, color: '#8892a8' }}>Control de Asistencia</div>
+      <div style={{ width: sidebarOpen ? 210 : 0, minWidth: sidebarOpen ? 210 : 0, background: '#111827', borderRight: sidebarOpen ? '1px solid #1e2a45' : 'none', display: 'flex', flexDirection: 'column', flexShrink: 0, overflow: 'hidden', transition: 'width .2s ease, min-width .2s ease', position: 'relative', zIndex: 100 }}>
+        <div style={{ width: 210, display: 'flex', flexDirection: 'column', height: '100%' }}>
+          <div style={{ padding: 16, borderBottom: '1px solid #1e2a45', display: 'flex', alignItems: 'center', gap: 10 }}>
+            <img src="/logo.jpeg" style={{ width: 32, height: 32, borderRadius: 8 }} alt="GM" />
+            <div>
+              <div style={{ fontSize: 13, fontWeight: 700 }}>G.Montalvo</div>
+              <div style={{ fontSize: 9, color: '#8892a8' }}>Control de Asistencia</div>
+            </div>
           </div>
+          <nav style={{ flex: 1, padding: 8, display: 'flex', flexDirection: 'column', gap: 2 }}>
+            <div style={{ fontSize: 9, fontWeight: 600, textTransform: 'uppercase', letterSpacing: 1, color: '#4a5568', padding: '8px 8px 4px' }}>Principal</div>
+            {[{ id: 'dashboard', lb: 'Dashboard' }, { id: 'attendance', lb: 'Asistencia' }].map(n => (
+              <button key={n.id} onClick={() => { setTab(n.id); if (window.innerWidth < 768) setSidebarOpen(false) }} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 10px', borderRadius: 6, cursor: 'pointer', fontSize: 12, fontWeight: 500, color: tab === n.id ? '#3b82f6' : '#8892a8', background: tab === n.id ? 'rgba(59,130,246,.12)' : 'transparent', border: 'none', width: '100%', textAlign: 'left', fontFamily: 'inherit' }}>{n.lb}</button>
+            ))}
+            <div style={{ fontSize: 9, fontWeight: 600, textTransform: 'uppercase', letterSpacing: 1, color: '#4a5568', padding: '12px 8px 4px' }}>Gestión</div>
+            {[{ id: 'employees', lb: 'Empleados' }, { id: 'sites', lb: 'Sitios' }].map(n => (
+              <button key={n.id} onClick={() => { setTab(n.id); if (window.innerWidth < 768) setSidebarOpen(false) }} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 10px', borderRadius: 6, cursor: 'pointer', fontSize: 12, fontWeight: 500, color: tab === n.id ? '#3b82f6' : '#8892a8', background: tab === n.id ? 'rgba(59,130,246,.12)' : 'transparent', border: 'none', width: '100%', textAlign: 'left', fontFamily: 'inherit' }}>{n.lb}</button>
+            ))}
+          </nav>
         </div>
-        <nav style={{ flex: 1, padding: 8, display: 'flex', flexDirection: 'column', gap: 2 }}>
-          <div style={{ fontSize: 9, fontWeight: 600, textTransform: 'uppercase', letterSpacing: 1, color: '#4a5568', padding: '8px 8px 4px' }}>Principal</div>
-          {[{ id: 'dashboard', lb: 'Dashboard' }, { id: 'attendance', lb: 'Asistencia' }].map(n => (
-            <button key={n.id} onClick={() => setTab(n.id)} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 10px', borderRadius: 6, cursor: 'pointer', fontSize: 12, fontWeight: 500, color: tab === n.id ? '#3b82f6' : '#8892a8', background: tab === n.id ? 'rgba(59,130,246,.12)' : 'transparent', border: 'none', width: '100%', textAlign: 'left', fontFamily: 'inherit' }}>{n.lb}</button>
-          ))}
-          <div style={{ fontSize: 9, fontWeight: 600, textTransform: 'uppercase', letterSpacing: 1, color: '#4a5568', padding: '12px 8px 4px' }}>Gestión</div>
-          {[{ id: 'employees', lb: 'Empleados' }, { id: 'sites', lb: 'Sitios' }].map(n => (
-            <button key={n.id} onClick={() => setTab(n.id)} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 10px', borderRadius: 6, cursor: 'pointer', fontSize: 12, fontWeight: 500, color: tab === n.id ? '#3b82f6' : '#8892a8', background: tab === n.id ? 'rgba(59,130,246,.12)' : 'transparent', border: 'none', width: '100%', textAlign: 'left', fontFamily: 'inherit' }}>{n.lb}</button>
-          ))}
-        </nav>
       </div>
 
       {/* ── Main ── */}
       <div style={{ flex: 1, overflow: 'auto', display: 'flex', flexDirection: 'column' }}>
         {/* Header */}
         <div style={{ padding: '16px 22px', borderBottom: '1px solid #1e2a45', background: '#111827', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexShrink: 0 }}>
-          <div>
-            <h1 style={{ fontSize: 17, fontWeight: 700 }}>{{ dashboard: 'Dashboard', attendance: 'Asistencia', employees: 'Empleados', sites: 'Sitios' }[tab]}</h1>
-            <p style={{ fontSize: 11, color: '#8892a8', marginTop: 1 }}>
-              {new Date().toLocaleDateString('es-MX', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric', timeZone: 'America/Cancun' })}
-            </p>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+            <button onClick={() => setSidebarOpen(o => !o)} style={{ background: 'none', border: '1px solid #1e2a45', borderRadius: 6, color: '#8892a8', cursor: 'pointer', padding: '5px 9px', fontSize: 16, lineHeight: 1, fontFamily: 'inherit' }}>☰</button>
+            <div>
+              <h1 style={{ fontSize: 17, fontWeight: 700 }}>{{ dashboard: 'Dashboard', attendance: 'Asistencia', employees: 'Empleados', sites: 'Sitios' }[tab]}</h1>
+              <p style={{ fontSize: 11, color: '#8892a8', marginTop: 1 }}>
+                {new Date().toLocaleDateString('es-MX', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric', timeZone: 'America/Cancun' })}
+              </p>
+            </div>
           </div>
           {tab === 'employees' && <button onClick={() => setModal({ type: 'emp', data: null })} style={{ padding: '7px 14px', borderRadius: 7, border: 'none', background: '#3b82f6', color: '#fff', fontSize: 12, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}>+ Nuevo Empleado</button>}
           {tab === 'sites'     && <button onClick={() => setModal({ type: 'site', data: null })} style={{ padding: '7px 14px', borderRadius: 7, border: 'none', background: '#3b82f6', color: '#fff', fontSize: 12, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}>+ Nuevo Sitio</button>}
@@ -321,12 +340,10 @@ export default function AdminPage() {
                 </select>
               </div>
             </div>
-            {(filterEmp || filterSite || filterFrom || filterTo || filterStatus) && (
-              <div style={{ marginBottom: 10, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                <span style={{ fontSize: 11, color: '#8892a8' }}>{filteredAtt.length} registro{filteredAtt.length !== 1 ? 's' : ''} encontrado{filteredAtt.length !== 1 ? 's' : ''}</span>
-                <button onClick={() => { setFilterEmp(''); setFilterSite(''); setFilterFrom(''); setFilterTo(''); setFilterStatus('') }} style={{ background: 'none', border: '1px solid #1e2a45', borderRadius: 5, color: '#8892a8', fontSize: 10, padding: '3px 10px', cursor: 'pointer', fontFamily: 'inherit' }}>Limpiar filtros</button>
-              </div>
-            )}
+            <div style={{ marginBottom: 10, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <span style={{ fontSize: 11, color: '#8892a8' }}>{filteredAtt.length} registro{filteredAtt.length !== 1 ? 's' : ''} encontrado{filteredAtt.length !== 1 ? 's' : ''}</span>
+              <button onClick={() => { setFilterEmp(''); setFilterSite(''); setFilterFrom(''); setFilterTo(''); setFilterStatus('') }} style={{ background: (filterEmp || filterSite || filterFrom || filterTo || filterStatus) ? 'rgba(59,130,246,.12)' : 'transparent', border: '1px solid ' + ((filterEmp || filterSite || filterFrom || filterTo || filterStatus) ? '#3b82f6' : '#1e2a45'), borderRadius: 5, color: (filterEmp || filterSite || filterFrom || filterTo || filterStatus) ? '#3b82f6' : '#4a5568', fontSize: 10, padding: '4px 12px', cursor: 'pointer', fontFamily: 'inherit', fontWeight: 600 }}>Limpiar filtros</button>
+            </div>
             <div style={{ background: '#1a2035', border: '1px solid #1e2a45', borderRadius: 10, overflow: 'hidden' }}>
               <table style={{ width: '100%', borderCollapse: 'collapse' }}>
                 <thead>
@@ -349,7 +366,7 @@ export default function AdminPage() {
                         <td style={{ padding: '9px 16px', fontSize: 11, color: '#8892a8' }}>{site?.name || '?'}</td>
                         <td style={{ padding: '9px 16px', fontSize: 11, fontFamily: "'JetBrains Mono'" }}>{fmtTime(r.check_in, site?.timezone)}</td>
                         <td style={{ padding: '9px 16px', fontSize: 11, fontFamily: "'JetBrains Mono'" }}>{fmtTime(r.check_out, site?.timezone)}</td>
-                        <td style={{ padding: '9px 16px', fontSize: 11, fontFamily: "'JetBrains Mono'" }}>{r.hours_worked > 0 ? r.hours_worked + 'h' : '–'}</td>
+                        <td style={{ padding: '9px 16px', fontSize: 11, fontFamily: "'JetBrains Mono'" }}>{fmtHours(r.hours_worked)}</td>
                         <td style={{ padding: '9px 16px', fontSize: 11, fontFamily: "'JetBrains Mono'", color: r.sales_amount > 0 ? '#10b981' : '#4a5568' }}>
                           {r.sales_amount > 0 ? '$' + Number(r.sales_amount).toLocaleString('es-MX') : '–'}
                         </td>
@@ -492,7 +509,7 @@ function EmpSidePanel({ emp, att, sites, onClose }) {
   const late    = filtered.filter(r => r.status === 'late').length
   const absent  = filtered.filter(r => r.status === 'absent').length
 
-  const iS = { background: '#0d1220', border: '1px solid #1e2a45', color: '#f1f5f9', fontSize: 11, padding: '6px 8px', borderRadius: 5, outline: 'none', fontFamily: 'inherit' }
+  const iS = { background: '#1a2035', border: '1px solid #2d3d5a', color: '#f1f5f9', fontSize: 11, padding: '7px 10px', borderRadius: 6, outline: 'none', fontFamily: 'inherit', colorScheme: 'dark' }
 
   return (
     <div style={{ position: 'fixed', top: 0, right: 0, width: 480, height: '100vh', background: '#111827', borderLeft: '1px solid #1e2a45', display: 'flex', flexDirection: 'column', zIndex: 150, boxShadow: '-8px 0 32px rgba(0,0,0,.4)' }}>
@@ -527,7 +544,7 @@ function EmpSidePanel({ emp, att, sites, onClose }) {
           ['Puntuales', onTime,          '#10b981'],
           ['Retardos',  late,            '#f59e0b'],
           ['Faltas',    absent,          '#ef4444'],
-          ['Horas',     totalHours.toFixed(1) + 'h', '#8892a8'],
+          ['Horas',     fmtHours(totalHours), '#8892a8'],
         ].map(([l, v, c], i) => (
           <div key={l} style={{ padding: '10px 14px', borderRight: i < 4 ? '1px solid #1e2a45' : 'none' }}>
             <div style={{ fontSize: 9, color: '#4a5568', textTransform: 'uppercase', letterSpacing: '.5px', marginBottom: 3 }}>{l}</div>
@@ -568,7 +585,7 @@ function EmpSidePanel({ emp, att, sites, onClose }) {
                   <td style={{ padding: '8px 14px', fontSize: 11, color: '#8892a8' }}>{site?.name || '?'}</td>
                   <td style={{ padding: '8px 14px', fontSize: 11, fontFamily: "'JetBrains Mono'" }}>{fmtTime(r.check_in, site?.timezone)}</td>
                   <td style={{ padding: '8px 14px', fontSize: 11, fontFamily: "'JetBrains Mono'" }}>{fmtTime(r.check_out, site?.timezone)}</td>
-                  <td style={{ padding: '8px 14px', fontSize: 11, fontFamily: "'JetBrains Mono'" }}>{r.hours_worked > 0 ? r.hours_worked + 'h' : '–'}</td>
+                  <td style={{ padding: '8px 14px', fontSize: 11, fontFamily: "'JetBrains Mono'" }}>{fmtHours(r.hours_worked)}</td>
                   <td style={{ padding: '8px 14px' }}>
                     {r.status ? (
                       <span style={{ padding: '2px 8px', borderRadius: 4, fontSize: 10, fontWeight: 600, color: stClr[r.status] || '#8892a8', background: stBg[r.status] || 'rgba(136,146,168,.1)' }}>
@@ -760,10 +777,10 @@ function ScheduleModal({ emp, sites, schedules, onSave, onClose }) {
       <div onClick={e => e.stopPropagation()} style={{ background: '#1a2035', border: '1px solid #1e2a45', borderRadius: 12, padding: 22, width: '100%', maxWidth: 640, maxHeight: '92vh', overflow: 'auto' }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
           <h3 style={{ fontSize: 15, fontWeight: 700 }}>Horarios — {emp.name}</h3>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <button onClick={prevWeek} style={{ background: 'none', border: '1px solid #1e2a45', borderRadius: 5, color: '#8892a8', padding: '4px 10px', cursor: 'pointer', fontFamily: 'inherit', fontSize: 13 }}>‹</button>
-            <span style={{ fontSize: 12, color: '#8892a8', minWidth: 160, textAlign: 'center' }}>{weekLabel}</span>
-            <button onClick={nextWeek} style={{ background: 'none', border: '1px solid #1e2a45', borderRadius: 5, color: '#8892a8', padding: '4px 10px', cursor: 'pointer', fontFamily: 'inherit', fontSize: 13 }}>›</button>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6, background: '#0d1220', border: '1px solid #1e2a45', borderRadius: 8, padding: '4px 6px' }}>
+            <button onClick={prevWeek} style={{ background: 'rgba(59,130,246,.15)', border: 'none', borderRadius: 5, color: '#3b82f6', padding: '5px 12px', cursor: 'pointer', fontFamily: 'inherit', fontSize: 15, fontWeight: 700, lineHeight: 1 }}>‹</button>
+            <span style={{ fontSize: 12, color: '#f1f5f9', fontWeight: 600, minWidth: 170, textAlign: 'center' }}>{weekLabel}</span>
+            <button onClick={nextWeek} style={{ background: 'rgba(59,130,246,.15)', border: 'none', borderRadius: 5, color: '#3b82f6', padding: '5px 12px', cursor: 'pointer', fontFamily: 'inherit', fontSize: 15, fontWeight: 700, lineHeight: 1 }}>›</button>
           </div>
         </div>
         <p style={{ fontSize: 11, color: '#8892a8', marginBottom: 16 }}>Activa los días que trabaja. Cada día puede tener diferente sucursal y horario.</p>
