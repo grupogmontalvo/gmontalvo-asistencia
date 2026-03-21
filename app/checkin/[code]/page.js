@@ -62,7 +62,7 @@ function SalesModal({ onConfirm, onSkip }) {
   )
 }
 
-function CameraModal({ onCapture, onClose }) {
+function CameraModal({ onCapture, onClose, title = '📸 Foto de entrada' }) {
   const videoRef  = useRef(null)
   const canvasRef = useRef(null)
   const streamRef = useRef(null)
@@ -124,7 +124,7 @@ function CameraModal({ onCapture, onClose }) {
     <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.92)', zIndex: 400, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: 16 }}>
       <div style={{ width: '100%', maxWidth: 380, background: '#1a2035', border: '1px solid #1e2a45', borderRadius: 18, overflow: 'hidden' }}>
         <div style={{ padding: '14px 18px', borderBottom: '1px solid #1e2a45', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-          <div style={{ fontSize: 14, fontWeight: 700 }}>📸 Foto de entrada</div>
+          <div style={{ fontSize: 14, fontWeight: 700 }}>{title}</div>
           <button onClick={onClose} style={{ background: 'none', border: 'none', color: '#8892a8', fontSize: 20, cursor: 'pointer', lineHeight: 1 }}>×</button>
         </div>
         <div style={{ padding: 16 }}>
@@ -183,12 +183,10 @@ export default function CheckinPage({ params }) {
   const [schedule, setSchedule]       = useState(null)
   const [showSalesModal, setShowSalesModal] = useState(false)
   const [loading, setLoading]         = useState(false)
-  // Selfie / photo capture
-  const [showCamera, setShowCamera]   = useState(false)
-  const [photoBlob, setPhotoBlob]     = useState(null)
-  const [photoPreview, setPhotoPreview] = useState(null)
-  // Confirmation modal for non-checkin actions
-  const [confirmAction, setConfirmAction] = useState(null) // { label, onConfirm }
+  // Camera state — 'in' | 'out' | null
+  const [showCamera, setShowCamera]   = useState(null)
+  // Confirmation modal
+  const [confirmAction, setConfirmAction] = useState(null)
 
   useEffect(() => { const t = setInterval(() => setNow(new Date()), 1000); return () => clearInterval(t) }, [])
 
@@ -297,39 +295,45 @@ export default function CheckinPage({ params }) {
     return 'late'
   }
 
-  async function doCheckin() {
+  async function uploadPhoto(blob, suffix) {
+    if (!blob) return null
+    try {
+      const tz    = site?.timezone || 'America/Cancun'
+      const today = new Date().toLocaleDateString('en-CA', { timeZone: tz })
+      const fileName = `${emp.id}_${today}_${suffix}_${Date.now()}.jpg`
+      const { data: uploadData, error: uploadErr } = await supabase.storage
+        .from('checkin-photos')
+        .upload(fileName, blob, { contentType: 'image/jpeg', upsert: false })
+      if (!uploadErr && uploadData) {
+        const { data: urlData } = supabase.storage.from('checkin-photos').getPublicUrl(fileName)
+        return urlData?.publicUrl || null
+      }
+    } catch (e) {
+      console.warn('Photo upload failed:', e)
+    }
+    return null
+  }
+
+  // ── Check In ──
+  function doCheckin() {
     if (isIn || isDone || loading) return
-    // Show camera to capture selfie first
-    setShowCamera(true)
+    if (emp?.skip_photo) {
+      doCheckinWithPhoto(null)
+    } else {
+      setShowCamera('in')
+    }
   }
 
   async function doCheckinWithPhoto(blob) {
-    setShowCamera(false)
+    setShowCamera(null)
     setLoading(true)
     const checkIn = new Date()
     const tz      = site?.timezone || 'America/Cancun'
     const today   = checkIn.toLocaleDateString('en-CA', { timeZone: tz })
     const status  = await calcStatus(checkIn)
+    const photoUrl = await uploadPhoto(blob, 'in')
 
-    // Upload selfie to Supabase Storage
-    let photoUrl = null
-    if (blob) {
-      try {
-        const fileName = `${emp.id}_${today}_${Date.now()}.jpg`
-        const { data: uploadData, error: uploadErr } = await supabase.storage
-          .from('checkin-photos')
-          .upload(fileName, blob, { contentType: 'image/jpeg', upsert: false })
-        if (!uploadErr && uploadData) {
-          const { data: urlData } = supabase.storage.from('checkin-photos').getPublicUrl(fileName)
-          photoUrl = urlData?.publicUrl || null
-        }
-      } catch (e) {
-        // Photo upload failed — continue check-in anyway
-        console.warn('Photo upload failed:', e)
-      }
-    }
-
-    const record  = {
+    const record = {
       employee_id: emp.id, site_id: site.id, date: today, status,
       check_in: checkIn.toISOString(),
       gps_lat: gps.lat || null, gps_lng: gps.lng || null, gps_distance_m: gps.dist || null,
@@ -345,6 +349,7 @@ export default function CheckinPage({ params }) {
     setLoading(false)
   }
 
+  // ── Check Out ──
   function doCheckout() {
     setConfirmAction({
       label: 'Registrar Salida',
@@ -353,13 +358,66 @@ export default function CheckinPage({ params }) {
       color: '#ef4444',
       onConfirm: () => {
         setConfirmAction(null)
-        if (emp?.skip_sales) {
-          finishCheckout(null)
+        if (emp?.skip_photo) {
+          proceedCheckout()
         } else {
-          setShowSalesModal(true)
+          setShowCamera('out')
         }
       }
     })
+  }
+
+  function proceedCheckout() {
+    setShowCamera(null)
+    if (emp?.skip_sales) {
+      finishCheckout(null, null)
+    } else {
+      setShowSalesModal(true)
+    }
+  }
+
+  // Called after camera modal for checkout
+  async function handleCheckoutPhoto(blob) {
+    setShowCamera(null)
+    // Store blob temporarily, then show sales modal or finish
+    if (emp?.skip_sales) {
+      await finishCheckout(null, blob)
+    } else {
+      // Store blob so finishCheckout can use it
+      pendingCheckoutPhotoRef.current = blob
+      setShowSalesModal(true)
+    }
+  }
+
+  const pendingCheckoutPhotoRef = useRef(null)
+
+  async function finishCheckout(salesAmount, photoBlob) {
+    setShowSalesModal(false)
+    if (!todayRecord) return
+    const tz       = site?.timezone || 'America/Cancun'
+    const checkOut = new Date()
+    const ciDate   = new Date(todayRecord.check_in)
+    const lunchMins = todayRecord.lunch_start && todayRecord.lunch_end
+      ? (new Date(todayRecord.lunch_end) - new Date(todayRecord.lunch_start)) / 60000 : 0
+    const hrs = ((checkOut - ciDate) / 3600000 - lunchMins / 60).toFixed(1)
+
+    // Upload checkout photo
+    const blob = photoBlob ?? pendingCheckoutPhotoRef.current
+    pendingCheckoutPhotoRef.current = null
+    const photoUrlOut = await uploadPhoto(blob, 'out')
+
+    await supabase.from('attendance').update({
+      check_out: checkOut.toISOString(),
+      hours_worked: parseFloat(hrs),
+      ...(salesAmount !== null ? { sales_amount: salesAmount } : {}),
+      ...(photoUrlOut ? { photo_url_out: photoUrlOut } : {}),
+    }).eq('id', todayRecord.id)
+
+    setIsIn(false); setIsDone(true); setOnLunch(false); setOnBreak(false)
+    setCoTime(fmtTime(checkOut, tz))
+    const newEvs = [{ type: 'co', time: fmtTime(checkOut, tz) }]
+    if (salesAmount !== null && salesAmount > 0) newEvs.push({ type: 'sale', time: fmtTime(checkOut, tz), amount: salesAmount })
+    setEvents(prev => [...prev, ...newEvs])
   }
 
   function requestLunch(start) {
@@ -380,27 +438,6 @@ export default function CheckinPage({ params }) {
       color: '#3b82f6',
       onConfirm: () => { setConfirmAction(null); doBreak(start) }
     })
-  }
-
-  async function finishCheckout(salesAmount) {
-    setShowSalesModal(false)
-    if (!todayRecord) return
-    const tz       = site?.timezone || 'America/Cancun'
-    const checkOut = new Date()
-    const ciDate   = new Date(todayRecord.check_in)
-    const lunchMins = todayRecord.lunch_start && todayRecord.lunch_end
-      ? (new Date(todayRecord.lunch_end) - new Date(todayRecord.lunch_start)) / 60000 : 0
-    const hrs = ((checkOut - ciDate) / 3600000 - lunchMins / 60).toFixed(1)
-    await supabase.from('attendance').update({
-      check_out: checkOut.toISOString(),
-      hours_worked: parseFloat(hrs),
-      ...(salesAmount !== null ? { sales_amount: salesAmount } : {})
-    }).eq('id', todayRecord.id)
-    setIsIn(false); setIsDone(true); setOnLunch(false); setOnBreak(false)
-    setCoTime(fmtTime(checkOut, tz))
-    const newEvs = [{ type: 'co', time: fmtTime(checkOut, tz) }]
-    if (salesAmount !== null && salesAmount > 0) newEvs.push({ type: 'sale', time: fmtTime(checkOut, tz), amount: salesAmount })
-    setEvents(prev => [...prev, ...newEvs])
   }
 
   async function doLunch(start) {
@@ -529,7 +566,9 @@ export default function CheckinPage({ params }) {
 
   return (
     <div style={S.page}>
-      {showCamera && <CameraModal onCapture={doCheckinWithPhoto} onClose={() => setShowCamera(false)} />}
+      {/* Camera modal — 'in' or 'out' */}
+      {showCamera === 'in'  && <CameraModal title='📸 Foto de entrada' onCapture={doCheckinWithPhoto} onClose={() => setShowCamera(null)} />}
+      {showCamera === 'out' && <CameraModal title='📸 Foto de salida'  onCapture={handleCheckoutPhoto} onClose={() => setShowCamera(null)} />}
 
       {confirmAction && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.8)', zIndex: 300, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '0 16px', backdropFilter: 'blur(6px)' }}>
@@ -545,13 +584,13 @@ export default function CheckinPage({ params }) {
         </div>
       )}
 
-      {showSalesModal && <SalesModal onConfirm={(amt) => finishCheckout(amt)} onSkip={() => finishCheckout(null)} />}
+      {showSalesModal && <SalesModal onConfirm={(amt) => finishCheckout(amt, null)} onSkip={() => finishCheckout(null, null)} />}
 
       {loading && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(5,8,16,0.7)', zIndex: 400, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
           <div style={{ background: '#1a2035', border: '1px solid #1e2a45', borderRadius: 14, padding: '28px 36px', textAlign: 'center' }}>
             <div style={{ width: 36, height: 36, border: '3px solid #1e2a45', borderTop: '3px solid #10b981', borderRadius: '50%', animation: 'spin 0.8s linear infinite', margin: '0 auto 12px' }} />
-            <div style={{ fontSize: 13, color: '#8892a8' }}>Registrando entrada...</div>
+            <div style={{ fontSize: 13, color: '#8892a8' }}>Procesando...</div>
             <style>{`@keyframes spin { to { transform: rotate(360deg) } }`}</style>
           </div>
         </div>
@@ -559,12 +598,26 @@ export default function CheckinPage({ params }) {
 
       <div style={S.bar}><img src='/logo.jpeg' style={S.logo} alt='GM' /><span style={{ fontSize: 13, fontWeight: 600 }}>{site?.name}</span></div>
       <div style={S.container}>
+
+        {/* ── Card principal ── */}
         <div style={S.card}>
           <div style={{ fontSize: 16, fontWeight: 700 }}>{emp?.name}</div>
           <div style={S.sub}>{emp?.role}</div>
           <div style={{ ...S.muted, marginTop: 2 }}>{site?.name}</div>
           <div style={S.clock}>{fmtTime(now, tz)}</div>
           <div style={S.muted}>{now.toLocaleDateString('es-MX', { weekday: 'long', day: 'numeric', month: 'long', timeZone: tz })}</div>
+
+          {/* Banner "Ya registraste tu entrada" cuando isIn */}
+          {isIn && !isDone && (
+            <div style={{ marginTop: 14, padding: '12px 16px', borderRadius: 10, background: 'rgba(16,185,129,.1)', border: '1px solid rgba(16,185,129,.25)', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10 }}>
+              <span style={{ fontSize: 20 }}>✅</span>
+              <div style={{ textAlign: 'left' }}>
+                <div style={{ fontSize: 13, fontWeight: 700, color: '#10b981' }}>Ya registraste tu entrada</div>
+                <div style={{ fontSize: 11, color: '#8892a8', fontFamily: "'JetBrains Mono'" }}>a las {ciTime}</div>
+              </div>
+            </div>
+          )}
+
           <div style={{ marginTop: 14, paddingTop: 14, borderTop: '1px solid #1e2a45', display: 'flex', justifyContent: 'center', gap: 20, flexWrap: 'wrap' }}>
             {schedule && (
               <div style={{ textAlign: 'center' }}>
@@ -613,11 +666,17 @@ export default function CheckinPage({ params }) {
 
         <div style={S.btnGrid}>
           <button
-            style={S.actBtn(isIn || isDone || loading || (!gpsOk && gps.status !== 'idle'))}
+            style={{
+              ...S.actBtn(isIn || isDone || loading || (!gpsOk && gps.status !== 'idle')),
+              ...(!isIn && !isDone && gpsOk ? { background: 'rgba(16,185,129,.08)', border: '2px solid rgba(16,185,129,.4)' } : {}),
+            }}
             disabled={isIn || isDone || loading || (!gpsOk && gps.status !== 'idle')}
             onClick={doCheckin}
           >
-            <div style={S.actIcon('rgba(16,185,129,.12)', '#10b981')}>✓</div>Check In
+            <div style={S.actIcon('rgba(16,185,129,.12)', '#10b981')}>✓</div>
+            <span style={{ fontSize: !isIn && !isDone ? 13 : 12, fontWeight: !isIn && !isDone ? 700 : 600 }}>
+              {isIn ? 'Check In ✓' : 'Hacer Check In'}
+            </span>
           </button>
           <button style={S.actBtn(!isIn || onLunch || onBreak)} disabled={!isIn || onLunch || onBreak} onClick={doCheckout}>
             <div style={S.actIcon('rgba(239,68,68,.12)', '#ef4444')}>✕</div>Check Out
