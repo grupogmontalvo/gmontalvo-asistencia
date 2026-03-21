@@ -186,10 +186,14 @@ export default function AdminPage() {
     return { sc, emp, site, record, color, bg, statusLabel }
   })
 
-  // Stats
+  // Check ins de hoy sin horario asignado
+  const scheduledEmpIds = new Set(todaySchedules.map(s => s.employee_id))
+  const unscheduledAtt  = todayAtt.filter(r => !scheduledEmpIds.has(r.employee_id))
+
+  // Stats (incluye ambos)
   const statOnTime  = dashRows.filter(r => r.record && !r.record.check_out && r.record.status === 'on_time').length
   const statTol     = dashRows.filter(r => r.record && !r.record.check_out && (r.record.status === 'tolerancia' || r.record.status === 'late')).length
-  const statDone    = dashRows.filter(r => r.record?.check_out).length
+  const statDone    = dashRows.filter(r => r.record?.check_out).length + unscheduledAtt.filter(r => r.check_out).length
   const statMissing = dashRows.filter(r => !r.record && r.statusLabel === 'No se presentó').length
   const statPending = dashRows.filter(r => !r.record && r.statusLabel !== 'No se presentó').length
 
@@ -312,15 +316,17 @@ export default function AdminPage() {
               ))}
             </div>
 
-            {/* Per-site groups */}
+            {/* Per-site groups — scheduled + unscheduled */}
             {sites.map(site => {
-              const siteRows = dashRows.filter(r => r.sc.site_id === site.id)
-              if (siteRows.length === 0) return null
+              const siteRows        = dashRows.filter(r => r.sc.site_id === site.id)
+              const siteUnscheduled = unscheduledAtt.filter(r => r.site_id === site.id)
+              if (siteRows.length === 0 && siteUnscheduled.length === 0) return null
+              const totalCount = siteRows.length + siteUnscheduled.length
               return (
                 <div key={site.id} style={{ background: '#1a2035', border: '1px solid #1e2a45', borderRadius: 10, overflow: 'hidden', marginBottom: 14 }}>
                   <div style={{ padding: '10px 16px', borderBottom: '1px solid #1e2a45', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                     <div style={{ fontWeight: 600, fontSize: 13 }}>{site.name}</div>
-                    <div style={{ fontSize: 10, color: '#4a5568' }}>{siteRows.length} esperado{siteRows.length !== 1 ? 's' : ''} hoy</div>
+                    <div style={{ fontSize: 10, color: '#4a5568' }}>{totalCount} empleado{totalCount !== 1 ? 's' : ''} hoy</div>
                   </div>
                   <table style={{ width: '100%', borderCollapse: 'collapse' }}>
                     <thead>
@@ -353,12 +359,38 @@ export default function AdminPage() {
                           </td>
                         </tr>
                       ))}
+                      {siteUnscheduled.map(r => {
+                        const emp = emps.find(e => e.id === r.employee_id)
+                        const color = r.check_out ? '#3b82f6' : '#10b981'
+                        const bg    = r.check_out ? 'rgba(59,130,246,.12)' : 'rgba(16,185,129,.12)'
+                        const label = r.check_out ? 'Completó turno' : 'Activo'
+                        return (
+                          <tr key={r.id} style={{ borderBottom: '1px solid rgba(30,42,69,.3)', background: 'rgba(16,185,129,.03)' }}>
+                            <td style={{ padding: '10px 16px' }}>
+                              <button onClick={() => setSideEmp(emp)} style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', textAlign: 'left', fontFamily: 'inherit' }}>
+                                <div style={{ fontSize: 12, fontWeight: 600, color: '#3b82f6', textDecoration: 'underline', textDecorationColor: 'rgba(59,130,246,.3)' }}>{emp?.name || '?'}</div>
+                                <div style={{ fontSize: 10, color: '#4a5568' }}>{emp?.role}</div>
+                              </button>
+                            </td>
+                            <td style={{ padding: '10px 16px', fontSize: 10, color: '#4a5568', fontStyle: 'italic' }}>Sin horario</td>
+                            <td style={{ padding: '10px 16px', fontSize: 11, fontFamily: "'JetBrains Mono'" }}>
+                              {fmtTime(r.check_in, site.timezone)}
+                            </td>
+                            <td style={{ padding: '10px 16px', fontSize: 11, fontFamily: "'JetBrains Mono'" }}>
+                              {r.check_out ? fmtTime(r.check_out, site.timezone) : '–'}
+                            </td>
+                            <td style={{ padding: '10px 16px' }}>
+                              <span style={{ padding: '3px 10px', borderRadius: 5, fontSize: 10, fontWeight: 600, color, background: bg }}>{label}</span>
+                            </td>
+                          </tr>
+                        )
+                      })}
                     </tbody>
                   </table>
                 </div>
               )
             })}
-            {dashRows.length === 0 && (
+            {dashRows.length === 0 && unscheduledAtt.length === 0 && (
               <div style={{ padding: 32, textAlign: 'center', color: '#4a5568', fontSize: 13, background: '#1a2035', borderRadius: 10, border: '1px solid #1e2a45' }}>
                 No hay horarios cargados para hoy.
               </div>
