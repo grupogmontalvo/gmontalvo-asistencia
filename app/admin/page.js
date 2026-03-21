@@ -599,9 +599,29 @@ export default function AdminPage() {
 }
 
 // ─── Employee Side Panel ──────────────────────────────────────────────────────
+const ALL_COLS = [
+  { key: 'date',      label: 'Fecha' },
+  { key: 'site',      label: 'Sucursal' },
+  { key: 'checkin',   label: 'Entrada' },
+  { key: 'checkout',  label: 'Salida' },
+  { key: 'hours',     label: 'Horas' },
+  { key: 'time_out',  label: 'T. Fuera' },
+  { key: 'sales',     label: 'Venta' },
+  { key: 'photo_in',  label: 'Foto In' },
+  { key: 'photo_out', label: 'Foto Out' },
+  { key: 'gps',       label: 'GPS' },
+  { key: 'status',    label: 'Estado' },
+]
+
 function EmpSidePanel({ emp, att, sites, onClose }) {
   const [from, setFrom] = useState('')
   const [to,   setTo]   = useState('')
+  const [visibleCols, setVisibleCols] = useState(['date','site','checkin','checkout','hours','time_out','sales','photo_in','photo_out','gps','status'])
+  const [showColPicker, setShowColPicker] = useState(false)
+
+  function toggleCol(key) {
+    setVisibleCols(p => p.includes(key) ? p.filter(k => k !== key) : [...p, key])
+  }
 
   const filtered = att.filter(r => {
     if (from && r.date < from) return false
@@ -625,7 +645,24 @@ function EmpSidePanel({ emp, att, sites, onClose }) {
           <div style={{ fontSize: 15, fontWeight: 700 }}>{emp.name}</div>
           <div style={{ fontSize: 11, color: '#8892a8', marginTop: 2 }}>{emp.email} · {emp.role}</div>
         </div>
-        <button onClick={onClose} style={{ background: 'none', border: '1px solid #1e2a45', borderRadius: 6, color: '#8892a8', fontSize: 18, cursor: 'pointer', padding: '2px 10px', lineHeight: 1 }}>×</button>
+        <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+          <div style={{ position: 'relative' }}>
+            <button onClick={() => setShowColPicker(p => !p)} style={{ background: showColPicker ? 'rgba(59,130,246,.12)' : 'none', border: '1px solid ' + (showColPicker ? '#3b82f6' : '#1e2a45'), borderRadius: 6, color: showColPicker ? '#3b82f6' : '#8892a8', fontSize: 11, cursor: 'pointer', padding: '4px 10px', fontFamily: 'inherit' }}>
+              Columnas
+            </button>
+            {showColPicker && (
+              <div onClick={e => e.stopPropagation()} style={{ position: 'absolute', right: 0, top: 34, background: '#1a2035', border: '1px solid #1e2a45', borderRadius: 10, padding: 12, zIndex: 10, minWidth: 160, boxShadow: '0 8px 24px rgba(0,0,0,.4)' }}>
+                {ALL_COLS.map(c => (
+                  <label key={c.key} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, cursor: 'pointer', color: '#f1f5f9', padding: '4px 0' }}>
+                    <input type='checkbox' checked={visibleCols.includes(c.key)} onChange={() => toggleCol(c.key)} style={{ accentColor: '#3b82f6' }} />
+                    {c.label}
+                  </label>
+                ))}
+              </div>
+            )}
+          </div>
+          <button onClick={onClose} style={{ background: 'none', border: '1px solid #1e2a45', borderRadius: 6, color: '#8892a8', fontSize: 18, cursor: 'pointer', padding: '2px 10px', lineHeight: 1 }}>×</button>
+        </div>
       </div>
 
       {/* Date filters */}
@@ -672,43 +709,41 @@ function EmpSidePanel({ emp, att, sites, onClose }) {
       )}
 
       {/* Records */}
-      <div style={{ flex: 1, overflowY: 'auto' }}>
+      <div style={{ flex: 1, overflowY: 'auto' }} onClick={() => showColPicker && setShowColPicker(false)}>
         <table style={{ width: '100%', borderCollapse: 'collapse' }}>
           <thead style={{ position: 'sticky', top: 0, background: '#111827', zIndex: 1 }}>
-            <tr>{['Fecha', 'Sucursal', 'Entrada', 'Salida', 'Horas', 'Venta', 'Foto', 'Estado'].map(h => (
-              <th key={h} style={{ textAlign: 'left', fontSize: 9, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '.6px', color: '#4a5568', padding: '8px 14px', borderBottom: '1px solid #1e2a45' }}>{h}</th>
-            ))}</tr>
+            <tr>
+              {ALL_COLS.filter(c => visibleCols.includes(c.key)).map(c => (
+                <th key={c.key} style={{ textAlign: 'left', fontSize: 9, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '.6px', color: '#4a5568', padding: '8px 14px', borderBottom: '1px solid #1e2a45', whiteSpace: 'nowrap' }}>{c.label}</th>
+              ))}
+            </tr>
           </thead>
           <tbody>
             {filtered.length === 0 && (
-              <tr><td colSpan={8} style={{ padding: 24, textAlign: 'center', color: '#4a5568', fontSize: 12 }}>Sin registros</td></tr>
+              <tr><td colSpan={visibleCols.length} style={{ padding: 24, textAlign: 'center', color: '#4a5568', fontSize: 12 }}>Sin registros</td></tr>
             )}
             {filtered.map(r => {
               const site = sites.find(s => s.id === r.site_id)
+              // Tiempo fuera = comida + descanso en minutos
+              const lunchMins = r.lunch_start && r.lunch_end ? Math.round((new Date(r.lunch_end) - new Date(r.lunch_start)) / 60000) : 0
+              const breakMins = r.break_start && r.break_end ? Math.round((new Date(r.break_end) - new Date(r.break_start)) / 60000) : 0
+              const timeOutMins = lunchMins + breakMins
+              const timeOutLabel = timeOutMins > 0 ? `${Math.floor(timeOutMins/60) > 0 ? Math.floor(timeOutMins/60)+'h ' : ''}${timeOutMins%60 > 0 ? timeOutMins%60+'m' : ''}`.trim() : '–'
+              const gpsLabel = r.gps_lat && r.gps_lng ? `${r.gps_distance_m ?? '?'}m` : '–'
+              const gpsLink  = r.gps_lat && r.gps_lng ? `https://maps.google.com/?q=${r.gps_lat},${r.gps_lng}` : null
               return (
                 <tr key={r.id} style={{ borderBottom: '1px solid rgba(30,42,69,.3)' }}>
-                  <td style={{ padding: '8px 14px', fontSize: 11, fontFamily: "'JetBrains Mono'" }}>{fmtDate(r.date)}</td>
-                  <td style={{ padding: '8px 14px', fontSize: 11, color: '#8892a8' }}>{site?.name || '?'}</td>
-                  <td style={{ padding: '8px 14px', fontSize: 11, fontFamily: "'JetBrains Mono'" }}>{fmtTime(r.check_in, site?.timezone)}</td>
-                  <td style={{ padding: '8px 14px', fontSize: 11, fontFamily: "'JetBrains Mono'" }}>{fmtTime(r.check_out, site?.timezone)}</td>
-                  <td style={{ padding: '8px 14px', fontSize: 11, fontFamily: "'JetBrains Mono'" }}>{fmtHours(r.hours_worked)}</td>
-                  <td style={{ padding: '8px 14px', fontSize: 11, fontFamily: "'JetBrains Mono'", color: r.sales_amount > 0 ? '#10b981' : '#4a5568' }}>
-                    {r.sales_amount > 0 ? '$' + Number(r.sales_amount).toLocaleString('es-MX') : '–'}
-                  </td>
-                  <td style={{ padding: '8px 14px' }}>
-                    {r.photo_url
-                      ? <a href={r.photo_url} target='_blank' rel='noopener noreferrer'>
-                          <img src={r.photo_url} alt='foto' style={{ width: 32, height: 32, borderRadius: 6, objectFit: 'cover', display: 'block', border: '1px solid #1e2a45' }} />
-                        </a>
-                      : <span style={{ fontSize: 10, color: '#4a5568' }}>–</span>}
-                  </td>
-                  <td style={{ padding: '8px 14px' }}>
-                    {r.status ? (
-                      <span style={{ padding: '2px 8px', borderRadius: 4, fontSize: 10, fontWeight: 600, color: stClr[r.status] || '#8892a8', background: stBg[r.status] || 'rgba(136,146,168,.1)' }}>
-                        {stLbl[r.status] || r.status}
-                      </span>
-                    ) : <span style={{ fontSize: 10, color: '#4a5568' }}>–</span>}
-                  </td>
+                  {visibleCols.includes('date')      && <td style={{ padding: '8px 14px', fontSize: 11, fontFamily: "'JetBrains Mono'", whiteSpace: 'nowrap' }}>{fmtDate(r.date)}</td>}
+                  {visibleCols.includes('site')      && <td style={{ padding: '8px 14px', fontSize: 11, color: '#8892a8', whiteSpace: 'nowrap' }}>{site?.name || '?'}</td>}
+                  {visibleCols.includes('checkin')   && <td style={{ padding: '8px 14px', fontSize: 11, fontFamily: "'JetBrains Mono'", whiteSpace: 'nowrap' }}>{fmtTime(r.check_in, site?.timezone)}</td>}
+                  {visibleCols.includes('checkout')  && <td style={{ padding: '8px 14px', fontSize: 11, fontFamily: "'JetBrains Mono'", whiteSpace: 'nowrap' }}>{fmtTime(r.check_out, site?.timezone)}</td>}
+                  {visibleCols.includes('hours')     && <td style={{ padding: '8px 14px', fontSize: 11, fontFamily: "'JetBrains Mono'", whiteSpace: 'nowrap' }}>{fmtHours(r.hours_worked)}</td>}
+                  {visibleCols.includes('time_out')  && <td style={{ padding: '8px 14px', fontSize: 11, fontFamily: "'JetBrains Mono'", color: timeOutMins > 0 ? '#f59e0b' : '#4a5568', whiteSpace: 'nowrap' }}>{timeOutLabel}</td>}
+                  {visibleCols.includes('sales')     && <td style={{ padding: '8px 14px', fontSize: 11, fontFamily: "'JetBrains Mono'", color: r.sales_amount > 0 ? '#10b981' : '#4a5568', whiteSpace: 'nowrap' }}>{r.sales_amount > 0 ? '$' + Number(r.sales_amount).toLocaleString('es-MX') : '–'}</td>}
+                  {visibleCols.includes('photo_in')  && <td style={{ padding: '8px 14px' }}>{r.photo_url ? <a href={r.photo_url} target='_blank' rel='noopener noreferrer'><img src={r.photo_url} alt='in' style={{ width: 32, height: 32, borderRadius: 6, objectFit: 'cover', display: 'block', border: '1px solid #1e2a45' }} /></a> : <span style={{ fontSize: 10, color: '#4a5568' }}>–</span>}</td>}
+                  {visibleCols.includes('photo_out') && <td style={{ padding: '8px 14px' }}>{r.photo_url_out ? <a href={r.photo_url_out} target='_blank' rel='noopener noreferrer'><img src={r.photo_url_out} alt='out' style={{ width: 32, height: 32, borderRadius: 6, objectFit: 'cover', display: 'block', border: '1px solid #1e2a45' }} /></a> : <span style={{ fontSize: 10, color: '#4a5568' }}>–</span>}</td>}
+                  {visibleCols.includes('gps')       && <td style={{ padding: '8px 14px', fontSize: 11, whiteSpace: 'nowrap' }}>{gpsLink ? <a href={gpsLink} target='_blank' rel='noopener noreferrer' style={{ color: '#3b82f6', textDecoration: 'none', fontFamily: "'JetBrains Mono'" }}>{gpsLabel} ↗</a> : <span style={{ color: '#4a5568' }}>–</span>}</td>}
+                  {visibleCols.includes('status')    && <td style={{ padding: '8px 14px' }}>{r.status ? <span style={{ padding: '2px 8px', borderRadius: 4, fontSize: 10, fontWeight: 600, color: stClr[r.status] || '#8892a8', background: stBg[r.status] || 'rgba(136,146,168,.1)', whiteSpace: 'nowrap' }}>{stLbl[r.status] || r.status}</span> : <span style={{ fontSize: 10, color: '#4a5568' }}>–</span>}</td>}
                 </tr>
               )
             })}
@@ -722,7 +757,7 @@ function EmpSidePanel({ emp, att, sites, onClose }) {
 // ─── Emp Modal ────────────────────────────────────────────────────────────────
 function EmpModal({ data, onSave, onClose }) {
   // skip_sales=true means DO NOT ask for sales. We invert for the "is vendor" checkbox.
-  const [f, setF] = useState(data || { name: '', email: '', phone: '', role: 'Vendedor(a)', skip_sales: false })
+  const [f, setF] = useState(data || { name: '', email: '', phone: '', role: 'Vendedor(a)', skip_sales: false, skip_photo: false })
   const upd = (k, v) => setF(p => ({ ...p, [k]: v }))
   const valid = f.name?.trim() && f.email?.trim()
   const isVendor = !f.skip_sales  // vendor = asks for sales = skip_sales is false
@@ -749,6 +784,11 @@ function EmpModal({ data, onSave, onClose }) {
             Vendedor — pedir monto de ventas al hacer Check Out
           </label>
           <div style={{ fontSize: 10, color: '#4a5568', marginTop: 4, marginLeft: 20 }}>Desmarca si es bodega, admin u otro rol sin ventas directas</div>
+          <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, cursor: 'pointer', color: '#f1f5f9', marginTop: 10 }}>
+            <input type='checkbox' checked={!f.skip_photo} onChange={e => upd('skip_photo', !e.target.checked)} />
+            Pedir foto al hacer Check In y Check Out
+          </label>
+          <div style={{ fontSize: 10, color: '#4a5568', marginTop: 4, marginLeft: 20 }}>Desmarca si no quieres solicitar foto a este empleado</div>
         </div>
         <div style={{ display: 'flex', gap: 8 }}>
           <button disabled={!valid} onClick={() => onSave(f)} style={{ flex: 1, padding: '10px 16px', borderRadius: 7, border: 'none', background: valid ? '#3b82f6' : '#1e2a45', color: '#fff', fontSize: 12, fontWeight: 600, cursor: valid ? 'pointer' : 'not-allowed', fontFamily: 'inherit' }}>Guardar</button>
@@ -761,9 +801,10 @@ function EmpModal({ data, onSave, onClose }) {
 
 // ─── Site Modal ───────────────────────────────────────────────────────────────
 function SiteModal({ data, onSave, onClose }) {
-  const [f, setF] = useState(data || { name: '', code: '', address: '', grace_mins: 5, absent_mins: 15, lat: 0, lng: 0, radius_m: 150 })
+  const [f, setF] = useState(data || { name: '', code: '', address: '', grace_mins: 5, absent_mins: 15, lat: '', lng: '', radius_m: 150 })
   const upd = (k, v) => setF(p => ({ ...p, [k]: v }))
   const valid = f.name?.trim() && f.code?.trim()
+  const hasGps = f.lat !== '' && f.lng !== '' && parseFloat(f.lat) !== 0 && parseFloat(f.lng) !== 0
   return (
     <div onClick={onClose} style={{ position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', background: 'rgba(0,0,0,.7)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 200 }}>
       <div onClick={e => e.stopPropagation()} style={{ background: '#1a2035', border: '1px solid #1e2a45', borderRadius: 12, padding: 22, width: '100%', maxWidth: 440, maxHeight: '85vh', overflow: 'auto' }}>
@@ -774,13 +815,16 @@ function SiteModal({ data, onSave, onClose }) {
             <input value={f[k] || ''} onChange={e => upd(k, k === 'code' ? e.target.value.toUpperCase() : e.target.value)} style={{ width: '100%', background: '#0d1220', border: '1px solid #1e2a45', color: '#f1f5f9', fontSize: 12, padding: '8px 10px', borderRadius: 6, outline: 'none', fontFamily: k === 'code' ? "'JetBrains Mono'" : 'inherit' }} />
           </div>
         ))}
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8, marginBottom: 10 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8, marginBottom: 4 }}>
           {[['Latitud', 'lat'], ['Longitud', 'lng'], ['Radio (m)', 'radius_m']].map(([l, k]) => (
             <div key={k}>
               <label style={{ fontSize: 10, fontWeight: 600, color: '#8892a8', display: 'block', marginBottom: 4 }}>{l}</label>
-              <input type='number' step='any' value={f[k] || 0} onChange={e => upd(k, parseFloat(e.target.value) || 0)} style={{ width: '100%', background: '#0d1220', border: '1px solid #1e2a45', color: '#f1f5f9', fontSize: 12, padding: '8px 10px', borderRadius: 6, outline: 'none', fontFamily: 'inherit' }} />
+              <input type='number' step='any' value={f[k] ?? ''} placeholder={k === 'radius_m' ? '150' : 'Opcional'} onChange={e => upd(k, e.target.value === '' ? '' : parseFloat(e.target.value))} style={{ width: '100%', background: '#0d1220', border: '1px solid #1e2a45', color: '#f1f5f9', fontSize: 12, padding: '8px 10px', borderRadius: 6, outline: 'none', fontFamily: 'inherit' }} />
             </div>
           ))}
+        </div>
+        <div style={{ fontSize: 10, color: '#4a5568', marginBottom: 10, padding: '6px 10px', background: hasGps ? 'rgba(16,185,129,.06)' : 'rgba(245,158,11,.06)', border: '1px solid ' + (hasGps ? 'rgba(16,185,129,.2)' : 'rgba(245,158,11,.2)'), borderRadius: 6 }}>
+          {hasGps ? '📍 GPS activo — se validará la ubicación al hacer Check In' : '⚠️ Sin GPS — empleados podrán hacer Check In desde cualquier lugar'}
         </div>
         <div style={{ marginBottom: 14 }}>
           <label style={{ fontSize: 10, fontWeight: 600, color: '#8892a8', display: 'block', marginBottom: 4 }}>Tolerancia (minutos después de la hora de entrada)</label>
@@ -900,11 +944,16 @@ function ScheduleModal({ emp, sites, schedules, onSave, onClose }) {
       <div onClick={e => e.stopPropagation()} style={{ background: '#1a2035', border: '1px solid #1e2a45', borderRadius: 12, padding: 22, width: '100%', maxWidth: 640, maxHeight: '92vh', overflow: 'auto' }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
           <h3 style={{ fontSize: 15, fontWeight: 700 }}>Horarios — {emp.name}</h3>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 6, background: '#0d1220', border: '1px solid #1e2a45', borderRadius: 8, padding: '4px 6px' }}>
-            <button onClick={prevWeek} style={{ background: 'rgba(59,130,246,.15)', border: 'none', borderRadius: 5, color: '#3b82f6', padding: '5px 12px', cursor: 'pointer', fontFamily: 'inherit', fontSize: 15, fontWeight: 700, lineHeight: 1 }}>‹</button>
-            <span style={{ fontSize: 12, color: '#f1f5f9', fontWeight: 600, minWidth: 170, textAlign: 'center' }}>{weekLabel}</span>
-            <button onClick={nextWeek} style={{ background: 'rgba(59,130,246,.15)', border: 'none', borderRadius: 5, color: '#3b82f6', padding: '5px 12px', cursor: 'pointer', fontFamily: 'inherit', fontSize: 15, fontWeight: 700, lineHeight: 1 }}>›</button>
-          </div>
+          {!emp.fixed_week && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, background: '#0d1220', border: '1px solid #1e2a45', borderRadius: 8, padding: '4px 6px' }}>
+              <button onClick={prevWeek} style={{ background: 'rgba(59,130,246,.15)', border: 'none', borderRadius: 5, color: '#3b82f6', padding: '5px 12px', cursor: 'pointer', fontFamily: 'inherit', fontSize: 15, fontWeight: 700, lineHeight: 1 }}>‹</button>
+              <span style={{ fontSize: 12, color: '#f1f5f9', fontWeight: 600, minWidth: 170, textAlign: 'center' }}>{weekLabel}</span>
+              <button onClick={nextWeek} style={{ background: 'rgba(59,130,246,.15)', border: 'none', borderRadius: 5, color: '#3b82f6', padding: '5px 12px', cursor: 'pointer', fontFamily: 'inherit', fontSize: 15, fontWeight: 700, lineHeight: 1 }}>›</button>
+            </div>
+          )}
+          {emp.fixed_week && (
+            <span style={{ fontSize: 10, color: '#f59e0b', background: 'rgba(245,158,11,.1)', border: '1px solid rgba(245,158,11,.25)', borderRadius: 5, padding: '3px 10px' }}>Semana fija</span>
+          )}
         </div>
         <p style={{ fontSize: 11, color: '#8892a8', marginBottom: 16 }}>Activa los días que trabaja. Cada día puede tener diferente sucursal y horario.</p>
 
@@ -918,7 +967,7 @@ function ScheduleModal({ emp, sites, schedules, onSave, onClose }) {
                 <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                   <button onClick={() => toggle(date)} style={{ width: 22, height: 22, borderRadius: 6, flexShrink: 0, cursor: 'pointer', border: '2px solid ' + (isOn ? '#10b981' : '#4a5568'), background: isOn ? '#10b981' : 'transparent', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontSize: 12, fontWeight: 700 }}>{isOn ? '✓' : ''}</button>
                   <span style={{ fontSize: 12, fontWeight: 600, width: 34, flexShrink: 0, color: date === todayDate ? '#3b82f6' : '#f1f5f9' }}>{label}</span>
-                  <span style={{ fontSize: 10, color: '#4a5568', fontFamily: "'JetBrains Mono'", width: 70, flexShrink: 0 }}>{date.slice(5).replace('-', '/')}</span>
+                  {!emp.fixed_week && <span style={{ fontSize: 10, color: '#4a5568', fontFamily: "'JetBrains Mono'", width: 70, flexShrink: 0 }}>{date.slice(5).replace('-', '/')}</span>}
                   {isOn ? (
                     <div style={{ display: 'flex', alignItems: 'center', gap: 6, flex: 1, flexWrap: 'wrap' }}>
                       <select value={day.site_id || ''} onChange={e => upd(date, 'site_id', e.target.value)} style={{ ...iS, flex: '1 1 120px', minWidth: 100, padding: '6px 8px' }}>
