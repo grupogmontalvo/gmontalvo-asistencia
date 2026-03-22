@@ -1,5 +1,5 @@
 'use client'
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { supabase } from '../../lib/supabase'
 import { useRouter } from 'next/navigation'
 
@@ -49,18 +49,37 @@ function addDays(date, n) {
 
 const DAY_NAMES = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom']
 
+function slugify(str) {
+  return str.toLowerCase()
+    .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+}
+
+function autoCode(name) {
+  const base = name.toUpperCase()
+    .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^A-Z0-9]/g, '')
+    .slice(0, 6)
+  const rand = Math.random().toString(36).slice(2, 5).toUpperCase()
+  return base + rand
+}
+
 export default function AdminPage() {
   const router = useRouter()
   const [authUser,  setAuthUser]  = useState(null)
   const [adminUser, setAdminUser] = useState(null)
   const [authLoading, setAuthLoading] = useState(true)
 
-  const [sites, setSites]     = useState([])
-  const [emps, setEmps]       = useState([])
-  const [att, setAtt]         = useState([])
+  const [sites, setSites]       = useState([])
+  const [emps, setEmps]         = useState([])
+  const [att, setAtt]           = useState([])
   const [schedules, setSchedules] = useState([])
   const [adminUsers, setAdminUsers] = useState([])
-  const [goals, setGoals]     = useState([])
+  const [goals, setGoals]       = useState([])
+  const [companies, setCompanies] = useState([])
+  const [selectedCompanyId, setSelectedCompanyId] = useState('')
+
   const [tab, setTab]         = useState('dashboard')
   const [modal, setModal]     = useState(null)
   const [sideEmp, setSideEmp] = useState(null)
@@ -96,20 +115,41 @@ export default function AdminPage() {
 
   const load = useCallback(async () => {
     if (!adminUser) return
-    let sitesQuery = supabase.from('sites').select('*').eq('active', true).order('name')
+    setLoading(true)
 
+    const companyId = isSuperAdmin ? (selectedCompanyId || null) : adminUser.company_id
+
+    // Empresas (solo superadmin)
+    if (isSuperAdmin) {
+      const { data: comps } = await supabase.from('companies').select('*').order('name')
+      setCompanies(comps || [])
+    }
+
+    // Sites
+    let sitesQuery = supabase.from('sites').select('*').eq('active', true).order('name')
     if (!isSuperAdmin) {
       const { data: perms } = await supabase.from('admin_site_permissions').select('site_id').eq('admin_user_id', adminUser.id)
       const permSiteIds = (perms || []).map(p => p.site_id)
       if (permSiteIds.length === 0) { setSites([]); setEmps([]); setAtt([]); setSchedules([]); setLoading(false); return }
       sitesQuery = sitesQuery.in('id', permSiteIds)
+    } else if (companyId) {
+      sitesQuery = sitesQuery.eq('company_id', companyId)
     }
 
+    // Employees
+    let empsQuery = supabase.from('employees').select('*').eq('active', true).order('name')
+    if (companyId) empsQuery = empsQuery.eq('company_id', companyId)
+
+    // Attendance
+    let attQuery = supabase.from('attendance').select('*').order('date', { ascending: false })
+    if (companyId) attQuery = attQuery.eq('company_id', companyId)
+
+    // Schedules
+    let scQuery = supabase.from('schedules').select('*')
+    if (companyId) scQuery = scQuery.eq('company_id', companyId)
+
     const [s, e, a, sc, g] = await Promise.all([
-      sitesQuery,
-      supabase.from('employees').select('*').eq('active', true).order('name'),
-      supabase.from('attendance').select('*').order('date', { ascending: false }),
-      supabase.from('schedules').select('*'),
+      sitesQuery, empsQuery, attQuery, scQuery,
       supabase.from('employee_goals').select('*'),
     ])
     setSites(s.data || [])
@@ -124,7 +164,7 @@ export default function AdminPage() {
     }
 
     setLoading(false)
-  }, [adminUser, isSuperAdmin])
+  }, [adminUser, isSuperAdmin, selectedCompanyId])
 
   useEffect(() => { if (adminUser) load() }, [adminUser, load])
   useEffect(() => {
@@ -185,16 +225,26 @@ export default function AdminPage() {
   })
 
   async function saveSite(data) {
-    if (data.id) { await supabase.from('sites').update(data).eq('id', data.id) }
-    else { delete data.id; await supabase.from('sites').insert(data) }
+    const companyId = isSuperAdmin ? (selectedCompanyId || companies[0]?.id) : adminUser.company_id
+    if (!data.id) {
+      delete data.id
+      data.company_id = companyId
+      if (!data.code) data.code = autoCode(data.name)
+      await supabase.from('sites').insert(data)
+    } else {
+      await supabase.from('sites').update(data).eq('id', data.id)
+    }
     setToast('Sitio guardado'); setModal(null); load()
   }
 
   async function saveEmp(data, weeklyGoal) {
+    const companyId = isSuperAdmin ? (selectedCompanyId || companies[0]?.id) : adminUser.company_id
     let empId = data.id
-    if (empId) { await supabase.from('employees').update(data).eq('id', empId) }
-    else {
+    if (empId) {
+      await supabase.from('employees').update(data).eq('id', empId)
+    } else {
       delete data.id
+      data.company_id = companyId
       const { data: newEmp } = await supabase.from('employees').insert(data).select().single()
       empId = newEmp?.id
     }
@@ -206,6 +256,12 @@ export default function AdminPage() {
       }
     }
     setToast('Empleado guardado'); setModal(null); load()
+  }
+
+  async function saveCompany(data) {
+    if (data.id) { await supabase.from('companies').update(data).eq('id', data.id) }
+    else { delete data.id; await supabase.from('companies').insert(data) }
+    setToast('Empresa guardada'); setModal(null); load()
   }
 
   async function delEmp(id) { await supabase.from('employees').update({ active: false }).eq('id', id); setToast('Empleado eliminado'); setModal(null); load() }
@@ -223,6 +279,10 @@ export default function AdminPage() {
   const inputStyle = { width: '100%', background: '#0d1220', border: '1px solid #1e2a45', color: '#f1f5f9', fontSize: 12, padding: '7px 10px', borderRadius: 6, outline: 'none', fontFamily: 'inherit' }
   const selectStyle = { ...inputStyle }
 
+  const activeCompany = isSuperAdmin
+    ? (selectedCompanyId ? companies.find(c => c.id === selectedCompanyId) : null)
+    : companies.find(c => c.id === adminUser?.company_id)
+
   return (
     <div style={{ display: 'flex', height: '100vh', overflow: 'hidden', fontFamily: "'DM Sans', sans-serif", background: '#0a0e1a', color: '#f1f5f9' }}>
       {sidebarOpen && <div onClick={() => setSidebarOpen(false)} style={{ display: 'none', position: 'fixed', inset: 0, background: 'rgba(0,0,0,.5)', zIndex: 99 }} className="sidebar-overlay" />}
@@ -231,8 +291,27 @@ export default function AdminPage() {
         <div style={{ width: 210, display: 'flex', flexDirection: 'column', height: '100%' }}>
           <div style={{ padding: 16, borderBottom: '1px solid #1e2a45', display: 'flex', alignItems: 'center', gap: 10 }}>
             <img src="/logo.jpeg" style={{ width: 32, height: 32, borderRadius: 8 }} alt="GM" />
-            <div><div style={{ fontSize: 13, fontWeight: 700 }}>G.Montalvo</div><div style={{ fontSize: 9, color: '#8892a8' }}>Control de Asistencia</div></div>
+            <div>
+              <div style={{ fontSize: 13, fontWeight: 700 }}>G.Montalvo</div>
+              <div style={{ fontSize: 9, color: '#8892a8' }}>Control de Asistencia</div>
+            </div>
           </div>
+
+          {/* Selector de empresa — solo superadmin */}
+          {isSuperAdmin && (
+            <div style={{ padding: '8px 10px', borderBottom: '1px solid #1e2a45', background: 'rgba(59,130,246,.05)' }}>
+              <div style={{ fontSize: 9, color: '#4a5568', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '.5px', marginBottom: 4 }}>Empresa</div>
+              <select
+                value={selectedCompanyId}
+                onChange={e => setSelectedCompanyId(e.target.value)}
+                style={{ width: '100%', background: '#0d1220', border: '1px solid #1e2a45', color: '#f1f5f9', fontSize: 11, padding: '5px 8px', borderRadius: 5, fontFamily: 'inherit' }}
+              >
+                <option value=''>Todas</option>
+                {companies.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+              </select>
+            </div>
+          )}
+
           <nav style={{ flex: 1, padding: 8, display: 'flex', flexDirection: 'column', gap: 2 }}>
             <div style={{ fontSize: 9, fontWeight: 600, textTransform: 'uppercase', letterSpacing: 1, color: '#4a5568', padding: '8px 8px 4px' }}>Principal</div>
             {[{ id: 'dashboard', lb: 'Dashboard' }, { id: 'attendance', lb: 'Asistencia' }].map(n => (
@@ -244,7 +323,9 @@ export default function AdminPage() {
             ))}
             {isSuperAdmin && <>
               <div style={{ fontSize: 9, fontWeight: 600, textTransform: 'uppercase', letterSpacing: 1, color: '#4a5568', padding: '12px 8px 4px' }}>Admin</div>
-              <button onClick={() => { setTab('users'); if (window.innerWidth < 768) setSidebarOpen(false) }} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 10px', borderRadius: 6, cursor: 'pointer', fontSize: 12, fontWeight: 500, color: tab === 'users' ? '#3b82f6' : '#8892a8', background: tab === 'users' ? 'rgba(59,130,246,.12)' : 'transparent', border: 'none', width: '100%', textAlign: 'left', fontFamily: 'inherit' }}>Usuarios</button>
+              {[{ id: 'users', lb: 'Usuarios' }, { id: 'companies', lb: 'Empresas' }].map(n => (
+                <button key={n.id} onClick={() => { setTab(n.id); if (window.innerWidth < 768) setSidebarOpen(false) }} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 10px', borderRadius: 6, cursor: 'pointer', fontSize: 12, fontWeight: 500, color: tab === n.id ? '#3b82f6' : '#8892a8', background: tab === n.id ? 'rgba(59,130,246,.12)' : 'transparent', border: 'none', width: '100%', textAlign: 'left', fontFamily: 'inherit' }}>{n.lb}</button>
+              ))}
             </>}
           </nav>
           <div style={{ padding: '12px 8px', borderTop: '1px solid #1e2a45' }}>
@@ -259,13 +340,17 @@ export default function AdminPage() {
           <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
             <button onClick={() => setSidebarOpen(o => !o)} style={{ background: 'none', border: '1px solid #1e2a45', borderRadius: 6, color: '#8892a8', cursor: 'pointer', padding: '5px 9px', fontSize: 16, lineHeight: 1, fontFamily: 'inherit' }}>☰</button>
             <div>
-              <h1 style={{ fontSize: 17, fontWeight: 700 }}>{{ dashboard: 'Dashboard', attendance: 'Asistencia', employees: 'Empleados', sites: 'Sitios', users: 'Usuarios' }[tab]}</h1>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <h1 style={{ fontSize: 17, fontWeight: 700 }}>{{ dashboard: 'Dashboard', attendance: 'Asistencia', employees: 'Empleados', sites: 'Sitios', users: 'Usuarios', companies: 'Empresas' }[tab]}</h1>
+                {activeCompany && <span style={{ fontSize: 10, color: '#3b82f6', background: 'rgba(59,130,246,.1)', border: '1px solid rgba(59,130,246,.2)', borderRadius: 4, padding: '2px 8px', fontWeight: 600 }}>{activeCompany.name}</span>}
+              </div>
               <p style={{ fontSize: 11, color: '#8892a8', marginTop: 1 }}>{new Date().toLocaleDateString('es-MX', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric', timeZone: 'America/Cancun' })}</p>
             </div>
           </div>
-          {tab === 'employees' && <button onClick={() => setModal({ type: 'emp', data: null })} style={{ padding: '7px 14px', borderRadius: 7, border: 'none', background: '#3b82f6', color: '#fff', fontSize: 12, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}>+ Nuevo Empleado</button>}
-          {tab === 'sites'     && <button onClick={() => setModal({ type: 'site', data: null })} style={{ padding: '7px 14px', borderRadius: 7, border: 'none', background: '#3b82f6', color: '#fff', fontSize: 12, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}>+ Nuevo Sitio</button>}
-          {tab === 'users'     && isSuperAdmin && <button onClick={() => setModal({ type: 'adminUser', data: null })} style={{ padding: '7px 14px', borderRadius: 7, border: 'none', background: '#3b82f6', color: '#fff', fontSize: 12, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}>+ Nuevo Usuario</button>}
+          {tab === 'employees'  && <button onClick={() => setModal({ type: 'emp', data: null })} style={{ padding: '7px 14px', borderRadius: 7, border: 'none', background: '#3b82f6', color: '#fff', fontSize: 12, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}>+ Nuevo Empleado</button>}
+          {tab === 'sites'      && <button onClick={() => setModal({ type: 'site', data: null })} style={{ padding: '7px 14px', borderRadius: 7, border: 'none', background: '#3b82f6', color: '#fff', fontSize: 12, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}>+ Nuevo Sitio</button>}
+          {tab === 'users'      && isSuperAdmin && <button onClick={() => setModal({ type: 'adminUser', data: null })} style={{ padding: '7px 14px', borderRadius: 7, border: 'none', background: '#3b82f6', color: '#fff', fontSize: 12, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}>+ Nuevo Usuario</button>}
+          {tab === 'companies'  && isSuperAdmin && <button onClick={() => setModal({ type: 'company', data: null })} style={{ padding: '7px 14px', borderRadius: 7, border: 'none', background: '#3b82f6', color: '#fff', fontSize: 12, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}>+ Nueva Empresa</button>}
         </div>
 
         <div style={{ flex: 1, padding: '18px 22px', overflow: 'auto' }}>
@@ -291,7 +376,7 @@ export default function AdminPage() {
                     <div style={{ fontSize: 10, color: '#4a5568' }}>{totalCount} empleado{totalCount !== 1 ? 's' : ''} hoy</div>
                   </div>
                   <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-                    <thead><tr>{['Empleado','Horario','Entrada','Salida','Estado'].map(h => (
+                    <thead><tr>{['Empleado','Horario','Entrada','Salida','Ventas','Estado'].map(h => (
                       <th key={h} style={{ textAlign: 'left', fontSize: 9, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '.6px', color: '#4a5568', padding: '8px 16px', borderBottom: '1px solid #1e2a45' }}>{h}</th>
                     ))}</tr></thead>
                     <tbody>
@@ -306,6 +391,7 @@ export default function AdminPage() {
                           <td style={{ padding: '10px 16px', fontSize: 11, fontFamily: "'JetBrains Mono'", color: '#8892a8' }}>{sc.start_time?.slice(0,5)} – {sc.end_time?.slice(0,5)}</td>
                           <td style={{ padding: '10px 16px', fontSize: 11, fontFamily: "'JetBrains Mono'" }}>{record?.check_in ? fmtTime(record.check_in, site.timezone) : '–'}</td>
                           <td style={{ padding: '10px 16px', fontSize: 11, fontFamily: "'JetBrains Mono'" }}>{record?.check_out ? fmtTime(record.check_out, site.timezone) : '–'}</td>
+                          <td style={{ padding: '10px 16px', fontSize: 11, fontFamily: "'JetBrains Mono'", color: record?.sales_amount > 0 ? '#10b981' : '#4a5568' }}>{record?.sales_amount > 0 ? '$'+Number(record.sales_amount).toLocaleString('es-MX') : '–'}</td>
                           <td style={{ padding: '10px 16px' }}><span style={{ padding: '3px 10px', borderRadius: 5, fontSize: 10, fontWeight: 600, color, background: bg }}>{statusLabel}</span></td>
                         </tr>
                       ))}
@@ -323,6 +409,7 @@ export default function AdminPage() {
                             <td style={{ padding: '10px 16px', fontSize: 10, color: '#4a5568', fontStyle: 'italic' }}>Sin horario</td>
                             <td style={{ padding: '10px 16px', fontSize: 11, fontFamily: "'JetBrains Mono'" }}>{fmtTime(r.check_in, site.timezone)}</td>
                             <td style={{ padding: '10px 16px', fontSize: 11, fontFamily: "'JetBrains Mono'" }}>{r.check_out ? fmtTime(r.check_out, site.timezone) : '–'}</td>
+                            <td style={{ padding: '10px 16px', fontSize: 11, fontFamily: "'JetBrains Mono'", color: r.sales_amount > 0 ? '#10b981' : '#4a5568' }}>{r.sales_amount > 0 ? '$'+Number(r.sales_amount).toLocaleString('es-MX') : '–'}</td>
                             <td style={{ padding: '10px 16px' }}><span style={{ padding: '3px 10px', borderRadius: 5, fontSize: 10, fontWeight: 600, color, background: bg }}>{label}</span></td>
                           </tr>
                         )
@@ -472,16 +559,18 @@ export default function AdminPage() {
           {tab === 'users' && isSuperAdmin && (
             <div style={{ background: '#1a2035', border: '1px solid #1e2a45', borderRadius: 10, overflow: 'hidden' }}>
               <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-                <thead><tr>{['Usuario','Email','Rol','Sucursales',''].map(h => (
+                <thead><tr>{['Usuario','Email','Empresa','Rol','Sucursales',''].map(h => (
                   <th key={h} style={{ textAlign: 'left', fontSize: 9, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '.6px', color: '#4a5568', padding: '9px 16px', borderBottom: '1px solid #1e2a45' }}>{h}</th>
                 ))}</tr></thead>
                 <tbody>
                   {adminUsers.map(au => {
                     const auSites = (au.admin_site_permissions || []).map(p => sites.find(s => s.id === p.site_id)?.name).filter(Boolean)
+                    const auCompany = companies.find(c => c.id === au.company_id)
                     return (
                       <tr key={au.id} style={{ borderBottom: '1px solid rgba(30,42,69,.3)' }}>
                         <td style={{ padding: '9px 16px' }}><div style={{ fontSize: 12, fontWeight: 600 }}>{au.name}</div></td>
                         <td style={{ padding: '9px 16px', fontSize: 11, color: '#8892a8' }}>{au.email}</td>
+                        <td style={{ padding: '9px 16px', fontSize: 11, color: '#8892a8' }}>{au.role === 'superadmin' ? <span style={{ color: '#4a5568' }}>—</span> : (auCompany?.name || <span style={{ color: '#ef4444' }}>Sin empresa</span>)}</td>
                         <td style={{ padding: '9px 16px' }}><span style={{ padding: '2px 8px', borderRadius: 4, fontSize: 10, fontWeight: 600, color: au.role === 'superadmin' ? '#3b82f6' : '#10b981', background: au.role === 'superadmin' ? 'rgba(59,130,246,.12)' : 'rgba(16,185,129,.12)' }}>{au.role === 'superadmin' ? 'Super Admin' : 'Gerente'}</span></td>
                         <td style={{ padding: '9px 16px', fontSize: 11, color: '#8892a8' }}>{au.role === 'superadmin' ? <span style={{ color: '#4a5568' }}>Todas</span> : auSites.length > 0 ? auSites.join(', ') : <span style={{ color: '#ef4444' }}>Sin asignar</span>}</td>
                         <td style={{ padding: '9px 16px' }}>
@@ -493,27 +582,55 @@ export default function AdminPage() {
                       </tr>
                     )
                   })}
-                  {adminUsers.length === 0 && <tr><td colSpan={5} style={{ padding: 24, textAlign: 'center', color: '#4a5568', fontSize: 12 }}>No hay usuarios admin.</td></tr>}
+                  {adminUsers.length === 0 && <tr><td colSpan={6} style={{ padding: 24, textAlign: 'center', color: '#4a5568', fontSize: 12 }}>No hay usuarios admin.</td></tr>}
                 </tbody>
               </table>
+            </div>
+          )}
+
+          {tab === 'companies' && isSuperAdmin && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+              {companies.map(company => {
+                const compEmps  = emps.filter(e => e.company_id === company.id).length
+                const compSites = sites.filter(s => s.company_id === company.id).length
+                return (
+                  <div key={company.id} style={{ background: '#1a2035', border: '1px solid #1e2a45', borderRadius: 10, padding: 16, display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 10 }}>
+                    <div>
+                      <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 2 }}>{company.name}</div>
+                      <div style={{ fontSize: 11, color: '#4a5568', fontFamily: "'JetBrains Mono'" }}>slug: {company.slug}</div>
+                      <div style={{ fontSize: 10, color: '#8892a8', marginTop: 4 }}>{compSites} sucursal{compSites !== 1 ? 'es' : ''} · {compEmps} empleado{compEmps !== 1 ? 's' : ''}</div>
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                      <button
+                        onClick={() => setSelectedCompanyId(company.id)}
+                        style={{ padding: '5px 10px', borderRadius: 5, border: '1px solid rgba(59,130,246,.25)', background: selectedCompanyId === company.id ? 'rgba(59,130,246,.2)' : 'rgba(59,130,246,.1)', color: '#3b82f6', fontSize: 10, cursor: 'pointer', fontFamily: 'inherit', fontWeight: 600 }}
+                      >Ver datos</button>
+                      <button onClick={() => setModal({ type: 'company', data: company })} style={{ background: 'none', border: 'none', color: '#8892a8', cursor: 'pointer', fontSize: 11, fontFamily: 'inherit' }}>Editar</button>
+                    </div>
+                  </div>
+                )
+              })}
+              {companies.length === 0 && <div style={{ padding: 20, textAlign: 'center', color: '#4a5568', fontSize: 12, background: '#1a2035', borderRadius: 10, border: '1px solid #1e2a45' }}>No hay empresas.</div>}
             </div>
           )}
         </div>
       </div>
 
-      {sideEmp && <EmpSidePanel emp={sideEmp} att={att.filter(r => r.employee_id === sideEmp.id)} sites={sites} onClose={() => setSideEmp(null)} />}
+      {sideEmp && <EmpSidePanel emp={sideEmp} att={att.filter(r => r.employee_id === sideEmp.id)} sites={sites} onClose={() => setSideEmp(null)} onRefresh={load} />}
 
       {modal?.type === 'emp'       && <EmpModal       data={modal.data?.emp || null} currentGoal={modal.data?.goal?.weekly_goal || ''} onSave={saveEmp} onClose={() => setModal(null)} />}
       {modal?.type === 'site'      && <SiteModal      data={modal.data} onSave={saveSite} onClose={() => setModal(null)} />}
       {modal?.type === 'qr'        && <QrModal        site={modal.data} url={getSiteUrl(modal.data.code)} onClose={() => setModal(null)} />}
       {modal?.type === 'schedule'  && <ScheduleModal  emp={modal.data} sites={sites} schedules={schedules.filter(s => s.employee_id === modal.data.id)} onSave={async () => { await load(); setToast('Horarios guardados'); setModal(null) }} onClose={() => setModal(null)} />}
-      {modal?.type === 'adminUser' && <AdminUserModal data={modal.data} sites={sites} onSave={async () => { await load(); setToast('Usuario guardado'); setModal(null) }} onClose={() => setModal(null)} />}
+      {modal?.type === 'adminUser' && <AdminUserModal data={modal.data} sites={sites} companies={companies} isSuperAdmin={isSuperAdmin} onSave={async () => { await load(); setToast('Usuario guardado'); setModal(null) }} onClose={() => setModal(null)} />}
+      {modal?.type === 'company'   && <CompanyModal   data={modal.data} onSave={saveCompany} onClose={() => setModal(null)} />}
 
       {toast && <div style={{ position: 'fixed', bottom: 20, right: 20, background: '#1a2035', border: '1px solid rgba(16,185,129,.25)', borderRadius: 8, padding: '10px 16px', fontSize: 12, fontWeight: 500, zIndex: 200, color: '#10b981' }}>{toast}</div>}
     </div>
   )
 }
 
+// ─── Emp Side Panel ───────────────────────────────────────────────────────────
 const ALL_COLS = [
   { key: 'date', label: 'Fecha' }, { key: 'site', label: 'Sucursal' }, { key: 'checkin', label: 'Entrada' },
   { key: 'checkout', label: 'Salida' }, { key: 'hours', label: 'Horas' }, { key: 'time_out', label: 'T. Fuera' },
@@ -521,11 +638,13 @@ const ALL_COLS = [
   { key: 'gps', label: 'GPS' }, { key: 'status', label: 'Estado' },
 ]
 
-function EmpSidePanel({ emp, att, sites, onClose }) {
+function EmpSidePanel({ emp, att, sites, onClose, onRefresh }) {
   const [from, setFrom] = useState('')
   const [to,   setTo]   = useState('')
   const [visibleCols, setVisibleCols] = useState(['date','site','checkin','checkout','hours','time_out','sales','photo_in','photo_out','gps','status'])
   const [showColPicker, setShowColPicker] = useState(false)
+  const [editingSale, setEditingSale] = useState(null) // { id, value }
+  const [saleErr, setSaleErr] = useState('')
 
   const filtered = att.filter(r => {
     if (from && r.date < from) return false
@@ -540,6 +659,16 @@ function EmpSidePanel({ emp, att, sites, onClose }) {
   const absent = filtered.filter(r => r.status === 'absent').length
 
   const iS = { background: '#1a2035', border: '1px solid #2d3d5a', color: '#f1f5f9', fontSize: 11, padding: '7px 10px', borderRadius: 6, outline: 'none', fontFamily: 'inherit', colorScheme: 'dark' }
+
+  async function saveSale(attId) {
+    setSaleErr('')
+    const val = parseFloat(editingSale.value)
+    if (isNaN(val) || val < 0) { setSaleErr('Monto inválido'); return }
+    if (val > MAX_SALE) { setSaleErr(`Máx $${MAX_SALE.toLocaleString('es-MX')}`); return }
+    await supabase.from('attendance').update({ sales_amount: val }).eq('id', attId)
+    setEditingSale(null)
+    if (onRefresh) onRefresh()
+  }
 
   return (
     <div style={{ position: 'fixed', top: 0, right: 0, width: 480, height: '100vh', background: '#111827', borderLeft: '1px solid #1e2a45', display: 'flex', flexDirection: 'column', zIndex: 150, boxShadow: '-8px 0 32px rgba(0,0,0,.4)' }}>
@@ -607,6 +736,7 @@ function EmpSidePanel({ emp, att, sites, onClose }) {
               const tomLabel = tom > 0 ? `${Math.floor(tom/60)>0?Math.floor(tom/60)+'h ':''}${tom%60>0?tom%60+'m':''}`.trim() : '–'
               const gpsLabel = r.gps_lat && r.gps_lng ? `${r.gps_distance_m??'?'}m` : '–'
               const gpsLink  = r.gps_lat && r.gps_lng ? `https://maps.google.com/?q=${r.gps_lat},${r.gps_lng}` : null
+              const isEditing = editingSale?.id === r.id
               return (
                 <tr key={r.id} style={{ borderBottom: '1px solid rgba(30,42,69,.3)' }}>
                   {visibleCols.includes('date')      && <td style={{ padding: '8px 14px', fontSize: 11, fontFamily: "'JetBrains Mono'", whiteSpace: 'nowrap' }}>{fmtDate(r.date)}</td>}
@@ -615,7 +745,34 @@ function EmpSidePanel({ emp, att, sites, onClose }) {
                   {visibleCols.includes('checkout')  && <td style={{ padding: '8px 14px', fontSize: 11, fontFamily: "'JetBrains Mono'", whiteSpace: 'nowrap' }}>{fmtTime(r.check_out, site?.timezone)}</td>}
                   {visibleCols.includes('hours')     && <td style={{ padding: '8px 14px', fontSize: 11, fontFamily: "'JetBrains Mono'", whiteSpace: 'nowrap' }}>{fmtHours(r.hours_worked)}</td>}
                   {visibleCols.includes('time_out')  && <td style={{ padding: '8px 14px', fontSize: 11, fontFamily: "'JetBrains Mono'", color: tom>0?'#f59e0b':'#4a5568', whiteSpace: 'nowrap' }}>{tomLabel}</td>}
-                  {visibleCols.includes('sales')     && <td style={{ padding: '8px 14px', fontSize: 11, fontFamily: "'JetBrains Mono'", color: r.sales_amount>0?'#10b981':'#4a5568', whiteSpace: 'nowrap' }}>{r.sales_amount>0?'$'+Number(r.sales_amount).toLocaleString('es-MX'):'–'}</td>}
+                  {visibleCols.includes('sales') && (
+                    <td style={{ padding: '8px 14px', whiteSpace: 'nowrap' }}>
+                      {isEditing ? (
+                        <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
+                          <input
+                            type='number'
+                            value={editingSale.value}
+                            onChange={e => { setEditingSale(p => ({ ...p, value: e.target.value })); setSaleErr('') }}
+                            onKeyDown={e => { if (e.key === 'Enter') saveSale(r.id); if (e.key === 'Escape') setEditingSale(null) }}
+                            autoFocus
+                            style={{ width: 90, background: '#0d1220', border: '1px solid '+(saleErr?'#ef4444':'#3b82f6'), color: '#f1f5f9', fontSize: 11, padding: '4px 7px', borderRadius: 5, fontFamily: "'JetBrains Mono'", outline: 'none' }}
+                          />
+                          <button onClick={() => saveSale(r.id)} style={{ background: 'rgba(16,185,129,.15)', border: '1px solid rgba(16,185,129,.3)', borderRadius: 4, color: '#10b981', fontSize: 12, cursor: 'pointer', padding: '3px 7px' }}>✓</button>
+                          <button onClick={() => { setEditingSale(null); setSaleErr('') }} style={{ background: 'none', border: '1px solid #1e2a45', borderRadius: 4, color: '#8892a8', fontSize: 12, cursor: 'pointer', padding: '3px 7px' }}>✕</button>
+                        </div>
+                      ) : (
+                        <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                          <span style={{ fontSize: 11, fontFamily: "'JetBrains Mono'", color: r.sales_amount > 0 ? '#10b981' : '#4a5568' }}>{r.sales_amount > 0 ? '$'+Number(r.sales_amount).toLocaleString('es-MX') : '–'}</span>
+                          <button
+                            onClick={() => { setEditingSale({ id: r.id, value: r.sales_amount || 0 }); setSaleErr('') }}
+                            style={{ background: 'none', border: 'none', color: '#4a5568', cursor: 'pointer', fontSize: 11, padding: '1px 4px', borderRadius: 3, lineHeight: 1 }}
+                            title='Editar venta'
+                          >✎</button>
+                        </div>
+                      )}
+                      {isEditing && saleErr && <div style={{ fontSize: 9, color: '#ef4444', marginTop: 2 }}>{saleErr}</div>}
+                    </td>
+                  )}
                   {visibleCols.includes('photo_in')  && <td style={{ padding: '8px 14px' }}>{r.photo_url?<a href={r.photo_url} target='_blank' rel='noopener noreferrer'><img src={r.photo_url} alt='in' style={{ width:32,height:32,borderRadius:6,objectFit:'cover',display:'block',border:'1px solid #1e2a45' }} /></a>:<span style={{ fontSize:10,color:'#4a5568' }}>–</span>}</td>}
                   {visibleCols.includes('photo_out') && <td style={{ padding: '8px 14px' }}>{r.photo_url_out?<a href={r.photo_url_out} target='_blank' rel='noopener noreferrer'><img src={r.photo_url_out} alt='out' style={{ width:32,height:32,borderRadius:6,objectFit:'cover',display:'block',border:'1px solid #1e2a45' }} /></a>:<span style={{ fontSize:10,color:'#4a5568' }}>–</span>}</td>}
                   {visibleCols.includes('gps')       && <td style={{ padding: '8px 14px', fontSize: 11, whiteSpace: 'nowrap' }}>{gpsLink?<a href={gpsLink} target='_blank' rel='noopener noreferrer' style={{ color:'#3b82f6',textDecoration:'none',fontFamily:"'JetBrains Mono'" }}>{gpsLabel} ↗</a>:<span style={{ color:'#4a5568' }}>–</span>}</td>}
@@ -665,23 +822,15 @@ function EmpModal({ data, currentGoal, onSave, onClose }) {
             <option>Vendedor(a)</option><option>Encargado(a)</option><option>Gerente Regional</option><option>Supervisor(a)</option>
           </select>
         </div>
-
-        {/* Meta semanal */}
         <div style={{ marginBottom: 14, background: 'rgba(16,185,129,.05)', border: `1px solid ${goalErr ? 'rgba(239,68,68,.4)' : 'rgba(16,185,129,.15)'}`, borderRadius: 8, padding: '12px 14px' }}>
           <label style={{ fontSize: 10, fontWeight: 600, color: '#10b981', display: 'block', marginBottom: 6, textTransform: 'uppercase', letterSpacing: '.5px' }}>Meta de ventas semanal</label>
           <div style={{ position: 'relative' }}>
             <span style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', fontSize: 14, fontWeight: 700, color: '#4a5568', pointerEvents: 'none' }}>$</span>
-            <input
-              type='number' inputMode='decimal' placeholder='Sin meta (dejar vacío)'
-              value={weeklyGoal}
-              onChange={e => { setWeeklyGoal(e.target.value); setGoalErr('') }}
-              style={{ width:'100%',background:'#0d1220',border:`1px solid ${goalErr?'#ef4444':'#1e2a45'}`,color:'#f1f5f9',fontSize:14,fontWeight:700,padding:'10px 10px 10px 26px',borderRadius:8,outline:'none',fontFamily:"'JetBrains Mono', monospace",boxSizing:'border-box' }}
-            />
+            <input type='number' inputMode='decimal' placeholder='Sin meta (dejar vacío)' value={weeklyGoal} onChange={e => { setWeeklyGoal(e.target.value); setGoalErr('') }} style={{ width:'100%',background:'#0d1220',border:`1px solid ${goalErr?'#ef4444':'#1e2a45'}`,color:'#f1f5f9',fontSize:14,fontWeight:700,padding:'10px 10px 10px 26px',borderRadius:8,outline:'none',fontFamily:"'JetBrains Mono', monospace",boxSizing:'border-box' }} />
           </div>
           {goalErr && <div style={{ fontSize: 11, color: '#ef4444', marginTop: 6, fontWeight: 600 }}>⚠ {goalErr}</div>}
           {!goalErr && <div style={{ fontSize: 10, color: '#4a5568', marginTop: 6 }}>Máximo ${MAX_SALE.toLocaleString('es-MX')}. Deja vacío para no asignar meta.</div>}
         </div>
-
         <div style={{ borderTop: '1px solid #1e2a45', paddingTop: 12, marginBottom: 14 }}>
           <div style={{ fontSize: 10, fontWeight: 600, color: '#4a5568', textTransform: 'uppercase', letterSpacing: '.5px', marginBottom: 10 }}>Comportamiento</div>
           <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, cursor: 'pointer', color: '#f1f5f9' }}>
@@ -704,38 +853,162 @@ function EmpModal({ data, currentGoal, onSave, onClose }) {
   )
 }
 
-// ─── Site Modal ───────────────────────────────────────────────────────────────
+// ─── Site Modal con Leaflet ───────────────────────────────────────────────────
 function SiteModal({ data, onSave, onClose }) {
-  const [f, setF] = useState(data || { name: '', code: '', address: '', grace_mins: 5, absent_mins: 15, lat: '', lng: '', radius_m: 150 })
+  const isNew = !data?.id
+  const [f, setF] = useState(data || { name: '', address: '', grace_mins: 5, absent_mins: 15, lat: '', lng: '', radius_m: 150 })
+  const [searchQuery, setSearchQuery] = useState(data?.address || '')
+  const [searching, setSearching] = useState(false)
+  const [searchErr, setSearchErr] = useState('')
+  const mapRef         = useRef(null)
+  const mapInstanceRef = useRef(null)
+  const markerRef      = useRef(null)
   const upd = (k, v) => setF(p => ({ ...p, [k]: v }))
-  const valid = f.name?.trim() && f.code?.trim()
+  const valid = f.name?.trim()
   const hasGps = f.lat !== '' && f.lng !== '' && parseFloat(f.lat) !== 0 && parseFloat(f.lng) !== 0
+
+  // Cargar Leaflet y crear mapa
+  useEffect(() => {
+    function initMap() {
+      if (!mapRef.current || mapInstanceRef.current) return
+      const L = window.L
+      const lat = parseFloat(f.lat) || 21.1619
+      const lng = parseFloat(f.lng) || -86.8515
+      const map = L.map(mapRef.current, { zoomControl: true }).setView([lat, lng], hasGps ? 16 : 13)
+      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        attribution: '© <a href="https://openstreetmap.org">OpenStreetMap</a>'
+      }).addTo(map)
+      const marker = L.marker([lat, lng], { draggable: true }).addTo(map)
+      marker.on('dragend', e => {
+        const pos = e.target.getLatLng()
+        setF(p => ({ ...p, lat: parseFloat(pos.lat.toFixed(6)), lng: parseFloat(pos.lng.toFixed(6)) }))
+      })
+      mapInstanceRef.current = map
+      markerRef.current = marker
+    }
+
+    function loadLeaflet() {
+      if (!document.querySelector('link[href*="leaflet"]')) {
+        const css = document.createElement('link')
+        css.rel = 'stylesheet'
+        css.href = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css'
+        document.head.appendChild(css)
+      }
+      if (window.L) { setTimeout(initMap, 50); return }
+      if (document.querySelector('script[src*="leaflet"]')) {
+        const existing = document.querySelector('script[src*="leaflet"]')
+        if (existing._loaded) { setTimeout(initMap, 50) }
+        else { existing.addEventListener('load', () => setTimeout(initMap, 50)) }
+        return
+      }
+      const script = document.createElement('script')
+      script.src = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js'
+      script.onload = () => { script._loaded = true; setTimeout(initMap, 50) }
+      document.head.appendChild(script)
+    }
+
+    loadLeaflet()
+    return () => {
+      if (mapInstanceRef.current) { mapInstanceRef.current.remove(); mapInstanceRef.current = null; markerRef.current = null }
+    }
+  }, [])
+
+  // Actualizar marcador cuando cambian lat/lng manualmente
+  useEffect(() => {
+    if (!mapInstanceRef.current || !markerRef.current) return
+    const lat = parseFloat(f.lat); const lng = parseFloat(f.lng)
+    if (!isNaN(lat) && !isNaN(lng) && lat !== 0 && lng !== 0) {
+      markerRef.current.setLatLng([lat, lng])
+    }
+  }, [f.lat, f.lng])
+
+  async function searchLocation() {
+    if (!searchQuery.trim()) return
+    setSearching(true); setSearchErr('')
+    try {
+      const res = await fetch(`https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(searchQuery)}&format=json&limit=5&countrycodes=mx`)
+      const results = await res.json()
+      if (results.length === 0) { setSearchErr('No se encontró la ubicación. Intenta con más detalle.'); setSearching(false); return }
+      const { lat, lon, display_name } = results[0]
+      const newLat = parseFloat(parseFloat(lat).toFixed(6))
+      const newLng = parseFloat(parseFloat(lon).toFixed(6))
+      setF(p => ({ ...p, lat: newLat, lng: newLng, address: p.address || display_name.split(',').slice(0,3).join(',').trim() }))
+      if (mapInstanceRef.current && markerRef.current) {
+        mapInstanceRef.current.setView([newLat, newLng], 17)
+        markerRef.current.setLatLng([newLat, newLng])
+      }
+    } catch (e) { setSearchErr('Error al buscar. Revisa tu conexión.') }
+    setSearching(false)
+  }
+
   return (
     <div onClick={onClose} style={{ position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', background: 'rgba(0,0,0,.7)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 200 }}>
-      <div onClick={e => e.stopPropagation()} style={{ background: '#1a2035', border: '1px solid #1e2a45', borderRadius: 12, padding: 22, width: '100%', maxWidth: 440, maxHeight: '85vh', overflow: 'auto' }}>
-        <h3 style={{ fontSize: 15, fontWeight: 700, marginBottom: 14 }}>{data ? 'Editar Sitio' : 'Nuevo Sitio'}</h3>
-        {[['Nombre','name'],['Código QR','code'],['Dirección','address']].map(([l,k]) => (
-          <div key={k} style={{ marginBottom: 10 }}>
-            <label style={{ fontSize: 10, fontWeight: 600, color: '#8892a8', display: 'block', marginBottom: 4 }}>{l}</label>
-            <input value={f[k]||''} onChange={e => upd(k, k==='code'?e.target.value.toUpperCase():e.target.value)} style={{ width:'100%',background:'#0d1220',border:'1px solid #1e2a45',color:'#f1f5f9',fontSize:12,padding:'8px 10px',borderRadius:6,outline:'none',fontFamily:k==='code'?"'JetBrains Mono'":'inherit' }} />
+      <div onClick={e => e.stopPropagation()} style={{ background: '#1a2035', border: '1px solid #1e2a45', borderRadius: 12, padding: 22, width: '100%', maxWidth: 520, maxHeight: '92vh', overflow: 'auto' }}>
+        <h3 style={{ fontSize: 15, fontWeight: 700, marginBottom: 14 }}>{isNew ? 'Nuevo Sitio' : 'Editar Sitio'}</h3>
+
+        <div style={{ marginBottom: 10 }}>
+          <label style={{ fontSize: 10, fontWeight: 600, color: '#8892a8', display: 'block', marginBottom: 4 }}>Nombre del sitio</label>
+          <input value={f.name||''} onChange={e => upd('name', e.target.value)} style={{ width:'100%',background:'#0d1220',border:'1px solid #1e2a45',color:'#f1f5f9',fontSize:12,padding:'8px 10px',borderRadius:6,outline:'none',fontFamily:'inherit' }} placeholder='Ej: Plaza Américas Cancún' />
+        </div>
+
+        {/* Búsqueda de ubicación */}
+        <div style={{ marginBottom: 6 }}>
+          <label style={{ fontSize: 10, fontWeight: 600, color: '#8892a8', display: 'block', marginBottom: 4 }}>Buscar ubicación</label>
+          <div style={{ display: 'flex', gap: 6 }}>
+            <input
+              value={searchQuery}
+              onChange={e => setSearchQuery(e.target.value)}
+              onKeyDown={e => e.key === 'Enter' && searchLocation()}
+              placeholder='Ej: Plaza Américas Cancún, Quintana Roo'
+              style={{ flex:1, background:'#0d1220', border:'1px solid #1e2a45', color:'#f1f5f9', fontSize:12, padding:'8px 10px', borderRadius:6, outline:'none', fontFamily:'inherit' }}
+            />
+            <button onClick={searchLocation} disabled={searching} style={{ padding:'8px 14px', borderRadius:6, border:'none', background:'#3b82f6', color:'#fff', fontSize:12, fontWeight:600, cursor:searching?'wait':'pointer', fontFamily:'inherit', whiteSpace:'nowrap' }}>
+              {searching ? '...' : '🔍 Buscar'}
+            </button>
           </div>
-        ))}
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8, marginBottom: 4 }}>
-          {[['Latitud','lat'],['Longitud','lng'],['Radio (m)','radius_m']].map(([l,k]) => (
-            <div key={k}>
-              <label style={{ fontSize: 10, fontWeight: 600, color: '#8892a8', display: 'block', marginBottom: 4 }}>{l}</label>
-              <input type='number' step='any' value={f[k]??''} placeholder={k==='radius_m'?'150':'Opcional'} onChange={e => upd(k, e.target.value===''?'':parseFloat(e.target.value))} style={{ width:'100%',background:'#0d1220',border:'1px solid #1e2a45',color:'#f1f5f9',fontSize:12,padding:'8px 10px',borderRadius:6,outline:'none',fontFamily:'inherit' }} />
-            </div>
-          ))}
+          {searchErr && <div style={{ fontSize: 11, color: '#f59e0b', marginTop: 4 }}>⚠ {searchErr}</div>}
         </div>
-        <div style={{ fontSize: 10, color: '#4a5568', marginBottom: 10, padding: '6px 10px', background: hasGps?'rgba(16,185,129,.06)':'rgba(245,158,11,.06)', border: '1px solid '+(hasGps?'rgba(16,185,129,.2)':'rgba(245,158,11,.2)'), borderRadius: 6 }}>
-          {hasGps ? '📍 GPS activo — se validará la ubicación al hacer Check In' : '⚠️ Sin GPS — empleados podrán hacer Check In desde cualquier lugar'}
+
+        {/* Mapa */}
+        <div style={{ marginBottom: 10, borderRadius: 8, overflow: 'hidden', border: '1px solid #1e2a45' }}>
+          <div ref={mapRef} style={{ height: 220, width: '100%', background: '#0d1220' }} />
         </div>
-        <div style={{ marginBottom: 14 }}>
-          <label style={{ fontSize: 10, fontWeight: 600, color: '#8892a8', display: 'block', marginBottom: 4 }}>Tolerancia (minutos después de la hora de entrada)</label>
-          <input type='number' value={f.grace_mins||0} onChange={e => upd('grace_mins', parseInt(e.target.value)||0)} style={{ width:'100%',background:'#0d1220',border:'1px solid #1e2a45',color:'#f1f5f9',fontSize:12,padding:'8px 10px',borderRadius:6,outline:'none',fontFamily:'inherit' }} />
-          <div style={{ fontSize: 9, color: '#4a5568', marginTop: 4 }}>Ej: Entrada 10:00, tolerancia 15min → hasta 10:15 = Tolerancia, 10:16+ = Retardo</div>
+        <div style={{ fontSize: 10, color: '#4a5568', marginBottom: 12 }}>
+          {hasGps
+            ? `📍 ${f.lat}, ${f.lng} — arrastra el marcador para ajustar la posición`
+            : '⚠️ Sin coordenadas — busca la ubicación o arrastra el marcador'}
         </div>
+
+        <div style={{ marginBottom: 10 }}>
+          <label style={{ fontSize: 10, fontWeight: 600, color: '#8892a8', display: 'block', marginBottom: 4 }}>Dirección (texto)</label>
+          <input value={f.address||''} onChange={e => upd('address', e.target.value)} style={{ width:'100%',background:'#0d1220',border:'1px solid #1e2a45',color:'#f1f5f9',fontSize:12,padding:'8px 10px',borderRadius:6,outline:'none',fontFamily:'inherit' }} placeholder='Dirección completa' />
+        </div>
+
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 14 }}>
+          <div>
+            <label style={{ fontSize: 10, fontWeight: 600, color: '#8892a8', display: 'block', marginBottom: 4 }}>Radio GPS (metros)</label>
+            <input type='number' step='any' value={f.radius_m??150} onChange={e => upd('radius_m', parseInt(e.target.value)||150)} style={{ width:'100%',background:'#0d1220',border:'1px solid #1e2a45',color:'#f1f5f9',fontSize:12,padding:'8px 10px',borderRadius:6,outline:'none',fontFamily:'inherit' }} />
+          </div>
+          <div>
+            <label style={{ fontSize: 10, fontWeight: 600, color: '#8892a8', display: 'block', marginBottom: 4 }}>Tolerancia (minutos)</label>
+            <input type='number' value={f.grace_mins||0} onChange={e => upd('grace_mins', parseInt(e.target.value)||0)} style={{ width:'100%',background:'#0d1220',border:'1px solid #1e2a45',color:'#f1f5f9',fontSize:12,padding:'8px 10px',borderRadius:6,outline:'none',fontFamily:'inherit' }} />
+          </div>
+        </div>
+
+        {isNew && (
+          <div style={{ background: 'rgba(59,130,246,.06)', border: '1px solid rgba(59,130,246,.15)', borderRadius: 8, padding: '10px 14px', marginBottom: 14 }}>
+            <div style={{ fontSize: 10, color: '#3b82f6', fontWeight: 600, marginBottom: 2 }}>Código QR</div>
+            <div style={{ fontSize: 11, color: '#4a5568' }}>Se generará automáticamente al guardar. Podrás verlo e imprimirlo desde la lista de sitios.</div>
+          </div>
+        )}
+
+        {!isNew && (
+          <div style={{ marginBottom: 14 }}>
+            <label style={{ fontSize: 10, fontWeight: 600, color: '#8892a8', display: 'block', marginBottom: 4 }}>Código QR</label>
+            <input value={f.code||''} onChange={e => upd('code', e.target.value.toUpperCase())} style={{ width:'100%',background:'#0d1220',border:'1px solid #1e2a45',color:'#f1f5f9',fontSize:12,padding:'8px 10px',borderRadius:6,outline:'none',fontFamily:"'JetBrains Mono'" }} />
+          </div>
+        )}
+
         <div style={{ display: 'flex', gap: 8 }}>
           <button disabled={!valid} onClick={() => onSave(f)} style={{ flex:1,padding:'10px 16px',borderRadius:7,border:'none',background:valid?'#3b82f6':'#1e2a45',color:'#fff',fontSize:12,fontWeight:600,cursor:valid?'pointer':'not-allowed',fontFamily:'inherit' }}>Guardar</button>
           <button onClick={onClose} style={{ padding:'10px 16px',borderRadius:7,border:'1px solid #1e2a45',background:'transparent',color:'#8892a8',fontSize:12,cursor:'pointer',fontFamily:'inherit' }}>Cancelar</button>
@@ -745,6 +1018,7 @@ function SiteModal({ data, onSave, onClose }) {
   )
 }
 
+// ─── QR Modal ─────────────────────────────────────────────────────────────────
 function QrModal({ site, url, onClose }) {
   const qrImgUrl = `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(url)}`
   function printQR() {
@@ -772,6 +1046,7 @@ function QrModal({ site, url, onClose }) {
   )
 }
 
+// ─── Schedule Modal ───────────────────────────────────────────────────────────
 function ScheduleModal({ emp, sites, schedules, onSave, onClose }) {
   const todayDate = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Cancun' })
   const [weekStart, setWeekStart] = useState(() => getWeekStart(new Date()))
@@ -876,24 +1151,29 @@ function ScheduleModal({ emp, sites, schedules, onSave, onClose }) {
   )
 }
 
-function AdminUserModal({ data, sites, onSave, onClose }) {
-  const [name, setName]     = useState(data?.name || '')
-  const [email, setEmail]   = useState(data?.email || '')
-  const [role, setRole]     = useState(data?.role || 'manager')
+// ─── Admin User Modal ─────────────────────────────────────────────────────────
+function AdminUserModal({ data, sites, companies, isSuperAdmin, onSave, onClose }) {
+  const [name, setName]       = useState(data?.name || '')
+  const [email, setEmail]     = useState(data?.email || '')
+  const [role, setRole]       = useState(data?.role || 'manager')
+  const [companyId, setCompanyId] = useState(data?.company_id || companies[0]?.id || '')
   const [selSites, setSelSites] = useState((data?.admin_site_permissions || []).map(p => p.site_id))
-  const [saving, setSaving] = useState(false)
-  const [err, setErr]       = useState('')
+  const [saving, setSaving]   = useState(false)
+  const [err, setErr]         = useState('')
   const valid = name.trim() && email.trim()
+
+  // Filtrar sitios por empresa seleccionada
+  const companySites = companyId ? sites.filter(s => s.company_id === companyId) : sites
 
   async function handleSave() {
     setSaving(true); setErr('')
     try {
       if (data?.id) {
-        await supabase.from('admin_users').update({ name, role }).eq('id', data.id)
+        await supabase.from('admin_users').update({ name, role, company_id: role === 'superadmin' ? null : companyId }).eq('id', data.id)
         await supabase.from('admin_site_permissions').delete().eq('admin_user_id', data.id)
         if (role !== 'superadmin' && selSites.length > 0) await supabase.from('admin_site_permissions').insert(selSites.map(site_id => ({ admin_user_id: data.id, site_id })))
       } else {
-        const res = await fetch('/api/admin/invite', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email: email.trim().toLowerCase(), name, role, site_ids: selSites }) })
+        const res = await fetch('/api/admin/invite', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email: email.trim().toLowerCase(), name, role, site_ids: selSites, company_id: role === 'superadmin' ? null : companyId }) })
         const json = await res.json()
         if (!res.ok) { setErr(json.error || 'Error al invitar usuario'); setSaving(false); return }
       }
@@ -919,29 +1199,87 @@ function AdminUserModal({ data, sites, onSave, onClose }) {
             <div style={{ fontSize:10,color:'#4a5568',marginTop:4 }}>Recibirá un email para crear su contraseña</div>
           </div>
         )}
-        <div style={{ marginBottom: 14 }}>
+        <div style={{ marginBottom: 10 }}>
           <label style={{ fontSize:10,fontWeight:600,color:'#8892a8',display:'block',marginBottom:4 }}>Rol</label>
           <select value={role} onChange={e => setRole(e.target.value)} style={iS}>
             <option value='manager'>Gerente</option><option value='superadmin'>Super Admin</option>
           </select>
         </div>
+        {role !== 'superadmin' && companies.length > 0 && (
+          <div style={{ marginBottom: 10 }}>
+            <label style={{ fontSize:10,fontWeight:600,color:'#8892a8',display:'block',marginBottom:4 }}>Empresa</label>
+            <select value={companyId} onChange={e => { setCompanyId(e.target.value); setSelSites([]) }} style={iS}>
+              {companies.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+            </select>
+          </div>
+        )}
         {role !== 'superadmin' && (
           <div style={{ marginBottom: 16 }}>
             <div style={{ fontSize:10,fontWeight:600,color:'#8892a8',textTransform:'uppercase',letterSpacing:'.5px',marginBottom:8 }}>Sucursales que puede ver</div>
-            <div style={{ display:'flex',flexDirection:'column',gap:6 }}>
-              {sites.map(s => (
-                <label key={s.id} style={{ display:'flex',alignItems:'center',gap:8,fontSize:12,cursor:'pointer',color:'#f1f5f9',padding:'6px 10px',borderRadius:6,background:selSites.includes(s.id)?'rgba(59,130,246,.1)':'transparent',border:'1px solid '+(selSites.includes(s.id)?'rgba(59,130,246,.3)':'#1e2a45') }}>
-                  <input type='checkbox' checked={selSites.includes(s.id)} onChange={() => setSelSites(p => p.includes(s.id)?p.filter(x=>x!==s.id):[...p,s.id])} style={{ accentColor:'#3b82f6' }} />
-                  {s.name}
-                </label>
-              ))}
-            </div>
+            {companySites.length === 0 ? (
+              <div style={{ fontSize:11,color:'#4a5568',padding:'8px 10px',background:'#0d1220',borderRadius:6 }}>No hay sucursales en esta empresa</div>
+            ) : (
+              <div style={{ display:'flex',flexDirection:'column',gap:6 }}>
+                {companySites.map(s => (
+                  <label key={s.id} style={{ display:'flex',alignItems:'center',gap:8,fontSize:12,cursor:'pointer',color:'#f1f5f9',padding:'6px 10px',borderRadius:6,background:selSites.includes(s.id)?'rgba(59,130,246,.1)':'transparent',border:'1px solid '+(selSites.includes(s.id)?'rgba(59,130,246,.3)':'#1e2a45') }}>
+                    <input type='checkbox' checked={selSites.includes(s.id)} onChange={() => setSelSites(p => p.includes(s.id)?p.filter(x=>x!==s.id):[...p,s.id])} style={{ accentColor:'#3b82f6' }} />
+                    {s.name}
+                  </label>
+                ))}
+              </div>
+            )}
           </div>
         )}
         <div style={{ display: 'flex', gap: 8 }}>
           <button disabled={!valid||saving} onClick={handleSave} style={{ flex:1,padding:'10px 16px',borderRadius:7,border:'none',background:valid&&!saving?'#3b82f6':'#1e2a45',color:'#fff',fontSize:12,fontWeight:600,cursor:valid&&!saving?'pointer':'not-allowed',fontFamily:'inherit' }}>
             {saving?'Guardando...':data?'Guardar':'Enviar invitación'}
           </button>
+          <button onClick={onClose} style={{ padding:'10px 16px',borderRadius:7,border:'1px solid #1e2a45',background:'transparent',color:'#8892a8',fontSize:12,cursor:'pointer',fontFamily:'inherit' }}>Cancelar</button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ─── Company Modal ────────────────────────────────────────────────────────────
+function CompanyModal({ data, onSave, onClose }) {
+  const [name, setName]   = useState(data?.name || '')
+  const [slug, setSlug]   = useState(data?.slug || '')
+  const [autoSlug, setAutoSlug] = useState(!data?.slug)
+  const valid = name.trim() && slug.trim()
+
+  function handleNameChange(val) {
+    setName(val)
+    if (autoSlug) setSlug(slugify(val))
+  }
+
+  function handleSave() {
+    const d = { ...(data || {}), name: name.trim(), slug: slug.trim() }
+    onSave(d)
+  }
+
+  const iS = { width:'100%',background:'#0d1220',border:'1px solid #1e2a45',color:'#f1f5f9',fontSize:12,padding:'8px 10px',borderRadius:6,outline:'none',fontFamily:'inherit' }
+
+  return (
+    <div onClick={onClose} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.7)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 200 }}>
+      <div onClick={e => e.stopPropagation()} style={{ background: '#1a2035', border: '1px solid #1e2a45', borderRadius: 12, padding: 22, width: '100%', maxWidth: 400 }}>
+        <h3 style={{ fontSize: 15, fontWeight: 700, marginBottom: 14 }}>{data ? 'Editar Empresa' : 'Nueva Empresa'}</h3>
+        <div style={{ marginBottom: 10 }}>
+          <label style={{ fontSize:10,fontWeight:600,color:'#8892a8',display:'block',marginBottom:4 }}>Nombre de la empresa</label>
+          <input value={name} onChange={e => handleNameChange(e.target.value)} style={iS} placeholder='Ej: Mi Empresa SA de CV' />
+        </div>
+        <div style={{ marginBottom: 18 }}>
+          <label style={{ fontSize:10,fontWeight:600,color:'#8892a8',display:'block',marginBottom:4 }}>Slug (identificador único)</label>
+          <input
+            value={slug}
+            onChange={e => { setSlug(slugify(e.target.value)); setAutoSlug(false) }}
+            style={{ ...iS, fontFamily:"'JetBrains Mono'" }}
+            placeholder='mi-empresa'
+          />
+          <div style={{ fontSize:10,color:'#4a5568',marginTop:4 }}>Solo letras, números y guiones. Se usa en URLs futuras.</div>
+        </div>
+        <div style={{ display: 'flex', gap: 8 }}>
+          <button disabled={!valid} onClick={handleSave} style={{ flex:1,padding:'10px 16px',borderRadius:7,border:'none',background:valid?'#3b82f6':'#1e2a45',color:'#fff',fontSize:12,fontWeight:600,cursor:valid?'pointer':'not-allowed',fontFamily:'inherit' }}>Guardar</button>
           <button onClick={onClose} style={{ padding:'10px 16px',borderRadius:7,border:'1px solid #1e2a45',background:'transparent',color:'#8892a8',fontSize:12,cursor:'pointer',fontFamily:'inherit' }}>Cancelar</button>
         </div>
       </div>
