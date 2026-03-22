@@ -183,6 +183,7 @@ export default function CheckinPage({ params }) {
   const [schedule, setSchedule]       = useState(null)
   const [showSalesModal, setShowSalesModal] = useState(false)
   const [loading, setLoading]         = useState(false)
+  const [checkoutErr, setCheckoutErr] = useState('')
   // Camera state — 'in' | 'out' | null
   const [showCamera, setShowCamera]   = useState(null)
   // Confirmation modal
@@ -379,11 +380,9 @@ export default function CheckinPage({ params }) {
   // Called after camera modal for checkout
   async function handleCheckoutPhoto(blob) {
     setShowCamera(null)
-    // Store blob temporarily, then show sales modal or finish
     if (emp?.skip_sales) {
       await finishCheckout(null, blob)
     } else {
-      // Store blob so finishCheckout can use it
       pendingCheckoutPhotoRef.current = blob
       setShowSalesModal(true)
     }
@@ -391,9 +390,16 @@ export default function CheckinPage({ params }) {
 
   const pendingCheckoutPhotoRef = useRef(null)
 
+  // ── FIX: finishCheckout robusto con manejo de error ──
   async function finishCheckout(salesAmount, photoBlob) {
     setShowSalesModal(false)
-    if (!todayRecord) return
+    if (!todayRecord) {
+      setCheckoutErr('Error: no se encontró el registro de entrada. Contacta a tu administrador.')
+      return
+    }
+    setLoading(true)
+    setCheckoutErr('')
+
     const tz       = site?.timezone || 'America/Cancun'
     const checkOut = new Date()
     const ciDate   = new Date(todayRecord.check_in)
@@ -406,18 +412,38 @@ export default function CheckinPage({ params }) {
     pendingCheckoutPhotoRef.current = null
     const photoUrlOut = await uploadPhoto(blob, 'out')
 
-    await supabase.from('attendance').update({
+    const updatePayload = {
       check_out: checkOut.toISOString(),
       hours_worked: parseFloat(hrs),
       ...(salesAmount !== null ? { sales_amount: salesAmount } : {}),
       ...(photoUrlOut ? { photo_url_out: photoUrlOut } : {}),
-    }).eq('id', todayRecord.id)
+    }
 
-    setIsIn(false); setIsDone(true); setOnLunch(false); setOnBreak(false)
+    const { data: updatedRecord, error } = await supabase
+      .from('attendance')
+      .update(updatePayload)
+      .eq('id', todayRecord.id)
+      .select()
+      .single()
+
+    if (error) {
+      console.error('Check-out error:', error)
+      setCheckoutErr('No se pudo registrar la salida. Intenta de nuevo.')
+      setLoading(false)
+      return
+    }
+
+    // Éxito — actualizar estado con datos reales de DB
+    setTodayRecord(updatedRecord)
+    setIsIn(false)
+    setIsDone(true)
+    setOnLunch(false)
+    setOnBreak(false)
     setCoTime(fmtTime(checkOut, tz))
     const newEvs = [{ type: 'co', time: fmtTime(checkOut, tz) }]
     if (salesAmount !== null && salesAmount > 0) newEvs.push({ type: 'sale', time: fmtTime(checkOut, tz), amount: salesAmount })
     setEvents(prev => [...prev, ...newEvs])
+    setLoading(false)
   }
 
   function requestLunch(start) {
@@ -649,6 +675,9 @@ export default function CheckinPage({ params }) {
             )}
           </div>
         </div>
+
+        {/* Error de checkout */}
+        {checkoutErr && <div style={S.err}>{checkoutErr}</div>}
 
         <div style={S.gps(gpsOk)}>
           <span>📍</span>
