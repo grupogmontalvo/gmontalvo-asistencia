@@ -27,7 +27,6 @@ function fmtDate(d) {
   return `${day}/${m}/${y}`
 }
 
-// Returns Monday of the week containing `date`
 function getWeekStart(date) {
   const d = new Date(date)
   const day = d.getDay()
@@ -50,22 +49,22 @@ const DAY_NAMES = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom']
 
 export default function AdminPage() {
   const router = useRouter()
-  const [authUser,  setAuthUser]  = useState(null)  // Supabase auth user
-  const [adminUser, setAdminUser] = useState(null)  // admin_users row (role, name)
+  const [authUser,  setAuthUser]  = useState(null)
+  const [adminUser, setAdminUser] = useState(null)
   const [authLoading, setAuthLoading] = useState(true)
 
   const [sites, setSites]     = useState([])
   const [emps, setEmps]       = useState([])
   const [att, setAtt]         = useState([])
   const [schedules, setSchedules] = useState([])
-  const [adminUsers, setAdminUsers] = useState([]) // for Usuarios tab
+  const [adminUsers, setAdminUsers] = useState([])
+  const [goals, setGoals]     = useState([]) // employee_goals
   const [tab, setTab]         = useState('dashboard')
   const [modal, setModal]     = useState(null)
   const [sideEmp, setSideEmp] = useState(null)
   const [loading, setLoading] = useState(true)
   const [toast, setToast]     = useState(null)
 
-  // Attendance filters
   const [filterEmp,    setFilterEmp]    = useState('')
   const [filterSite,   setFilterSite]   = useState('')
   const [filterFrom,   setFilterFrom]   = useState('')
@@ -76,12 +75,10 @@ export default function AdminPage() {
 
   const today = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Cancun' })
 
-  // ── Auth ──
   useEffect(() => {
     supabase.auth.getUser().then(async ({ data: { user } }) => {
       if (!user) { router.push('/admin/login'); return }
       setAuthUser(user)
-      // Load admin_users row to get role
       const { data: au } = await supabase.from('admin_users').select('*').eq('id', user.id).single()
       setAdminUser(au)
       setAuthLoading(false)
@@ -99,7 +96,6 @@ export default function AdminPage() {
     if (!adminUser) return
     let sitesQuery = supabase.from('sites').select('*').eq('active', true).order('name')
 
-    // If not superadmin, filter to permitted sites only
     if (!isSuperAdmin) {
       const { data: perms } = await supabase.from('admin_site_permissions').select('site_id').eq('admin_user_id', adminUser.id)
       const permSiteIds = (perms || []).map(p => p.site_id)
@@ -107,18 +103,19 @@ export default function AdminPage() {
       sitesQuery = sitesQuery.in('id', permSiteIds)
     }
 
-    const [s, e, a, sc] = await Promise.all([
+    const [s, e, a, sc, g] = await Promise.all([
       sitesQuery,
       supabase.from('employees').select('*').eq('active', true).order('name'),
       supabase.from('attendance').select('*').order('date', { ascending: false }),
       supabase.from('schedules').select('*'),
+      supabase.from('employee_goals').select('*'),
     ])
     setSites(s.data || [])
     setEmps(e.data || [])
     setAtt(a.data || [])
     setSchedules(sc.data || [])
+    setGoals(g.data || [])
 
-    // Load admin users if superadmin
     if (isSuperAdmin) {
       const { data: au } = await supabase.from('admin_users').select('*, admin_site_permissions(site_id)').order('created_at')
       setAdminUsers(au || [])
@@ -131,8 +128,6 @@ export default function AdminPage() {
   useEffect(() => {
     if (toast) { const t = setTimeout(() => setToast(null), 2500); return () => clearTimeout(t) }
   }, [toast])
-
-  // Auto-refresh data when switching tabs
   useEffect(() => { if (adminUser) load() }, [tab])
 
   if (authLoading) return (
@@ -141,11 +136,10 @@ export default function AdminPage() {
     </div>
   )
 
-  // ── Dashboard helpers ──────────────────────────────────────────────────────
+  // ── Dashboard helpers ──
   const todaySchedules = schedules.filter(s => s.date === today)
   const todayAtt       = att.filter(r => r.date === today)
 
-  // Build dashboard rows: one per employee scheduled today
   const dashRows = todaySchedules.map(sc => {
     const emp     = emps.find(e => e.id === sc.employee_id)
     const site    = sites.find(s => s.id === sc.site_id)
@@ -162,7 +156,6 @@ export default function AdminPage() {
       bg    = stBg[record.status]  || 'rgba(16,185,129,.12)'
       statusLabel = stLbl[record.status] || 'Activo'
     } else {
-      // Not checked in yet — compare current time vs schedule
       const grace    = site?.grace_mins || 5
       const absent   = site?.absent_mins || 15
       const start    = sc.start_time?.slice(0, 5)
@@ -186,18 +179,15 @@ export default function AdminPage() {
     return { sc, emp, site, record, color, bg, statusLabel }
   })
 
-  // Check ins de hoy sin horario asignado
   const scheduledEmpIds = new Set(todaySchedules.map(s => s.employee_id))
   const unscheduledAtt  = todayAtt.filter(r => !scheduledEmpIds.has(r.employee_id))
 
-  // Stats (incluye ambos)
   const statOnTime  = dashRows.filter(r => r.record && !r.record.check_out && r.record.status === 'on_time').length
   const statTol     = dashRows.filter(r => r.record && !r.record.check_out && (r.record.status === 'tolerancia' || r.record.status === 'late')).length
   const statDone    = dashRows.filter(r => r.record?.check_out).length + unscheduledAtt.filter(r => r.check_out).length
   const statMissing = dashRows.filter(r => !r.record && r.statusLabel === 'No se presentó').length
   const statPending = dashRows.filter(r => !r.record && r.statusLabel !== 'No se presentó').length
 
-  // ── Attendance filters ─────────────────────────────────────────────────────
   const filteredAtt = att.filter(r => {
     if (filterEmp    && r.employee_id !== filterEmp)   return false
     if (filterSite   && r.site_id !== filterSite)       return false
@@ -207,17 +197,32 @@ export default function AdminPage() {
     return true
   })
 
-  // ── Save helpers ───────────────────────────────────────────────────────────
   async function saveSite(data) {
     if (data.id) { await supabase.from('sites').update(data).eq('id', data.id) }
     else { delete data.id; await supabase.from('sites').insert(data) }
     setToast('Sitio guardado'); setModal(null); load()
   }
-  async function saveEmp(data) {
-    if (data.id) { await supabase.from('employees').update(data).eq('id', data.id) }
-    else { delete data.id; await supabase.from('employees').insert(data) }
+
+  async function saveEmp(data, weeklyGoal) {
+    let empId = data.id
+    if (empId) {
+      await supabase.from('employees').update(data).eq('id', empId)
+    } else {
+      delete data.id
+      const { data: newEmp } = await supabase.from('employees').insert(data).select().single()
+      empId = newEmp?.id
+    }
+    // Save or delete goal
+    if (empId) {
+      if (weeklyGoal && parseFloat(weeklyGoal) > 0) {
+        await supabase.from('employee_goals').upsert({ employee_id: empId, weekly_goal: parseFloat(weeklyGoal) }, { onConflict: 'employee_id' })
+      } else {
+        await supabase.from('employee_goals').delete().eq('employee_id', empId)
+      }
+    }
     setToast('Empleado guardado'); setModal(null); load()
   }
+
   async function delEmp(id) {
     await supabase.from('employees').update({ active: false }).eq('id', id)
     setToast('Empleado eliminado'); setModal(null); load()
@@ -244,8 +249,7 @@ export default function AdminPage() {
   return (
     <div style={{ display: 'flex', height: '100vh', overflow: 'hidden', fontFamily: "'DM Sans', sans-serif", background: '#0a0e1a', color: '#f1f5f9' }}>
 
-      {/* ── Mobile overlay ── */}
-      {sidebarOpen && <div onClick={() => setSidebarOpen(false)} style={{ display: 'none', position: 'fixed', inset: 0, background: 'rgba(0,0,0,.5)', zIndex: 99, '@media(maxWidth:768px)': { display: 'block' } }} className="sidebar-overlay" />}
+      {sidebarOpen && <div onClick={() => setSidebarOpen(false)} style={{ display: 'none', position: 'fixed', inset: 0, background: 'rgba(0,0,0,.5)', zIndex: 99 }} className="sidebar-overlay" />}
 
       {/* ── Sidebar ── */}
       <div style={{ width: sidebarOpen ? 210 : 0, minWidth: sidebarOpen ? 210 : 0, background: '#111827', borderRight: sidebarOpen ? '1px solid #1e2a45' : 'none', display: 'flex', flexDirection: 'column', flexShrink: 0, overflow: 'hidden', transition: 'width .2s ease, min-width .2s ease', position: 'relative', zIndex: 100 }}>
@@ -280,7 +284,6 @@ export default function AdminPage() {
 
       {/* ── Main ── */}
       <div style={{ flex: 1, overflow: 'auto', display: 'flex', flexDirection: 'column' }}>
-        {/* Header */}
         <div style={{ padding: '16px 22px', borderBottom: '1px solid #1e2a45', background: '#111827', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexShrink: 0 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
             <button onClick={() => setSidebarOpen(o => !o)} style={{ background: 'none', border: '1px solid #1e2a45', borderRadius: 6, color: '#8892a8', cursor: 'pointer', padding: '5px 9px', fontSize: 16, lineHeight: 1, fontFamily: 'inherit' }}>☰</button>
@@ -300,7 +303,6 @@ export default function AdminPage() {
 
           {/* ══ DASHBOARD ══ */}
           {tab === 'dashboard' && <>
-            {/* Stats */}
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 12, marginBottom: 18 }}>
               {[
                 ['Puntuales',  statOnTime,  '#10b981'],
@@ -316,7 +318,6 @@ export default function AdminPage() {
               ))}
             </div>
 
-            {/* Per-site groups — scheduled + unscheduled */}
             {sites.map(site => {
               const siteRows        = dashRows.filter(r => r.sc.site_id === site.id)
               const siteUnscheduled = unscheduledAtt.filter(r => r.site_id === site.id)
@@ -373,12 +374,8 @@ export default function AdminPage() {
                               </button>
                             </td>
                             <td style={{ padding: '10px 16px', fontSize: 10, color: '#4a5568', fontStyle: 'italic' }}>Sin horario</td>
-                            <td style={{ padding: '10px 16px', fontSize: 11, fontFamily: "'JetBrains Mono'" }}>
-                              {fmtTime(r.check_in, site.timezone)}
-                            </td>
-                            <td style={{ padding: '10px 16px', fontSize: 11, fontFamily: "'JetBrains Mono'" }}>
-                              {r.check_out ? fmtTime(r.check_out, site.timezone) : '–'}
-                            </td>
+                            <td style={{ padding: '10px 16px', fontSize: 11, fontFamily: "'JetBrains Mono'" }}>{fmtTime(r.check_in, site.timezone)}</td>
+                            <td style={{ padding: '10px 16px', fontSize: 11, fontFamily: "'JetBrains Mono'" }}>{r.check_out ? fmtTime(r.check_out, site.timezone) : '–'}</td>
                             <td style={{ padding: '10px 16px' }}>
                               <span style={{ padding: '3px 10px', borderRadius: 5, fontSize: 10, fontWeight: 600, color, background: bg }}>{label}</span>
                             </td>
@@ -399,7 +396,6 @@ export default function AdminPage() {
 
           {/* ══ ASISTENCIA ══ */}
           {tab === 'attendance' && <>
-            {/* Filters */}
             <div style={{ background: '#1a2035', border: '1px solid #1e2a45', borderRadius: 10, padding: '14px 16px', marginBottom: 14, display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 10 }}>
               <div>
                 <div style={{ fontSize: 10, color: '#4a5568', marginBottom: 4, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '.5px' }}>Empleado</div>
@@ -485,7 +481,7 @@ export default function AdminPage() {
             <div style={{ background: '#1a2035', border: '1px solid #1e2a45', borderRadius: 10, overflow: 'hidden' }}>
               <table style={{ width: '100%', borderCollapse: 'collapse' }}>
                 <thead>
-                  <tr>{['Empleado', 'Email', 'Rol', 'Próx. turno', ''].map(h => (
+                  <tr>{['Empleado', 'Email', 'Rol', 'Meta semanal', 'Próx. turno', ''].map(h => (
                     <th key={h} style={{ textAlign: 'left', fontSize: 9, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '.6px', color: '#4a5568', padding: '9px 16px', borderBottom: '1px solid #1e2a45' }}>{h}</th>
                   ))}</tr>
                 </thead>
@@ -494,6 +490,7 @@ export default function AdminPage() {
                     const empScheds = schedules.filter(s => s.employee_id === emp.id && s.date >= today).sort((a,b) => a.date.localeCompare(b.date))
                     const nextSched = empScheds[0]
                     const nextSite  = nextSched ? sites.find(s => s.id === nextSched.site_id) : null
+                    const goal      = goals.find(g => g.employee_id === emp.id)
                     return (
                       <tr key={emp.id} style={{ borderBottom: '1px solid rgba(30,42,69,.3)' }}>
                         <td style={{ padding: '9px 16px' }}>
@@ -506,6 +503,15 @@ export default function AdminPage() {
                         <td style={{ padding: '9px 16px' }}>
                           <span style={{ fontSize: 11, color: '#8892a8' }}>{emp.role}</span>
                           {emp.free_roam && <span style={{ marginLeft: 6, color: '#10b981', fontSize: 9, fontWeight: 600, background: 'rgba(16,185,129,.12)', padding: '1px 6px', borderRadius: 3 }}>Libre</span>}
+                        </td>
+                        <td style={{ padding: '9px 16px' }}>
+                          {goal ? (
+                            <span style={{ fontSize: 11, fontFamily: "'JetBrains Mono'", color: '#10b981', fontWeight: 600 }}>
+                              ${Number(goal.weekly_goal).toLocaleString('es-MX')}
+                            </span>
+                          ) : (
+                            <span style={{ fontSize: 10, color: '#4a5568' }}>Sin meta</span>
+                          )}
                         </td>
                         <td style={{ padding: '9px 16px' }}>
                           {nextSched ? (
@@ -521,7 +527,7 @@ export default function AdminPage() {
                           <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
                             <button onClick={() => setSideEmp(emp)} style={{ padding: '4px 10px', borderRadius: 5, border: '1px solid rgba(16,185,129,.25)', background: 'rgba(16,185,129,.1)', color: '#10b981', fontSize: 10, cursor: 'pointer', fontFamily: 'inherit', fontWeight: 600 }}>Historial</button>
                             <button onClick={() => setModal({ type: 'schedule', data: emp })} style={{ padding: '4px 10px', borderRadius: 5, border: '1px solid rgba(59,130,246,.25)', background: 'rgba(59,130,246,.12)', color: '#3b82f6', fontSize: 10, cursor: 'pointer', fontFamily: 'inherit', fontWeight: 600 }}>Horarios</button>
-                            <button onClick={() => setModal({ type: 'emp', data: emp })} style={{ background: 'none', border: 'none', color: '#8892a8', cursor: 'pointer', fontSize: 11, fontFamily: 'inherit' }}>Editar</button>
+                            <button onClick={() => setModal({ type: 'emp', data: { emp, goal } })} style={{ background: 'none', border: 'none', color: '#8892a8', cursor: 'pointer', fontSize: 11, fontFamily: 'inherit' }}>Editar</button>
                             <button onClick={() => { if (confirm('Eliminar ' + emp.name + '?')) delEmp(emp.id) }} style={{ background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer', fontSize: 11, fontFamily: 'inherit' }}>Eliminar</button>
                           </div>
                         </td>
@@ -572,9 +578,7 @@ export default function AdminPage() {
                     const auSites = (au.admin_site_permissions || []).map(p => sites.find(s => s.id === p.site_id)?.name).filter(Boolean)
                     return (
                       <tr key={au.id} style={{ borderBottom: '1px solid rgba(30,42,69,.3)' }}>
-                        <td style={{ padding: '9px 16px' }}>
-                          <div style={{ fontSize: 12, fontWeight: 600 }}>{au.name}</div>
-                        </td>
+                        <td style={{ padding: '9px 16px' }}><div style={{ fontSize: 12, fontWeight: 600 }}>{au.name}</div></td>
                         <td style={{ padding: '9px 16px', fontSize: 11, color: '#8892a8' }}>{au.email}</td>
                         <td style={{ padding: '9px 16px' }}>
                           <span style={{ padding: '2px 8px', borderRadius: 4, fontSize: 10, fontWeight: 600, color: au.role === 'superadmin' ? '#3b82f6' : '#10b981', background: au.role === 'superadmin' ? 'rgba(59,130,246,.12)' : 'rgba(16,185,129,.12)' }}>
@@ -614,13 +618,12 @@ export default function AdminPage() {
       )}
 
       {/* ── Modals ── */}
-      {modal?.type === 'emp'       && <EmpModal       data={modal.data} onSave={saveEmp} onClose={() => setModal(null)} />}
+      {modal?.type === 'emp'       && <EmpModal       data={modal.data?.emp || null} currentGoal={modal.data?.goal?.weekly_goal || ''} onSave={saveEmp} onClose={() => setModal(null)} />}
       {modal?.type === 'site'      && <SiteModal      data={modal.data} onSave={saveSite} onClose={() => setModal(null)} />}
       {modal?.type === 'qr'        && <QrModal        site={modal.data} url={getSiteUrl(modal.data.code)} onClose={() => setModal(null)} />}
       {modal?.type === 'schedule'  && <ScheduleModal  emp={modal.data} sites={sites} schedules={schedules.filter(s => s.employee_id === modal.data.id)} onSave={async () => { await load(); setToast('Horarios guardados'); setModal(null) }} onClose={() => setModal(null)} />}
       {modal?.type === 'adminUser' && <AdminUserModal data={modal.data} sites={sites} onSave={async () => { await load(); setToast('Usuario guardado'); setModal(null) }} onClose={() => setModal(null)} />}
 
-      {/* Toast */}
       {toast && (
         <div style={{ position: 'fixed', bottom: 20, right: 20, background: '#1a2035', border: '1px solid rgba(16,185,129,.25)', borderRadius: 8, padding: '10px 16px', fontSize: 12, fontWeight: 500, zIndex: 200, color: '#10b981' }}>
           {toast}
@@ -671,7 +674,6 @@ function EmpSidePanel({ emp, att, sites, onClose }) {
 
   return (
     <div style={{ position: 'fixed', top: 0, right: 0, width: 480, height: '100vh', background: '#111827', borderLeft: '1px solid #1e2a45', display: 'flex', flexDirection: 'column', zIndex: 150, boxShadow: '-8px 0 32px rgba(0,0,0,.4)' }}>
-      {/* Header */}
       <div style={{ padding: '18px 20px', borderBottom: '1px solid #1e2a45', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexShrink: 0 }}>
         <div>
           <div style={{ fontSize: 15, fontWeight: 700 }}>{emp.name}</div>
@@ -697,7 +699,6 @@ function EmpSidePanel({ emp, att, sites, onClose }) {
         </div>
       </div>
 
-      {/* Date filters */}
       <div style={{ padding: '12px 20px', borderBottom: '1px solid #1e2a45', display: 'flex', gap: 10, alignItems: 'center', flexShrink: 0 }}>
         <div style={{ flex: 1 }}>
           <div style={{ fontSize: 9, color: '#4a5568', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '.5px', marginBottom: 3 }}>Desde</div>
@@ -712,7 +713,6 @@ function EmpSidePanel({ emp, att, sites, onClose }) {
         )}
       </div>
 
-      {/* Stats */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', borderBottom: '1px solid #1e2a45', flexShrink: 0 }}>
         {[
           ['Registros', filtered.length, '#3b82f6'],
@@ -740,7 +740,6 @@ function EmpSidePanel({ emp, att, sites, onClose }) {
         </div>
       )}
 
-      {/* Records */}
       <div style={{ flex: 1, overflowY: 'auto' }} onClick={() => showColPicker && setShowColPicker(false)}>
         <table style={{ width: '100%', borderCollapse: 'collapse' }}>
           <thead style={{ position: 'sticky', top: 0, background: '#111827', zIndex: 1 }}>
@@ -756,7 +755,6 @@ function EmpSidePanel({ emp, att, sites, onClose }) {
             )}
             {filtered.map(r => {
               const site = sites.find(s => s.id === r.site_id)
-              // Tiempo fuera = comida + descanso en minutos
               const lunchMins = r.lunch_start && r.lunch_end ? Math.round((new Date(r.lunch_end) - new Date(r.lunch_start)) / 60000) : 0
               const breakMins = r.break_start && r.break_end ? Math.round((new Date(r.break_end) - new Date(r.break_start)) / 60000) : 0
               const timeOutMins = lunchMins + breakMins
@@ -787,12 +785,13 @@ function EmpSidePanel({ emp, att, sites, onClose }) {
 }
 
 // ─── Emp Modal ────────────────────────────────────────────────────────────────
-function EmpModal({ data, onSave, onClose }) {
-  // skip_sales=true means DO NOT ask for sales. We invert for the "is vendor" checkbox.
+function EmpModal({ data, currentGoal, onSave, onClose }) {
   const [f, setF] = useState(data || { name: '', email: '', phone: '', role: 'Vendedor(a)', skip_sales: false, skip_photo: false })
+  const [weeklyGoal, setWeeklyGoal] = useState(currentGoal ? String(currentGoal) : '')
   const upd = (k, v) => setF(p => ({ ...p, [k]: v }))
   const valid = f.name?.trim() && f.email?.trim()
-  const isVendor = !f.skip_sales  // vendor = asks for sales = skip_sales is false
+  const isVendor = !f.skip_sales
+
   return (
     <div onClick={onClose} style={{ position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', background: 'rgba(0,0,0,.7)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 200 }}>
       <div onClick={e => e.stopPropagation()} style={{ background: '#1a2035', border: '1px solid #1e2a45', borderRadius: 12, padding: 22, width: '100%', maxWidth: 440, maxHeight: '85vh', overflow: 'auto' }}>
@@ -803,12 +802,30 @@ function EmpModal({ data, onSave, onClose }) {
             <input type={t} value={f[k] || ''} onChange={e => upd(k, e.target.value)} style={{ width: '100%', background: '#0d1220', border: '1px solid #1e2a45', color: '#f1f5f9', fontSize: 12, padding: '8px 10px', borderRadius: 6, outline: 'none', fontFamily: 'inherit' }} />
           </div>
         ))}
-        <div style={{ marginBottom: 14 }}>
+        <div style={{ marginBottom: 10 }}>
           <label style={{ fontSize: 10, fontWeight: 600, color: '#8892a8', display: 'block', marginBottom: 4 }}>Rol</label>
           <select value={f.role || 'Vendedor(a)'} onChange={e => upd('role', e.target.value)} style={{ width: '100%', background: '#0d1220', border: '1px solid #1e2a45', color: '#f1f5f9', fontSize: 12, padding: '8px 10px', borderRadius: 6, fontFamily: 'inherit' }}>
             <option>Vendedor(a)</option><option>Encargado(a)</option><option>Gerente Regional</option><option>Supervisor(a)</option>
           </select>
         </div>
+
+        {/* Meta semanal */}
+        <div style={{ marginBottom: 14, background: 'rgba(16,185,129,.05)', border: '1px solid rgba(16,185,129,.15)', borderRadius: 8, padding: '12px 14px' }}>
+          <label style={{ fontSize: 10, fontWeight: 600, color: '#10b981', display: 'block', marginBottom: 6, textTransform: 'uppercase', letterSpacing: '.5px' }}>Meta de ventas semanal</label>
+          <div style={{ position: 'relative' }}>
+            <span style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', fontSize: 14, fontWeight: 700, color: '#4a5568', pointerEvents: 'none' }}>$</span>
+            <input
+              type='number'
+              inputMode='decimal'
+              placeholder='Sin meta (dejar vacío)'
+              value={weeklyGoal}
+              onChange={e => setWeeklyGoal(e.target.value)}
+              style={{ width: '100%', background: '#0d1220', border: '1px solid #1e2a45', color: '#f1f5f9', fontSize: 14, fontWeight: 700, padding: '10px 10px 10px 26px', borderRadius: 8, outline: 'none', fontFamily: "'JetBrains Mono', monospace", boxSizing: 'border-box' }}
+            />
+          </div>
+          <div style={{ fontSize: 10, color: '#4a5568', marginTop: 6 }}>El empleado verá su progreso vs esta meta y comparación con la semana anterior al hacer Check Out. Deja vacío para no asignar.</div>
+        </div>
+
         <div style={{ borderTop: '1px solid #1e2a45', paddingTop: 12, marginBottom: 14 }}>
           <div style={{ fontSize: 10, fontWeight: 600, color: '#4a5568', textTransform: 'uppercase', letterSpacing: '.5px', marginBottom: 10 }}>Comportamiento</div>
           <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, cursor: 'pointer', color: '#f1f5f9' }}>
@@ -823,7 +840,7 @@ function EmpModal({ data, onSave, onClose }) {
           <div style={{ fontSize: 10, color: '#4a5568', marginTop: 4, marginLeft: 20 }}>Desmarca si no quieres solicitar foto a este empleado</div>
         </div>
         <div style={{ display: 'flex', gap: 8 }}>
-          <button disabled={!valid} onClick={() => onSave(f)} style={{ flex: 1, padding: '10px 16px', borderRadius: 7, border: 'none', background: valid ? '#3b82f6' : '#1e2a45', color: '#fff', fontSize: 12, fontWeight: 600, cursor: valid ? 'pointer' : 'not-allowed', fontFamily: 'inherit' }}>Guardar</button>
+          <button disabled={!valid} onClick={() => onSave(f, weeklyGoal)} style={{ flex: 1, padding: '10px 16px', borderRadius: 7, border: 'none', background: valid ? '#3b82f6' : '#1e2a45', color: '#fff', fontSize: 12, fontWeight: 600, cursor: valid ? 'pointer' : 'not-allowed', fontFamily: 'inherit' }}>Guardar</button>
           <button onClick={onClose} style={{ padding: '10px 16px', borderRadius: 7, border: '1px solid #1e2a45', background: 'transparent', color: '#8892a8', fontSize: 12, cursor: 'pointer', fontFamily: 'inherit' }}>Cancelar</button>
         </div>
       </div>
@@ -900,20 +917,18 @@ function QrModal({ site, url, onClose }) {
   )
 }
 
-// ─── Schedule Modal (date-based, week navigator) ──────────────────────────────
+// ─── Schedule Modal ────────────────────────────────────────────────────────────
 function ScheduleModal({ emp, sites, schedules, onSave, onClose }) {
   const todayDate  = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Cancun' })
   const [weekStart, setWeekStart] = useState(() => getWeekStart(new Date()))
   const [week, setWeek] = useState({})
   const [saving, setSaving] = useState(false)
 
-  // Build 7 dates for current week view
   const weekDates = Array.from({ length: 7 }, (_, i) => {
     const d = addDays(weekStart, i)
     return { date: dateStr(d), label: DAY_NAMES[i], d }
   })
 
-  // Load existing schedules into week state when weekStart changes
   useEffect(() => {
     const w = {}
     weekDates.forEach(({ date }) => {
@@ -927,7 +942,6 @@ function ScheduleModal({ emp, sites, schedules, onSave, onClose }) {
 
   const prevWeek = () => setWeekStart(d => addDays(d, -7))
   const nextWeek = () => setWeekStart(d => addDays(d,  7))
-
   const toggle = (date) => setWeek(p => ({ ...p, [date]: { ...p[date], on: !p[date].on } }))
   const upd    = (date, key, val) => setWeek(p => ({ ...p, [date]: { ...p[date], [key]: val } }))
 
@@ -947,7 +961,6 @@ function ScheduleModal({ emp, sites, schedules, onSave, onClose }) {
 
   const save = async () => {
     setSaving(true)
-    // Delete existing schedules for this week's dates
     const dates = weekDates.map(d => d.date)
     await supabase.from('schedules').delete().eq('employee_id', emp.id).in('date', dates)
     const inserts = []
@@ -969,7 +982,6 @@ function ScheduleModal({ emp, sites, schedules, onSave, onClose }) {
   })()
 
   const iS  = { width: '100%', background: '#0d1220', border: '1px solid #1e2a45', color: '#f1f5f9', fontSize: 11, padding: '6px 8px', borderRadius: 5, outline: 'none', fontFamily: 'inherit' }
-  const iSm = { ...iS, width: 90, textAlign: 'center', fontFamily: "'JetBrains Mono', monospace" }
 
   return (
     <div onClick={onClose} style={{ position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', background: 'rgba(0,0,0,.7)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 200, backdropFilter: 'blur(4px)' }}>
@@ -1038,9 +1050,7 @@ function AdminUserModal({ data, sites, onSave, onClose }) {
   const [name,     setName]     = useState(data?.name || '')
   const [email,    setEmail]    = useState(data?.email || '')
   const [role,     setRole]     = useState(data?.role || 'manager')
-  const [selSites, setSelSites] = useState(
-    (data?.admin_site_permissions || []).map(p => p.site_id)
-  )
+  const [selSites, setSelSites] = useState((data?.admin_site_permissions || []).map(p => p.site_id))
   const [saving, setSaving] = useState(false)
   const [err,    setErr]    = useState('')
 
@@ -1054,17 +1064,12 @@ function AdminUserModal({ data, sites, onSave, onClose }) {
     setSaving(true); setErr('')
     try {
       if (data?.id) {
-        // Update existing admin user
         await supabase.from('admin_users').update({ name, role }).eq('id', data.id)
-        // Re-sync site permissions
         await supabase.from('admin_site_permissions').delete().eq('admin_user_id', data.id)
         if (role !== 'superadmin' && selSites.length > 0) {
-          await supabase.from('admin_site_permissions').insert(
-            selSites.map(site_id => ({ admin_user_id: data.id, site_id }))
-          )
+          await supabase.from('admin_site_permissions').insert(selSites.map(site_id => ({ admin_user_id: data.id, site_id })))
         }
       } else {
-        // Invite new user via Supabase Auth admin invite
         const res = await fetch('/api/admin/invite', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -1086,9 +1091,7 @@ function AdminUserModal({ data, sites, onSave, onClose }) {
     <div onClick={onClose} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.7)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 200 }}>
       <div onClick={e => e.stopPropagation()} style={{ background: '#1a2035', border: '1px solid #1e2a45', borderRadius: 12, padding: 22, width: '100%', maxWidth: 460, maxHeight: '85vh', overflow: 'auto' }}>
         <h3 style={{ fontSize: 15, fontWeight: 700, marginBottom: 14 }}>{data ? 'Editar Usuario' : 'Invitar Usuario Admin'}</h3>
-
         {err && <div style={{ background: 'rgba(239,68,68,.1)', border: '1px solid rgba(239,68,68,.25)', borderRadius: 7, padding: '10px 14px', fontSize: 12, color: '#ef4444', marginBottom: 14 }}>{err}</div>}
-
         <div style={{ marginBottom: 10 }}>
           <label style={{ fontSize: 10, fontWeight: 600, color: '#8892a8', display: 'block', marginBottom: 4 }}>Nombre</label>
           <input value={name} onChange={e => setName(e.target.value)} style={iS} />
@@ -1107,7 +1110,6 @@ function AdminUserModal({ data, sites, onSave, onClose }) {
             <option value='superadmin'>Super Admin</option>
           </select>
         </div>
-
         {role !== 'superadmin' && (
           <div style={{ marginBottom: 16 }}>
             <div style={{ fontSize: 10, fontWeight: 600, color: '#8892a8', textTransform: 'uppercase', letterSpacing: '.5px', marginBottom: 8 }}>Sucursales que puede ver</div>
@@ -1121,7 +1123,6 @@ function AdminUserModal({ data, sites, onSave, onClose }) {
             </div>
           </div>
         )}
-
         <div style={{ display: 'flex', gap: 8 }}>
           <button disabled={!valid || saving} onClick={handleSave} style={{ flex: 1, padding: '10px 16px', borderRadius: 7, border: 'none', background: valid && !saving ? '#3b82f6' : '#1e2a45', color: '#fff', fontSize: 12, fontWeight: 600, cursor: valid && !saving ? 'pointer' : 'not-allowed', fontFamily: 'inherit' }}>
             {saving ? 'Guardando...' : data ? 'Guardar' : 'Enviar invitación'}
