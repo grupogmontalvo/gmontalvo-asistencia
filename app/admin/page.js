@@ -60,6 +60,8 @@ export default function AdminPage() {
   const [authLoading, setAuthLoading] = useState(true)
   const [sites, setSites]       = useState([])
   const [emps, setEmps]         = useState([])
+  // FIX BUG 2: allEmps guarda TODOS los empleados para resolver nombres en tablas
+  const [allEmps, setAllEmps]   = useState([])
   const [att, setAtt]           = useState([])
   const [schedules, setSchedules] = useState([])
   const [adminUsers, setAdminUsers] = useState([])
@@ -106,11 +108,12 @@ export default function AdminPage() {
     if (!isSuperAdmin) {
       const { data: perms } = await supabase.from('admin_site_permissions').select('site_id').eq('admin_user_id', adminUser.id)
       permSiteIds = (perms || []).map(p => p.site_id)
-      if (permSiteIds.length === 0) { setSites([]); setEmps([]); setAtt([]); setSchedules([]); setLoading(false); return }
+      if (permSiteIds.length === 0) { setSites([]); setEmps([]); setAllEmps([]); setAtt([]); setSchedules([]); setLoading(false); return }
       sitesQuery = sitesQuery.in('id', permSiteIds)
     } else if (companyId) {
       sitesQuery = sitesQuery.eq('company_id', companyId)
     }
+    // emps: empleados para gestión (filtrados por sucursal asignada)
     let empsQuery = supabase.from('employees').select('*').eq('active', true).order('name')
     if (companyId) empsQuery = empsQuery.eq('company_id', companyId)
     if (!isSuperAdmin && permSiteIds) {
@@ -125,17 +128,28 @@ export default function AdminPage() {
         empsQuery = empsQuery.in('id', visibleEmpIds)
       }
     }
+    // FIX BUG 2: allEmpsQuery carga TODOS los empleados de la empresa (para resolver nombres en attendance)
+    let allEmpsQuery = supabase.from('employees').select('id, name, email, role, phone, skip_sales, skip_photo, free_roam, fixed_week').eq('active', true).order('name')
+    if (companyId) allEmpsQuery = allEmpsQuery.eq('company_id', companyId)
+
     let attQuery = supabase.from('attendance').select('*').order('date', { ascending: false })
     if (companyId) attQuery = attQuery.eq('company_id', companyId)
+
+    // FIX BUG 1: para gerentes, también cargamos attendance de sus sucursales (no solo de empleados asignados)
+    if (!isSuperAdmin && permSiteIds) {
+      attQuery = attQuery.in('site_id', permSiteIds)
+    }
+
     let scQuery = supabase.from('schedules').select('*')
     if (companyId) scQuery = scQuery.eq('company_id', companyId)
-    const [s, e, a, sc, g, esa] = await Promise.all([
-      sitesQuery, empsQuery, attQuery, scQuery,
+    const [s, e, ae, a, sc, g, esa] = await Promise.all([
+      sitesQuery, empsQuery, allEmpsQuery, attQuery, scQuery,
       supabase.from('employee_goals').select('*'),
       supabase.from('employee_site_assignments').select('*'),
     ])
     setSites(s.data || [])
     setEmps(e.data || [])
+    setAllEmps(ae.data || [])
     setAtt(a.data || [])
     setSchedules(sc.data || [])
     setGoals(g.data || [])
@@ -156,8 +170,11 @@ export default function AdminPage() {
   )
   const todaySchedules = schedules.filter(s => s.date === today)
   const todayAtt       = att.filter(r => r.date === today)
+
+  // FIX BUG 1: dashRows incluye empleados con schedule Y sin schedule que hicieron check-in hoy
   const dashRows = todaySchedules.map(sc => {
-    const emp     = emps.find(e => e.id === sc.employee_id)
+    // FIX BUG 1: buscar en allEmps (no solo emps) para encontrar cualquier empleado
+    const emp     = allEmps.find(e => e.id === sc.employee_id)
     const site    = sites.find(s => s.id === sc.site_id)
     const record  = todayAtt.find(r => r.employee_id === sc.employee_id)
     const now     = new Date()
@@ -182,6 +199,7 @@ export default function AdminPage() {
     return { sc, emp, site, record, color, bg, statusLabel }
   })
   const scheduledEmpIds = new Set(todaySchedules.map(s => s.employee_id))
+  // FIX BUG 1: unscheduledAtt también resuelve nombres usando allEmps
   const unscheduledAtt  = todayAtt.filter(r => !scheduledEmpIds.has(r.employee_id))
   const statOnTime  = dashRows.filter(r => r.record && !r.record.check_out && r.record.status === 'on_time').length
   const statTol     = dashRows.filter(r => r.record && !r.record.check_out && (r.record.status === 'tolerancia' || r.record.status === 'late')).length
@@ -353,7 +371,8 @@ export default function AdminPage() {
                         </tr>
                       ))}
                       {siteUnscheduled.map(r => {
-                        const emp = emps.find(e => e.id === r.employee_id)
+                        // FIX BUG 1: buscar en allEmps para encontrar cualquier empleado aunque no esté asignado
+                        const emp = allEmps.find(e => e.id === r.employee_id)
                         const color = r.check_out ? '#3b82f6' : '#10b981'; const bg = r.check_out ? 'rgba(59,130,246,.12)' : 'rgba(16,185,129,.12)'; const label = r.check_out ? 'Completó turno' : 'Activo'
                         return (
                           <tr key={r.id} style={{ borderBottom: '1px solid rgba(30,42,69,.3)', background: 'rgba(16,185,129,.03)' }}>
@@ -382,7 +401,8 @@ export default function AdminPage() {
           </>}
           {tab === 'attendance' && <>
             <div style={{ background: '#1a2035', border: '1px solid #1e2a45', borderRadius: 10, padding: '14px 16px', marginBottom: 14, display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 10 }}>
-              {[['Empleado', filterEmp, setFilterEmp, emps.map(e => [e.id, e.name])],['Sucursal', filterSite, setFilterSite, sites.map(s => [s.id, s.name])]].map(([l, val, set, opts]) => (
+              {/* FIX BUG 2: usar allEmps para el filtro de empleados */}
+              {[['Empleado', filterEmp, setFilterEmp, allEmps.map(e => [e.id, e.name])],['Sucursal', filterSite, setFilterSite, sites.map(s => [s.id, s.name])]].map(([l, val, set, opts]) => (
                 <div key={l}>
                   <div style={{ fontSize: 10, color: '#4a5568', marginBottom: 4, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '.5px' }}>{l}</div>
                   <select value={val} onChange={e => set(e.target.value)} style={selectStyle}>
@@ -416,7 +436,8 @@ export default function AdminPage() {
                 ))}</tr></thead>
                 <tbody>
                   {filteredAtt.slice(0, 300).map(r => {
-                    const emp = emps.find(e => e.id === r.employee_id); const site = sites.find(s => s.id === r.site_id)
+                    // FIX BUG 2: buscar en allEmps para que siempre resuelva el nombre
+                    const emp = allEmps.find(e => e.id === r.employee_id); const site = sites.find(s => s.id === r.site_id)
                     return (
                       <tr key={r.id} style={{ borderBottom: '1px solid rgba(30,42,69,.3)' }}>
                         <td style={{ padding: '9px 16px', fontSize: 11, fontFamily: "'JetBrains Mono'" }}>{fmtDate(r.date)}</td>
@@ -953,56 +974,77 @@ function ScheduleModal({ emp, sites, schedules, onSave, onClose }) {
     setSaving(false); onSave()
   }
   const weekLabel = (() => { const s = weekDates[0].d; const e = weekDates[6].d; return `${s.getDate()} ${s.toLocaleDateString('es-MX',{month:'short'})} – ${e.getDate()} ${e.toLocaleDateString('es-MX',{month:'short',year:'numeric'})}` })()
-  const iS = { width:'100%',background:'#0d1220',border:'1px solid #1e2a45',color:'#f1f5f9',fontSize:11,padding:'6px 8px',borderRadius:5,outline:'none',fontFamily:'inherit' }
+  // FIX BUG 3: estilos para cada campo de horario — cada uno en su propia línea en móvil
+  const fieldStyle = { background:'#0d1220',border:'1px solid #1e2a45',color:'#f1f5f9',fontSize:11,padding:'6px 8px',borderRadius:5,outline:'none',fontFamily:'inherit',width:'100%' }
   return (
     <div onClick={onClose} style={{ position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', background: 'rgba(0,0,0,.7)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 200, backdropFilter: 'blur(4px)' }}>
-      <div onClick={e => e.stopPropagation()} style={{ background: '#1a2035', border: '1px solid #1e2a45', borderRadius: 12, padding: 22, width: '100%', maxWidth: 640, maxHeight: '92vh', overflow: 'auto' }}>
+      <div onClick={e => e.stopPropagation()} style={{ background: '#1a2035', border: '1px solid #1e2a45', borderRadius: 12, padding: 22, width: '100%', maxWidth: 480, maxHeight: '92vh', overflow: 'auto' }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
           <h3 style={{ fontSize: 15, fontWeight: 700 }}>Horarios — {emp.name}</h3>
           {!emp.fixed_week && (
             <div style={{ display: 'flex', alignItems: 'center', gap: 6, background: '#0d1220', border: '1px solid #1e2a45', borderRadius: 8, padding: '4px 6px' }}>
               <button onClick={() => setWeekStart(d => addDays(d,-7))} style={{ background:'rgba(59,130,246,.15)',border:'none',borderRadius:5,color:'#3b82f6',padding:'5px 12px',cursor:'pointer',fontFamily:'inherit',fontSize:15,fontWeight:700,lineHeight:1 }}>‹</button>
-              <span style={{ fontSize:12,color:'#f1f5f9',fontWeight:600,minWidth:170,textAlign:'center' }}>{weekLabel}</span>
+              <span style={{ fontSize:11,color:'#f1f5f9',fontWeight:600,minWidth:140,textAlign:'center' }}>{weekLabel}</span>
               <button onClick={() => setWeekStart(d => addDays(d,7))} style={{ background:'rgba(59,130,246,.15)',border:'none',borderRadius:5,color:'#3b82f6',padding:'5px 12px',cursor:'pointer',fontFamily:'inherit',fontSize:15,fontWeight:700,lineHeight:1 }}>›</button>
             </div>
           )}
           {emp.fixed_week && <span style={{ fontSize:10,color:'#f59e0b',background:'rgba(245,158,11,.1)',border:'1px solid rgba(245,158,11,.25)',borderRadius:5,padding:'3px 10px' }}>Semana fija</span>}
         </div>
         <p style={{ fontSize: 11, color: '#8892a8', marginBottom: 16 }}>Activa los días que trabaja. Cada día puede tener diferente sucursal y horario.</p>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
           {weekDates.map(({ date, label }) => {
             const day = week[date] || {}; const isOn = day.on; const isPast = date < todayDate; const isBlocked = day.blocked
             return (
-              <div key={date} style={{ background: isBlocked ? 'rgba(245,158,11,.05)' : isOn ? '#0d1220' : 'transparent', border: '1px solid ' + (isBlocked ? 'rgba(245,158,11,.3)' : isOn ? '#1e2a45' : 'rgba(30,42,69,.3)'), borderRadius: 8, padding: isOn || isBlocked ? '10px 12px' : '8px 12px', opacity: isPast && !isBlocked ? 0.55 : 1 }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              <div key={date} style={{ background: isBlocked ? 'rgba(245,158,11,.05)' : isOn ? '#0d1220' : 'transparent', border: '1px solid ' + (isBlocked ? 'rgba(245,158,11,.3)' : isOn ? '#1e2a45' : 'rgba(30,42,69,.3)'), borderRadius: 8, padding: '10px 12px', opacity: isPast && !isBlocked ? 0.55 : 1 }}>
+                {/* Fila superior: toggle + nombre día + fecha */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: isOn && !isBlocked ? 10 : 0 }}>
                   <button onClick={() => toggle(date)} disabled={isBlocked} style={{ width:22,height:22,borderRadius:6,flexShrink:0,cursor:isBlocked?'not-allowed':'pointer',border:'2px solid '+(isBlocked?'#f59e0b':isOn?'#10b981':'#4a5568'),background:isBlocked?'rgba(245,158,11,.15)':isOn?'#10b981':'transparent',display:'flex',alignItems:'center',justifyContent:'center',color:isBlocked?'#f59e0b':'#fff',fontSize:12,fontWeight:700 }}>{isBlocked?'🔒':isOn?'✓':''}</button>
-                  <span style={{ fontSize:12,fontWeight:600,width:34,flexShrink:0,color:date===todayDate?'#3b82f6':'#f1f5f9' }}>{label}</span>
-                  {!emp.fixed_week && <span style={{ fontSize:10,color:'#4a5568',fontFamily:"'JetBrains Mono'",width:70,flexShrink:0 }}>{date.slice(5).replace('-','/')}</span>}
-                  {isBlocked ? (
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                      <span style={{ fontSize: 11, color: '#f59e0b', fontWeight: 600 }}>Ocupado — otra sucursal</span>
-                      <span style={{ fontSize: 10, color: '#4a5568', fontFamily: "'JetBrains Mono'" }}>{day.start_time?.slice(0,5)} – {day.end_time?.slice(0,5)}</span>
-                      <span style={{ fontSize: 9, color: '#4a5568', background: 'rgba(245,158,11,.1)', border: '1px solid rgba(245,158,11,.2)', borderRadius: 4, padding: '1px 7px' }}>No editable</span>
-                    </div>
-                  ) : isOn ? (
-                    <div style={{ display:'flex',alignItems:'center',gap:6,flex:1,flexWrap:'wrap' }}>
-                      <select value={day.site_id||''} onChange={e => upd(date,'site_id',e.target.value)} style={{ ...iS,flex:'1 1 120px',minWidth:100,padding:'6px 8px' }}>
+                  <span style={{ fontSize:12,fontWeight:700,color:date===todayDate?'#3b82f6':'#f1f5f9' }}>{label}</span>
+                  {!emp.fixed_week && <span style={{ fontSize:10,color:'#4a5568',fontFamily:"'JetBrains Mono'" }}>{date.slice(5).replace('-','/')}</span>}
+                  {isBlocked && <span style={{ fontSize:11,color:'#f59e0b',fontWeight:600,marginLeft:4 }}>Ocupado — otra sucursal</span>}
+                  {!isOn && !isBlocked && <span style={{ fontSize:11,color:'#4a5568',marginLeft:4 }}>Descansa</span>}
+                </div>
+                {/* FIX BUG 3: Campos en columna vertical para móvil */}
+                {isBlocked && (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 4, paddingLeft: 30 }}>
+                    <span style={{ fontSize: 10, color: '#4a5568', fontFamily: "'JetBrains Mono'" }}>{day.start_time?.slice(0,5)} – {day.end_time?.slice(0,5)}</span>
+                    <span style={{ fontSize: 9, color: '#4a5568', background: 'rgba(245,158,11,.1)', border: '1px solid rgba(245,158,11,.2)', borderRadius: 4, padding: '1px 7px' }}>No editable</span>
+                  </div>
+                )}
+                {isOn && !isBlocked && (
+                  <div style={{ paddingLeft: 30, display: 'flex', flexDirection: 'column', gap: 8 }}>
+                    {/* Sucursal — fila completa */}
+                    <div>
+                      <div style={{ fontSize: 9, color: '#4a5568', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '.5px', marginBottom: 3 }}>Sucursal</div>
+                      <select value={day.site_id||''} onChange={e => upd(date,'site_id',e.target.value)} style={fieldStyle}>
                         {sites.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
                       </select>
-                      <select value={day.start_time||'10:00'} onChange={e => upd(date,'start_time',e.target.value)} style={{ ...iS,width:80,padding:'6px 6px',fontFamily:"'JetBrains Mono', monospace" }}>
-                        {Array.from({length:24},(_,h)=>['00','30'].map(m=>`${String(h).padStart(2,'0')}:${m}`)).flat().map(t=><option key={t} value={t}>{t}</option>)}
-                      </select>
-                      <span style={{ fontSize:11,color:'#4a5568' }}>a</span>
-                      <select value={day.end_time||'19:00'} onChange={e => upd(date,'end_time',e.target.value)} style={{ ...iS,width:80,padding:'6px 6px',fontFamily:"'JetBrains Mono', monospace" }}>
-                        {Array.from({length:24},(_,h)=>['00','30'].map(m=>`${String(h).padStart(2,'0')}:${m}`)).flat().map(t=><option key={t} value={t}>{t}</option>)}
-                      </select>
-                      <select value={day.lunch_mins??60} onChange={e => upd(date,'lunch_mins',parseInt(e.target.value))} style={{ ...iS,width:'auto',padding:'6px 8px' }}>
-                        <option value={0}>Sin comida</option><option value={30}>30m</option><option value={45}>45m</option><option value={60}>60m</option><option value={90}>90m</option>
-                      </select>
-                      <button onClick={() => copyToAll(date)} style={{ background:'none',border:'1px solid #1e2a45',borderRadius:4,color:'#8892a8',fontSize:9,padding:'3px 8px',cursor:'pointer',fontFamily:'inherit',whiteSpace:'nowrap' }}>Copiar a todos</button>
                     </div>
-                  ) : <span style={{ fontSize:11,color:'#4a5568' }}>Descansa</span>}
-                </div>
+                    {/* Horario — entrada y salida en fila */}
+                    <div style={{ display: 'flex', gap: 8, alignItems: 'flex-end' }}>
+                      <div style={{ flex: 1 }}>
+                        <div style={{ fontSize: 9, color: '#4a5568', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '.5px', marginBottom: 3 }}>Entrada</div>
+                        <select value={day.start_time||'10:00'} onChange={e => upd(date,'start_time',e.target.value)} style={{ ...fieldStyle, fontFamily:"'JetBrains Mono', monospace" }}>
+                          {Array.from({length:24},(_,h)=>['00','30'].map(m=>`${String(h).padStart(2,'0')}:${m}`)).flat().map(t=><option key={t} value={t}>{t}</option>)}
+                        </select>
+                      </div>
+                      <div style={{ flex: 1 }}>
+                        <div style={{ fontSize: 9, color: '#4a5568', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '.5px', marginBottom: 3 }}>Salida</div>
+                        <select value={day.end_time||'19:00'} onChange={e => upd(date,'end_time',e.target.value)} style={{ ...fieldStyle, fontFamily:"'JetBrains Mono', monospace" }}>
+                          {Array.from({length:24},(_,h)=>['00','30'].map(m=>`${String(h).padStart(2,'0')}:${m}`)).flat().map(t=><option key={t} value={t}>{t}</option>)}
+                        </select>
+                      </div>
+                      <div style={{ flex: 1 }}>
+                        <div style={{ fontSize: 9, color: '#4a5568', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '.5px', marginBottom: 3 }}>Comida</div>
+                        <select value={day.lunch_mins??60} onChange={e => upd(date,'lunch_mins',parseInt(e.target.value))} style={fieldStyle}>
+                          <option value={0}>Sin comida</option><option value={30}>30m</option><option value={45}>45m</option><option value={60}>60m</option><option value={90}>90m</option>
+                        </select>
+                      </div>
+                    </div>
+                    {/* Copiar a todos */}
+                    <button onClick={() => copyToAll(date)} style={{ background:'none',border:'1px solid #1e2a45',borderRadius:4,color:'#8892a8',fontSize:10,padding:'4px 10px',cursor:'pointer',fontFamily:'inherit',alignSelf:'flex-start' }}>Copiar a todos los días activos</button>
+                  </div>
+                )}
               </div>
             )
           })}
@@ -1024,7 +1066,6 @@ function AdminUserModal({ data, sites, companies, isSuperAdmin, onSave, onClose 
   const [selSites, setSelSites] = useState((data?.admin_site_permissions || []).map(p => p.site_id))
   const [saving, setSaving]   = useState(false)
   const [err, setErr]         = useState('')
-  // ── NUEVO: estado para mostrar el link generado ──────────────────────────
   const [inviteLink, setInviteLink] = useState('')
   const [copied, setCopied]   = useState(false)
   const valid = name.trim() && email.trim()
@@ -1034,7 +1075,6 @@ function AdminUserModal({ data, sites, companies, isSuperAdmin, onSave, onClose 
     setSaving(true); setErr('')
     try {
       if (data?.id) {
-        // Editar usuario existente — sin invitación
         await supabase.from('admin_users').update({ name, role, company_id: role === 'superadmin' ? null : companyId }).eq('id', data.id)
         await supabase.from('admin_site_permissions').delete().eq('admin_user_id', data.id)
         if (role !== 'superadmin' && selSites.length > 0) {
@@ -1042,7 +1082,6 @@ function AdminUserModal({ data, sites, companies, isSuperAdmin, onSave, onClose 
         }
         onSave()
       } else {
-        // Nuevo usuario — generar link
         const res = await fetch('/api/admin/invite', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -1050,7 +1089,6 @@ function AdminUserModal({ data, sites, companies, isSuperAdmin, onSave, onClose 
         })
         const json = await res.json()
         if (!res.ok) { setErr(json.error || 'Error al generar invitación'); setSaving(false); return }
-        // Mostrar el link para que lo copies y mandes por WhatsApp
         setInviteLink(json.link)
         setSaving(false)
       }
@@ -1068,8 +1106,6 @@ function AdminUserModal({ data, sites, companies, isSuperAdmin, onSave, onClose 
     <div onClick={inviteLink ? undefined : onClose} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.7)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 200 }}>
       <div onClick={e => e.stopPropagation()} style={{ background: '#1a2035', border: '1px solid #1e2a45', borderRadius: 12, padding: 22, width: '100%', maxWidth: 460, maxHeight: '85vh', overflow: 'auto' }}>
         <h3 style={{ fontSize: 15, fontWeight: 700, marginBottom: 14 }}>{data ? 'Editar Usuario' : 'Invitar Usuario Admin'}</h3>
-
-        {/* ── Pantalla de link generado ── */}
         {inviteLink ? (
           <div>
             <div style={{ background: 'rgba(16,185,129,.08)', border: '1px solid rgba(16,185,129,.2)', borderRadius: 10, padding: '16px 18px', marginBottom: 16 }}>
