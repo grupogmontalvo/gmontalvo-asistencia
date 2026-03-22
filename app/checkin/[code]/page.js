@@ -34,6 +34,23 @@ function fmtTime(d, tz) {
   return new Date(d).toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: tz || 'America/Cancun' })
 }
 
+function fmtMoney(n) {
+  return '$' + Number(n).toLocaleString('es-MX', { maximumFractionDigits: 0 })
+}
+
+// Lunes de la semana que contiene `dateStr` (en-CA format)
+function getWeekBounds(dateStr) {
+  const d = new Date(dateStr + 'T12:00:00')
+  const day = d.getDay()
+  const diff = day === 0 ? -6 : 1 - day
+  const mon = new Date(d)
+  mon.setDate(d.getDate() + diff)
+  const sun = new Date(mon)
+  sun.setDate(mon.getDate() + 6)
+  const toStr = x => x.toLocaleDateString('en-CA')
+  return { start: toStr(mon), end: toStr(sun) }
+}
+
 function SalesModal({ onConfirm, onSkip }) {
   const [amount, setAmount] = useState('')
   const [err, setErr] = useState('')
@@ -74,50 +91,29 @@ function CameraModal({ onCapture, onClose, title = '📸 Foto de entrada' }) {
   useEffect(() => {
     async function startCam() {
       try {
-        const stream = await navigator.mediaDevices.getUserMedia({
-          video: { facingMode: 'user', width: { ideal: 640 }, height: { ideal: 480 } },
-          audio: false,
-        })
+        const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user', width: { ideal: 640 }, height: { ideal: 480 } }, audio: false })
         streamRef.current = stream
-        if (videoRef.current) {
-          videoRef.current.srcObject = stream
-          videoRef.current.onloadedmetadata = () => setCamReady(true)
-        }
-      } catch (e) {
-        setErr('No se pudo acceder a la cámara. Verifica los permisos del navegador.')
-      }
+        if (videoRef.current) { videoRef.current.srcObject = stream; videoRef.current.onloadedmetadata = () => setCamReady(true) }
+      } catch (e) { setErr('No se pudo acceder a la cámara. Verifica los permisos del navegador.') }
     }
     startCam()
     return () => { streamRef.current?.getTracks().forEach(t => t.stop()) }
   }, [])
 
   function capture() {
-    const video  = videoRef.current
-    const canvas = canvasRef.current
+    const video = videoRef.current; const canvas = canvasRef.current
     if (!video || !canvas) return
-    canvas.width  = video.videoWidth
-    canvas.height = video.videoHeight
-    const ctx = canvas.getContext('2d')
-    ctx.drawImage(video, 0, 0)
-    canvas.toBlob(b => {
-      if (!b) return
-      setBlob(b)
-      setPreview(URL.createObjectURL(b))
-      streamRef.current?.getTracks().forEach(t => t.stop())
-    }, 'image/jpeg', 0.85)
+    canvas.width = video.videoWidth; canvas.height = video.videoHeight
+    canvas.getContext('2d').drawImage(video, 0, 0)
+    canvas.toBlob(b => { if (!b) return; setBlob(b); setPreview(URL.createObjectURL(b)); streamRef.current?.getTracks().forEach(t => t.stop()) }, 'image/jpeg', 0.85)
   }
 
   function retake() {
-    setPreview(null)
-    setBlob(null)
-    async function startCam() {
-      try {
-        const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user' }, audio: false })
-        streamRef.current = stream
-        if (videoRef.current) { videoRef.current.srcObject = stream; setCamReady(true) }
-      } catch { setErr('No se pudo reiniciar la cámara.') }
-    }
-    startCam()
+    setPreview(null); setBlob(null)
+    navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user' }, audio: false }).then(stream => {
+      streamRef.current = stream
+      if (videoRef.current) { videoRef.current.srcObject = stream; setCamReady(true) }
+    }).catch(() => setErr('No se pudo reiniciar la cámara.'))
   }
 
   return (
@@ -132,9 +128,7 @@ function CameraModal({ onCapture, onClose, title = '📸 Foto de entrada' }) {
             <div style={{ background: 'rgba(239,68,68,.12)', border: '1px solid rgba(239,68,68,.25)', borderRadius: 10, padding: 16, textAlign: 'center', fontSize: 13, color: '#ef4444', marginBottom: 14 }}>
               {err}
               <div style={{ marginTop: 12 }}>
-                <button onClick={() => onCapture(null)} style={{ padding: '10px 20px', borderRadius: 8, border: 'none', background: '#3b82f6', color: '#fff', fontSize: 13, fontWeight: 600, cursor: 'pointer', fontFamily: "'DM Sans', sans-serif" }}>
-                  Continuar sin foto
-                </button>
+                <button onClick={() => onCapture(null)} style={{ padding: '10px 20px', borderRadius: 8, border: 'none', background: '#3b82f6', color: '#fff', fontSize: 13, fontWeight: 600, cursor: 'pointer', fontFamily: "'DM Sans', sans-serif" }}>Continuar sin foto</button>
               </div>
             </div>
           ) : preview ? (
@@ -163,6 +157,62 @@ function CameraModal({ onCapture, onClose, title = '📸 Foto de entrada' }) {
   )
 }
 
+// ── Bloque de ventas semanales (durante turno y al terminar) ──
+function WeekSalesBlock({ thisWeekSales, lastWeekSales, goal, isDone }) {
+  const hasThis  = thisWeekSales > 0
+  const hasLast  = lastWeekSales > 0
+  const hasGoal  = goal > 0
+  if (!hasThis && !hasGoal) return null
+
+  const pct = hasGoal ? Math.min(100, Math.round((thisWeekSales / goal) * 100)) : null
+  const diff = hasThis && hasLast ? thisWeekSales - lastWeekSales : null
+  const diffPct = diff !== null && lastWeekSales > 0 ? Math.round((diff / lastWeekSales) * 100) : null
+  const isUp = diff !== null && diff >= 0
+
+  return (
+    <div style={{ background: '#1a2035', border: '1px solid #1e2a45', borderRadius: 12, padding: 16 }}>
+      <div style={{ fontSize: 10, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '.6px', color: '#4a5568', marginBottom: 12 }}>Ventas esta semana</div>
+
+      {/* Acumulado */}
+      {hasThis && (
+        <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, marginBottom: hasGoal || hasLast ? 12 : 0 }}>
+          <span style={{ fontSize: 26, fontWeight: 700, fontFamily: "'JetBrains Mono', monospace", color: '#10b981' }}>{fmtMoney(thisWeekSales)}</span>
+          {!isDone && <span style={{ fontSize: 11, color: '#4a5568' }}>acumulado</span>}
+        </div>
+      )}
+
+      {/* Barra de meta */}
+      {hasGoal && (
+        <div style={{ marginBottom: hasLast ? 12 : 0 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+            <span style={{ fontSize: 11, color: '#8892a8' }}>Meta: <span style={{ fontFamily: "'JetBrains Mono'", color: '#f1f5f9', fontWeight: 600 }}>{fmtMoney(goal)}</span></span>
+            <span style={{ fontSize: 12, fontWeight: 700, color: pct >= 100 ? '#10b981' : pct >= 70 ? '#f59e0b' : '#8892a8', fontFamily: "'JetBrains Mono'" }}>{pct}%</span>
+          </div>
+          <div style={{ height: 8, background: '#0d1220', borderRadius: 4, overflow: 'hidden' }}>
+            <div style={{ height: '100%', width: `${pct}%`, borderRadius: 4, background: pct >= 100 ? '#10b981' : pct >= 70 ? '#f59e0b' : '#3b82f6', transition: 'width .4s ease' }} />
+          </div>
+          {pct >= 100 && <div style={{ fontSize: 11, color: '#10b981', fontWeight: 600, marginTop: 6, textAlign: 'center' }}>🎉 ¡Meta alcanzada!</div>}
+        </div>
+      )}
+
+      {/* Comparación semana anterior */}
+      {hasLast && (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 10px', borderRadius: 8, background: '#0d1220' }}>
+          <span style={{ fontSize: 18 }}>{isUp ? '📈' : '📉'}</span>
+          <div style={{ flex: 1 }}>
+            <div style={{ fontSize: 11, color: '#4a5568' }}>Semana anterior: <span style={{ fontFamily: "'JetBrains Mono'", color: '#8892a8' }}>{fmtMoney(lastWeekSales)}</span></div>
+            {diffPct !== null && (
+              <div style={{ fontSize: 13, fontWeight: 700, color: isUp ? '#10b981' : '#ef4444', fontFamily: "'JetBrains Mono'" }}>
+                {isUp ? '+' : ''}{diffPct}% {isUp ? 'más' : 'menos'}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
 export default function CheckinPage({ params }) {
   const siteCode = params.code
   const [site, setSite]               = useState(null)
@@ -184,10 +234,13 @@ export default function CheckinPage({ params }) {
   const [showSalesModal, setShowSalesModal] = useState(false)
   const [loading, setLoading]         = useState(false)
   const [checkoutErr, setCheckoutErr] = useState('')
-  // Camera state — 'in' | 'out' | null
   const [showCamera, setShowCamera]   = useState(null)
-  // Confirmation modal
   const [confirmAction, setConfirmAction] = useState(null)
+
+  // Datos de ventas semanales y meta
+  const [thisWeekSales, setThisWeekSales] = useState(0)
+  const [lastWeekSales, setLastWeekSales] = useState(0)
+  const [weeklyGoal,    setWeeklyGoal]    = useState(0)
 
   useEffect(() => { const t = setInterval(() => setNow(new Date()), 1000); return () => clearInterval(t) }, [])
 
@@ -195,6 +248,29 @@ export default function CheckinPage({ params }) {
     const today = new Date().toLocaleDateString('en-CA', { timeZone: tz || 'America/Cancun' })
     const { data } = await supabase.from('schedules').select('*').eq('employee_id', empId).eq('date', today).maybeSingle()
     setSchedule(data)
+  }
+
+  async function loadWeeklyData(empId, tz) {
+    const today = new Date().toLocaleDateString('en-CA', { timeZone: tz || 'America/Cancun' })
+    const thisWeek = getWeekBounds(today)
+
+    // Fecha lunes de semana anterior
+    const lastMonDate = new Date(thisWeek.start + 'T12:00:00')
+    lastMonDate.setDate(lastMonDate.getDate() - 7)
+    const lastWeek = getWeekBounds(lastMonDate.toLocaleDateString('en-CA'))
+
+    const [thisRes, lastRes, goalRes] = await Promise.all([
+      supabase.from('attendance').select('sales_amount').eq('employee_id', empId).gte('date', thisWeek.start).lte('date', thisWeek.end),
+      supabase.from('attendance').select('sales_amount').eq('employee_id', empId).gte('date', lastWeek.start).lte('date', lastWeek.end),
+      supabase.from('employee_goals').select('weekly_goal').eq('employee_id', empId).maybeSingle(),
+    ])
+
+    const sumThis = (thisRes.data || []).reduce((s, r) => s + (parseFloat(r.sales_amount) || 0), 0)
+    const sumLast = (lastRes.data || []).reduce((s, r) => s + (parseFloat(r.sales_amount) || 0), 0)
+
+    setThisWeekSales(sumThis)
+    setLastWeekSales(sumLast)
+    setWeeklyGoal(parseFloat(goalRes.data?.weekly_goal) || 0)
   }
 
   useEffect(() => {
@@ -209,6 +285,7 @@ export default function CheckinPage({ params }) {
           setEmp(device.employees)
           await loadTodayRecord(device.employees.id, siteData.id, siteData.timezone)
           await loadSchedule(device.employees.id, siteData.timezone)
+          await loadWeeklyData(device.employees.id, siteData.timezone)
           checkGPS(siteData)
           setStep('checkin')
           await supabase.from('devices').update({ last_used: new Date().toISOString() }).eq('device_token', token)
@@ -277,6 +354,7 @@ export default function CheckinPage({ params }) {
     setEmp(empData)
     await loadTodayRecord(empData.id, site.id, site.timezone)
     await loadSchedule(empData.id, site.timezone)
+    await loadWeeklyData(empData.id, site.timezone)
     checkGPS(site)
     setStep('checkin')
   }
@@ -302,103 +380,61 @@ export default function CheckinPage({ params }) {
       const tz    = site?.timezone || 'America/Cancun'
       const today = new Date().toLocaleDateString('en-CA', { timeZone: tz })
       const fileName = `${emp.id}_${today}_${suffix}_${Date.now()}.jpg`
-      const { data: uploadData, error: uploadErr } = await supabase.storage
-        .from('checkin-photos')
-        .upload(fileName, blob, { contentType: 'image/jpeg', upsert: false })
+      const { data: uploadData, error: uploadErr } = await supabase.storage.from('checkin-photos').upload(fileName, blob, { contentType: 'image/jpeg', upsert: false })
       if (!uploadErr && uploadData) {
         const { data: urlData } = supabase.storage.from('checkin-photos').getPublicUrl(fileName)
         return urlData?.publicUrl || null
       }
-    } catch (e) {
-      console.warn('Photo upload failed:', e)
-    }
+    } catch (e) { console.warn('Photo upload failed:', e) }
     return null
   }
 
-  // ── Check In ──
   function doCheckin() {
     if (isIn || isDone || loading) return
-    if (emp?.skip_photo) {
-      doCheckinWithPhoto(null)
-    } else {
-      setShowCamera('in')
-    }
+    emp?.skip_photo ? doCheckinWithPhoto(null) : setShowCamera('in')
   }
 
   async function doCheckinWithPhoto(blob) {
-    setShowCamera(null)
-    setLoading(true)
+    setShowCamera(null); setLoading(true)
     const checkIn = new Date()
     const tz      = site?.timezone || 'America/Cancun'
     const today   = checkIn.toLocaleDateString('en-CA', { timeZone: tz })
     const status  = await calcStatus(checkIn)
     const photoUrl = await uploadPhoto(blob, 'in')
-
-    const record = {
-      employee_id: emp.id, site_id: site.id, date: today, status,
-      check_in: checkIn.toISOString(),
-      gps_lat: gps.lat || null, gps_lng: gps.lng || null, gps_distance_m: gps.dist || null,
-      ...(photoUrl ? { photo_url: photoUrl } : {}),
-    }
+    const record = { employee_id: emp.id, site_id: site.id, date: today, status, check_in: checkIn.toISOString(), gps_lat: gps.lat || null, gps_lng: gps.lng || null, gps_distance_m: gps.dist || null, ...(photoUrl ? { photo_url: photoUrl } : {}) }
     const { data, error } = await supabase.from('attendance').insert(record).select().single()
     if (!error && data) {
-      setTodayRecord(data)
-      setIsIn(true)
+      setTodayRecord(data); setIsIn(true)
       setCiTime(fmtTime(checkIn, tz))
       setEvents(prev => [...prev, { type: 'ci', time: fmtTime(checkIn, tz) }])
     }
     setLoading(false)
   }
 
-  // ── Check Out ──
   function doCheckout() {
     setConfirmAction({
-      label: 'Registrar Salida',
-      desc: '¿Confirmas que estás terminando tu turno?',
-      icon: '✕',
-      color: '#ef4444',
-      onConfirm: () => {
-        setConfirmAction(null)
-        if (emp?.skip_photo) {
-          proceedCheckout()
-        } else {
-          setShowCamera('out')
-        }
-      }
+      label: 'Registrar Salida', desc: '¿Confirmas que estás terminando tu turno?', icon: '✕', color: '#ef4444',
+      onConfirm: () => { setConfirmAction(null); emp?.skip_photo ? proceedCheckout() : setShowCamera('out') }
     })
   }
 
   function proceedCheckout() {
     setShowCamera(null)
-    if (emp?.skip_sales) {
-      finishCheckout(null, null)
-    } else {
-      setShowSalesModal(true)
-    }
+    emp?.skip_sales ? finishCheckout(null, null) : setShowSalesModal(true)
   }
 
-  // Called after camera modal for checkout
   async function handleCheckoutPhoto(blob) {
     setShowCamera(null)
-    if (emp?.skip_sales) {
-      await finishCheckout(null, blob)
-    } else {
-      pendingCheckoutPhotoRef.current = blob
-      setShowSalesModal(true)
-    }
+    if (emp?.skip_sales) { await finishCheckout(null, blob) }
+    else { pendingCheckoutPhotoRef.current = blob; setShowSalesModal(true) }
   }
 
   const pendingCheckoutPhotoRef = useRef(null)
 
-  // ── FIX: finishCheckout robusto con manejo de error ──
   async function finishCheckout(salesAmount, photoBlob) {
     setShowSalesModal(false)
-    if (!todayRecord) {
-      setCheckoutErr('Error: no se encontró el registro de entrada. Contacta a tu administrador.')
-      return
-    }
-    setLoading(true)
-    setCheckoutErr('')
+    if (!todayRecord) { setCheckoutErr('Error: no se encontró el registro de entrada. Contacta a tu administrador.'); return }
+    setLoading(true); setCheckoutErr('')
 
     const tz       = site?.timezone || 'America/Cancun'
     const checkOut = new Date()
@@ -407,21 +443,13 @@ export default function CheckinPage({ params }) {
       ? (new Date(todayRecord.lunch_end) - new Date(todayRecord.lunch_start)) / 60000 : 0
     const hrs = ((checkOut - ciDate) / 3600000 - lunchMins / 60).toFixed(1)
 
-    // Upload checkout photo
     const blob = photoBlob ?? pendingCheckoutPhotoRef.current
     pendingCheckoutPhotoRef.current = null
     const photoUrlOut = await uploadPhoto(blob, 'out')
 
-    const updatePayload = {
-      check_out: checkOut.toISOString(),
-      hours_worked: parseFloat(hrs),
-      ...(salesAmount !== null ? { sales_amount: salesAmount } : {}),
-      ...(photoUrlOut ? { photo_url_out: photoUrlOut } : {}),
-    }
-
     const { data: updatedRecord, error } = await supabase
       .from('attendance')
-      .update(updatePayload)
+      .update({ check_out: checkOut.toISOString(), hours_worked: parseFloat(hrs), ...(salesAmount !== null ? { sales_amount: salesAmount } : {}), ...(photoUrlOut ? { photo_url_out: photoUrlOut } : {}) })
       .eq('id', todayRecord.id)
       .select()
       .single()
@@ -429,16 +457,15 @@ export default function CheckinPage({ params }) {
     if (error) {
       console.error('Check-out error:', error)
       setCheckoutErr('No se pudo registrar la salida. Intenta de nuevo.')
-      setLoading(false)
-      return
+      setLoading(false); return
     }
 
-    // Éxito — actualizar estado con datos reales de DB
-    setTodayRecord(updatedRecord)
-    setIsIn(false)
-    setIsDone(true)
-    setOnLunch(false)
-    setOnBreak(false)
+    // Actualizar acumulado de ventas de la semana con el nuevo monto
+    if (salesAmount > 0) {
+      setThisWeekSales(prev => prev + salesAmount)
+    }
+
+    setTodayRecord(updatedRecord); setIsIn(false); setIsDone(true); setOnLunch(false); setOnBreak(false)
     setCoTime(fmtTime(checkOut, tz))
     const newEvs = [{ type: 'co', time: fmtTime(checkOut, tz) }]
     if (salesAmount !== null && salesAmount > 0) newEvs.push({ type: 'sale', time: fmtTime(checkOut, tz), amount: salesAmount })
@@ -450,8 +477,7 @@ export default function CheckinPage({ params }) {
     setConfirmAction({
       label: start ? 'Inicio de Comida' : 'Regreso de Comida',
       desc: start ? '¿Vas a tomar tu tiempo de comida?' : '¿Confirmas que regresas de la comida?',
-      icon: '☕',
-      color: '#f59e0b',
+      icon: '☕', color: '#f59e0b',
       onConfirm: () => { setConfirmAction(null); doLunch(start) }
     })
   }
@@ -460,16 +486,14 @@ export default function CheckinPage({ params }) {
     setConfirmAction({
       label: start ? 'Inicio de Descanso' : 'Regreso de Descanso',
       desc: start ? '¿Vas a tomar un descanso?' : '¿Confirmas que regresas del descanso?',
-      icon: '⏸',
-      color: '#3b82f6',
+      icon: '⏸', color: '#3b82f6',
       onConfirm: () => { setConfirmAction(null); doBreak(start) }
     })
   }
 
   async function doLunch(start) {
     if (!todayRecord) return
-    const tz = site?.timezone || 'America/Cancun'
-    const t  = new Date()
+    const tz = site?.timezone || 'America/Cancun'; const t = new Date()
     if (start) {
       await supabase.from('attendance').update({ lunch_start: t.toISOString() }).eq('id', todayRecord.id)
       setOnLunch(true); setEvents(prev => [...prev, { type: 'ls', time: fmtTime(t, tz) }])
@@ -482,8 +506,7 @@ export default function CheckinPage({ params }) {
 
   async function doBreak(start) {
     if (!todayRecord) return
-    const tz = site?.timezone || 'America/Cancun'
-    const t  = new Date()
+    const tz = site?.timezone || 'America/Cancun'; const t = new Date()
     if (start) {
       await supabase.from('attendance').update({ break_start: t.toISOString() }).eq('id', todayRecord.id)
       setOnBreak(true); setEvents(prev => [...prev, { type: 'bs', time: fmtTime(t, tz) }])
@@ -565,11 +588,15 @@ export default function CheckinPage({ params }) {
           )}
           {todayRecord?.sales_amount > 0 && (
             <div style={{ fontSize: 14, color: '#10b981', fontFamily: "'JetBrains Mono'", marginBottom: 4 }}>
-              ${Number(todayRecord.sales_amount).toLocaleString('es-MX')} en ventas
+              {fmtMoney(todayRecord.sales_amount)} hoy
             </div>
           )}
           <div style={{ marginTop: 14, paddingTop: 14, borderTop: '1px solid #1e2a45', fontSize: 11, color: '#4a5568' }}>¡Hasta mañana!</div>
         </div>
+
+        {/* Bloque de ventas semanales — solo si tiene ventas esta semana, meta o semana anterior */}
+        <WeekSalesBlock thisWeekSales={thisWeekSales} lastWeekSales={lastWeekSales} goal={weeklyGoal} isDone={true} />
+
         {events.length > 0 && (
           <div style={S.timeline}>
             <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 10 }}>Registro del Día</div>
@@ -578,7 +605,7 @@ export default function CheckinPage({ params }) {
                 <span style={S.dot(evMeta[e.type]?.[0] || '#4a5568')} />
                 <span style={{ width: 44, color: '#8892a8', fontSize: 11, fontFamily: "'JetBrains Mono', monospace" }}>{e.time}</span>
                 <span style={{ color: '#8892a8', flex: 1 }}>{evMeta[e.type]?.[1] || 'Acción'}</span>
-                {e.type === 'sale' && <span style={{ color: '#10b981', fontFamily: "'JetBrains Mono', monospace", fontSize: 12, fontWeight: 700 }}>${Number(e.amount).toLocaleString('es-MX')}</span>}
+                {e.type === 'sale' && <span style={{ color: '#10b981', fontFamily: "'JetBrains Mono', monospace", fontSize: 12, fontWeight: 700 }}>{fmtMoney(e.amount)}</span>}
               </div>
             ))}
           </div>
@@ -592,7 +619,6 @@ export default function CheckinPage({ params }) {
 
   return (
     <div style={S.page}>
-      {/* Camera modal — 'in' or 'out' */}
       {showCamera === 'in'  && <CameraModal title='📸 Foto de entrada' onCapture={doCheckinWithPhoto} onClose={() => setShowCamera(null)} />}
       {showCamera === 'out' && <CameraModal title='📸 Foto de salida'  onCapture={handleCheckoutPhoto} onClose={() => setShowCamera(null)} />}
 
@@ -625,7 +651,6 @@ export default function CheckinPage({ params }) {
       <div style={S.bar}><img src='/logo.jpeg' style={S.logo} alt='GM' /><span style={{ fontSize: 13, fontWeight: 600 }}>{site?.name}</span></div>
       <div style={S.container}>
 
-        {/* ── Card principal ── */}
         <div style={S.card}>
           <div style={{ fontSize: 16, fontWeight: 700 }}>{emp?.name}</div>
           <div style={S.sub}>{emp?.role}</div>
@@ -633,7 +658,6 @@ export default function CheckinPage({ params }) {
           <div style={S.clock}>{fmtTime(now, tz)}</div>
           <div style={S.muted}>{now.toLocaleDateString('es-MX', { weekday: 'long', day: 'numeric', month: 'long', timeZone: tz })}</div>
 
-          {/* Banner "Ya registraste tu entrada" cuando isIn */}
           {isIn && !isDone && (
             <div style={{ marginTop: 14, padding: '12px 16px', borderRadius: 10, background: 'rgba(16,185,129,.1)', border: '1px solid rgba(16,185,129,.25)', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10 }}>
               <span style={{ fontSize: 20 }}>✅</span>
@@ -673,10 +697,16 @@ export default function CheckinPage({ params }) {
                 </div>
               </div>
             )}
+            {/* Acumulado semanal discreto — durante el turno */}
+            {thisWeekSales > 0 && (
+              <div style={{ textAlign: 'center' }}>
+                <div style={{ fontSize: 9, color: '#4a5568', textTransform: 'uppercase', letterSpacing: '.6px' }}>Esta semana</div>
+                <div style={{ marginTop: 2, fontSize: 12, fontFamily: "'JetBrains Mono', monospace", color: '#10b981', fontWeight: 600 }}>{fmtMoney(thisWeekSales)}</div>
+              </div>
+            )}
           </div>
         </div>
 
-        {/* Error de checkout */}
         {checkoutErr && <div style={S.err}>{checkoutErr}</div>}
 
         <div style={S.gps(gpsOk)}>
@@ -695,10 +725,7 @@ export default function CheckinPage({ params }) {
 
         <div style={S.btnGrid}>
           <button
-            style={{
-              ...S.actBtn(isIn || isDone || loading || (!gpsOk && gps.status !== 'idle')),
-              ...(!isIn && !isDone && gpsOk ? { background: 'rgba(16,185,129,.08)', border: '2px solid rgba(16,185,129,.4)' } : {}),
-            }}
+            style={{ ...S.actBtn(isIn || isDone || loading || (!gpsOk && gps.status !== 'idle')), ...(!isIn && !isDone && gpsOk ? { background: 'rgba(16,185,129,.08)', border: '2px solid rgba(16,185,129,.4)' } : {}) }}
             disabled={isIn || isDone || loading || (!gpsOk && gps.status !== 'idle')}
             onClick={doCheckin}
           >
@@ -726,7 +753,7 @@ export default function CheckinPage({ params }) {
                 <span style={S.dot(evMeta[e.type]?.[0] || '#4a5568')} />
                 <span style={{ width: 44, color: '#8892a8', fontSize: 11, fontFamily: "'JetBrains Mono', monospace" }}>{e.time}</span>
                 <span style={{ color: '#8892a8', flex: 1 }}>{evMeta[e.type]?.[1] || 'Acción'}</span>
-                {e.type === 'sale' && <span style={{ color: '#10b981', fontFamily: "'JetBrains Mono', monospace", fontSize: 12, fontWeight: 700 }}>${Number(e.amount).toLocaleString('es-MX')}</span>}
+                {e.type === 'sale' && <span style={{ color: '#10b981', fontFamily: "'JetBrains Mono', monospace", fontSize: 12, fontWeight: 700 }}>{fmtMoney(e.amount)}</span>}
               </div>
             ))}
           </div>
