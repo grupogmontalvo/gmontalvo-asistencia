@@ -766,3 +766,42 @@ export default function CheckinPage({ params }) {
     </div>
   )
 }
+// REEMPLAZA SOLO la función SalesModal en checkin/[code]/page.js
+// Busca: "function SalesModal({ onConfirm, onSkip })"
+// Reemplaza todo el bloque hasta el cierre "}" antes de "function CameraModal"
+
+function SalesModal({ onConfirm, onSkip }) {
+  const [amount, setAmount] = useState('')
+  const [err, setErr] = useState('')
+
+  function handleConfirm() {
+    const val = parseFloat(amount.replace(/,/g, ''))
+    if (isNaN(val) || val < 0) { setErr('Ingresa un monto válido'); return }
+    if (val > 9999999) { setErr('El monto máximo es $9,999,999'); return }
+    onConfirm(val)
+  }
+
+  return (
+    <div style={{ position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', background: 'rgba(0,0,0,.8)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 200, backdropFilter: 'blur(6px)', padding: '0 16px' }}>
+      <div style={{ background: '#1a2035', border: '1px solid #1e2a45', borderRadius: 18, padding: 28, width: '100%', maxWidth: 360, textAlign: 'center' }}>
+        <div style={{ width: 56, height: 56, borderRadius: 16, background: 'rgba(16,185,129,.12)', border: '1px solid rgba(16,185,129,.2)', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 16px', fontSize: 26 }}>💰</div>
+        <div style={{ fontSize: 17, fontWeight: 700, marginBottom: 6 }}>Cierre del Día</div>
+        <div style={{ fontSize: 12, color: '#8892a8', marginBottom: 22 }}>¿Cuánto vendiste hoy?<br /><span style={{ fontSize: 11, color: '#4a5568' }}>Puedes omitirlo si no aplica.</span></div>
+        <div style={{ position: 'relative', marginBottom: err ? 8 : 20 }}>
+          <span style={{ position: 'absolute', left: 16, top: '50%', transform: 'translateY(-50%)', fontSize: 18, fontWeight: 700, color: '#4a5568', pointerEvents: 'none' }}>$</span>
+          <input type='number' inputMode='decimal' placeholder='0' value={amount}
+            onChange={e => { setAmount(e.target.value); setErr('') }}
+            onKeyDown={e => { if (e.key === 'Enter') handleConfirm() }}
+            autoFocus
+            style={{ width: '100%', background: '#0d1220', border: '1px solid ' + (err ? '#ef4444' : '#1e2a45'), color: '#f1f5f9', fontFamily: "'JetBrains Mono', monospace", fontSize: 28, fontWeight: 700, padding: '16px 16px 16px 36px', borderRadius: 12, outline: 'none', textAlign: 'right', boxSizing: 'border-box' }}
+          />
+        </div>
+        {err && <div style={{ fontSize: 12, color: '#ef4444', marginBottom: 16, fontWeight: 600 }}>⚠ {err}</div>}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+          <button onClick={handleConfirm} style={{ width: '100%', padding: '14px', borderRadius: 10, border: 'none', background: '#10b981', color: '#fff', fontFamily: "'DM Sans', sans-serif", fontSize: 14, fontWeight: 700, cursor: 'pointer' }}>Confirmar y Salir</button>
+          <button onClick={onSkip} style={{ width: '100%', padding: '12px', borderRadius: 10, border: '1px solid #1e2a45', background: 'transparent', color: '#4a5568', fontFamily: "'DM Sans', sans-serif", fontSize: 12, cursor: 'pointer' }}>Omitir</button>
+        </div>
+      </div>
+    </div>
+  )
+}
