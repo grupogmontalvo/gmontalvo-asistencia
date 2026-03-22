@@ -7,10 +7,16 @@ export async function POST(request) {
 
     const supabaseAdmin = createClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL,
-      process.env.SUPABASE_SERVICE_ROLE_KEY
+      process.env.SUPABASE_SERVICE_ROLE_KEY,
+      {
+        auth: {
+          flowType: 'pkce',
+        }
+      }
     )
 
-    // Genera el link sin mandar email
+    // Genera el link de invitación con PKCE
+    // El token va como ?code= en la URL (no en el #hash), así WhatsApp no lo rompe
     const { data: linkData, error: linkErr } = await supabaseAdmin.auth.admin.generateLink({
       type: 'invite',
       email,
@@ -40,7 +46,6 @@ export async function POST(request) {
       )
     }
 
-    // Regresa el link para que tú lo mandes por WhatsApp
     return NextResponse.json({ ok: true, link: inviteLink })
   } catch (e) {
     return NextResponse.json({ error: e.message }, { status: 500 })
