@@ -1,16 +1,46 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { supabase } from '../../../lib/supabase';
 
 export default function SetPasswordPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [password, setPassword] = useState('');
   const [confirm, setConfirm] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [ready, setReady] = useState(false);
+
+  useEffect(() => {
+    async function verify() {
+      // PKCE: el token llega como ?code= en la URL (no en el #hash)
+      // Esto funciona bien en WhatsApp, Gmail y cualquier app de mensajería
+      const code = searchParams.get('code');
+
+      if (code) {
+        // Intercambiar el code por una sesión
+        const { error: exchangeErr } = await supabase.auth.exchangeCodeForSession(code);
+        if (exchangeErr) {
+          setError('Link inválido o expirado. Pide al administrador que te reenvíe la invitación.');
+          return;
+        }
+        setReady(true);
+        return;
+      }
+
+      // Fallback: si no hay code, verificar si ya hay sesión activa
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session) {
+        setReady(true);
+      } else {
+        setError('Link inválido o expirado. Pide al administrador que te reenvíe la invitación.');
+      }
+    }
+
+    verify();
+  }, [searchParams]);
 
   async function handleSubmit() {
     if (password.length < 8)
@@ -31,16 +61,6 @@ export default function SetPasswordPage() {
     router.push('/admin');
   }
 
-  useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      if (session) {
-        setReady(true);
-      } else {
-        setError('Link inválido o expirado. Pide al administrador que te reenvíe la invitación.');
-      }
-    });
-  }, []);
-
   const inputStyle = {
     width: '100%',
     background: '#0d1220',
@@ -56,23 +76,14 @@ export default function SetPasswordPage() {
 
   return (
     <div style={{
-      display: 'flex',
-      alignItems: 'center',
-      justifyContent: 'center',
-      minHeight: '100vh',
-      background: '#0a0e1a',
-      fontFamily: "'DM Sans', sans-serif",
-      padding: 20,
+      display: 'flex', alignItems: 'center', justifyContent: 'center',
+      minHeight: '100vh', background: '#0a0e1a',
+      fontFamily: "'DM Sans', sans-serif", padding: 20,
     }}>
       <div style={{ width: '100%', maxWidth: 400 }}>
 
-        {/* Header */}
         <div style={{ textAlign: 'center', marginBottom: 32 }}>
-          <img
-            src="/logo.jpeg"
-            style={{ width: 52, height: 52, borderRadius: 12, marginBottom: 12 }}
-            alt="GM"
-          />
+          <img src="/logo.jpeg" style={{ width: 52, height: 52, borderRadius: 12, marginBottom: 12 }} alt="GM" />
           <h1 style={{ fontSize: 20, fontWeight: 700, color: '#f1f5f9', margin: 0 }}>
             Crear contraseña
           </h1>
@@ -81,24 +92,12 @@ export default function SetPasswordPage() {
           </p>
         </div>
 
-        {/* Card */}
-        <div style={{
-          background: '#111827',
-          border: '1px solid #1e2a45',
-          borderRadius: 14,
-          padding: 28,
-        }}>
+        <div style={{ background: '#111827', border: '1px solid #1e2a45', borderRadius: 14, padding: 28 }}>
 
-          {/* Error / verificando */}
           {error && (
             <div style={{
-              background: 'rgba(239,68,68,.1)',
-              border: '1px solid rgba(239,68,68,.25)',
-              borderRadius: 8,
-              padding: '10px 14px',
-              fontSize: 13,
-              color: '#ef4444',
-              marginBottom: 18,
+              background: 'rgba(239,68,68,.1)', border: '1px solid rgba(239,68,68,.25)',
+              borderRadius: 8, padding: '10px 14px', fontSize: 13, color: '#ef4444', marginBottom: 18,
             }}>
               {error}
             </div>
@@ -110,14 +109,12 @@ export default function SetPasswordPage() {
             </div>
           )}
 
-          {/* Formulario */}
           {ready && (
             <>
               <div style={{ marginBottom: 16 }}>
                 <label style={{
-                  fontSize: 11, fontWeight: 600, color: '#8892a8',
-                  display: 'block', marginBottom: 6,
-                  textTransform: 'uppercase', letterSpacing: '.5px',
+                  fontSize: 11, fontWeight: 600, color: '#8892a8', display: 'block',
+                  marginBottom: 6, textTransform: 'uppercase', letterSpacing: '.5px',
                 }}>
                   Nueva contraseña
                 </label>
@@ -132,9 +129,8 @@ export default function SetPasswordPage() {
 
               <div style={{ marginBottom: 22 }}>
                 <label style={{
-                  fontSize: 11, fontWeight: 600, color: '#8892a8',
-                  display: 'block', marginBottom: 6,
-                  textTransform: 'uppercase', letterSpacing: '.5px',
+                  fontSize: 11, fontWeight: 600, color: '#8892a8', display: 'block',
+                  marginBottom: 6, textTransform: 'uppercase', letterSpacing: '.5px',
                 }}>
                   Confirmar contraseña
                 </label>
@@ -152,14 +148,9 @@ export default function SetPasswordPage() {
                 onClick={handleSubmit}
                 disabled={loading || !password || !confirm}
                 style={{
-                  width: '100%',
-                  padding: '12px 16px',
-                  borderRadius: 8,
-                  border: 'none',
+                  width: '100%', padding: '12px 16px', borderRadius: 8, border: 'none',
                   background: (!loading && password && confirm) ? '#3b82f6' : '#1e2a45',
-                  color: '#fff',
-                  fontSize: 14,
-                  fontWeight: 600,
+                  color: '#fff', fontSize: 14, fontWeight: 600,
                   cursor: (!loading && password && confirm) ? 'pointer' : 'not-allowed',
                   fontFamily: 'inherit',
                 }}
