@@ -38,7 +38,6 @@ function fmtMoney(n) {
   return '$' + Number(n).toLocaleString('es-MX', { maximumFractionDigits: 0 })
 }
 
-// Lunes de la semana que contiene `dateStr` (en-CA format)
 function getWeekBounds(dateStr) {
   const d = new Date(dateStr + 'T12:00:00')
   const day = d.getDay()
@@ -54,11 +53,14 @@ function getWeekBounds(dateStr) {
 function SalesModal({ onConfirm, onSkip }) {
   const [amount, setAmount] = useState('')
   const [err, setErr] = useState('')
+
   function handleConfirm() {
     const val = parseFloat(amount.replace(/,/g, ''))
     if (isNaN(val) || val < 0) { setErr('Ingresa un monto válido'); return }
+    if (val > 9999999) { setErr('El monto máximo es $9,999,999'); return }
     onConfirm(val)
   }
+
   return (
     <div style={{ position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', background: 'rgba(0,0,0,.8)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 200, backdropFilter: 'blur(6px)', padding: '0 16px' }}>
       <div style={{ background: '#1a2035', border: '1px solid #1e2a45', borderRadius: 18, padding: 28, width: '100%', maxWidth: 360, textAlign: 'center' }}>
@@ -67,9 +69,14 @@ function SalesModal({ onConfirm, onSkip }) {
         <div style={{ fontSize: 12, color: '#8892a8', marginBottom: 22 }}>¿Cuánto vendiste hoy?<br /><span style={{ fontSize: 11, color: '#4a5568' }}>Puedes omitirlo si no aplica.</span></div>
         <div style={{ position: 'relative', marginBottom: err ? 8 : 20 }}>
           <span style={{ position: 'absolute', left: 16, top: '50%', transform: 'translateY(-50%)', fontSize: 18, fontWeight: 700, color: '#4a5568', pointerEvents: 'none' }}>$</span>
-          <input type='number' inputMode='decimal' placeholder='0' value={amount} onChange={e => { setAmount(e.target.value); setErr('') }} onKeyDown={e => { if (e.key === 'Enter') handleConfirm() }} autoFocus style={{ width: '100%', background: '#0d1220', border: '1px solid ' + (err ? '#ef4444' : '#1e2a45'), color: '#f1f5f9', fontFamily: "'JetBrains Mono', monospace", fontSize: 28, fontWeight: 700, padding: '16px 16px 16px 36px', borderRadius: 12, outline: 'none', textAlign: 'right', boxSizing: 'border-box' }} />
+          <input type='number' inputMode='decimal' placeholder='0' value={amount}
+            onChange={e => { setAmount(e.target.value); setErr('') }}
+            onKeyDown={e => { if (e.key === 'Enter') handleConfirm() }}
+            autoFocus
+            style={{ width: '100%', background: '#0d1220', border: '1px solid ' + (err ? '#ef4444' : '#1e2a45'), color: '#f1f5f9', fontFamily: "'JetBrains Mono', monospace", fontSize: 28, fontWeight: 700, padding: '16px 16px 16px 36px', borderRadius: 12, outline: 'none', textAlign: 'right', boxSizing: 'border-box' }}
+          />
         </div>
-        {err && <div style={{ fontSize: 11, color: '#ef4444', marginBottom: 16 }}>{err}</div>}
+        {err && <div style={{ fontSize: 12, color: '#ef4444', marginBottom: 16, fontWeight: 600 }}>⚠ {err}</div>}
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
           <button onClick={handleConfirm} style={{ width: '100%', padding: '14px', borderRadius: 10, border: 'none', background: '#10b981', color: '#fff', fontFamily: "'DM Sans', sans-serif", fontSize: 14, fontWeight: 700, cursor: 'pointer' }}>Confirmar y Salir</button>
           <button onClick={onSkip} style={{ width: '100%', padding: '12px', borderRadius: 10, border: '1px solid #1e2a45', background: 'transparent', color: '#4a5568', fontFamily: "'DM Sans', sans-serif", fontSize: 12, cursor: 'pointer' }}>Omitir</button>
@@ -157,7 +164,6 @@ function CameraModal({ onCapture, onClose, title = '📸 Foto de entrada' }) {
   )
 }
 
-// ── Bloque de ventas semanales (durante turno y al terminar) ──
 function WeekSalesBlock({ thisWeekSales, lastWeekSales, goal, isDone }) {
   const hasThis  = thisWeekSales > 0
   const hasLast  = lastWeekSales > 0
@@ -172,16 +178,12 @@ function WeekSalesBlock({ thisWeekSales, lastWeekSales, goal, isDone }) {
   return (
     <div style={{ background: '#1a2035', border: '1px solid #1e2a45', borderRadius: 12, padding: 16 }}>
       <div style={{ fontSize: 10, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '.6px', color: '#4a5568', marginBottom: 12 }}>Ventas esta semana</div>
-
-      {/* Acumulado */}
       {hasThis && (
         <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, marginBottom: hasGoal || hasLast ? 12 : 0 }}>
           <span style={{ fontSize: 26, fontWeight: 700, fontFamily: "'JetBrains Mono', monospace", color: '#10b981' }}>{fmtMoney(thisWeekSales)}</span>
           {!isDone && <span style={{ fontSize: 11, color: '#4a5568' }}>acumulado</span>}
         </div>
       )}
-
-      {/* Barra de meta */}
       {hasGoal && (
         <div style={{ marginBottom: hasLast ? 12 : 0 }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
@@ -194,8 +196,6 @@ function WeekSalesBlock({ thisWeekSales, lastWeekSales, goal, isDone }) {
           {pct >= 100 && <div style={{ fontSize: 11, color: '#10b981', fontWeight: 600, marginTop: 6, textAlign: 'center' }}>🎉 ¡Meta alcanzada!</div>}
         </div>
       )}
-
-      {/* Comparación semana anterior */}
       {hasLast && (
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 10px', borderRadius: 8, background: '#0d1220' }}>
           <span style={{ fontSize: 18 }}>{isUp ? '📈' : '📉'}</span>
@@ -237,7 +237,6 @@ export default function CheckinPage({ params }) {
   const [showCamera, setShowCamera]   = useState(null)
   const [confirmAction, setConfirmAction] = useState(null)
 
-  // Datos de ventas semanales y meta
   const [thisWeekSales, setThisWeekSales] = useState(0)
   const [lastWeekSales, setLastWeekSales] = useState(0)
   const [weeklyGoal,    setWeeklyGoal]    = useState(0)
@@ -253,8 +252,6 @@ export default function CheckinPage({ params }) {
   async function loadWeeklyData(empId, tz) {
     const today = new Date().toLocaleDateString('en-CA', { timeZone: tz || 'America/Cancun' })
     const thisWeek = getWeekBounds(today)
-
-    // Fecha lunes de semana anterior
     const lastMonDate = new Date(thisWeek.start + 'T12:00:00')
     lastMonDate.setDate(lastMonDate.getDate() - 7)
     const lastWeek = getWeekBounds(lastMonDate.toLocaleDateString('en-CA'))
@@ -265,11 +262,8 @@ export default function CheckinPage({ params }) {
       supabase.from('employee_goals').select('weekly_goal').eq('employee_id', empId).maybeSingle(),
     ])
 
-    const sumThis = (thisRes.data || []).reduce((s, r) => s + (parseFloat(r.sales_amount) || 0), 0)
-    const sumLast = (lastRes.data || []).reduce((s, r) => s + (parseFloat(r.sales_amount) || 0), 0)
-
-    setThisWeekSales(sumThis)
-    setLastWeekSales(sumLast)
+    setThisWeekSales((thisRes.data || []).reduce((s, r) => s + (parseFloat(r.sales_amount) || 0), 0))
+    setLastWeekSales((lastRes.data || []).reduce((s, r) => s + (parseFloat(r.sales_amount) || 0), 0))
     setWeeklyGoal(parseFloat(goalRes.data?.weekly_goal) || 0)
   }
 
@@ -460,10 +454,7 @@ export default function CheckinPage({ params }) {
       setLoading(false); return
     }
 
-    // Actualizar acumulado de ventas de la semana con el nuevo monto
-    if (salesAmount > 0) {
-      setThisWeekSales(prev => prev + salesAmount)
-    }
+    if (salesAmount > 0) setThisWeekSales(prev => prev + salesAmount)
 
     setTodayRecord(updatedRecord); setIsIn(false); setIsDone(true); setOnLunch(false); setOnBreak(false)
     setCoTime(fmtTime(checkOut, tz))
@@ -593,10 +584,7 @@ export default function CheckinPage({ params }) {
           )}
           <div style={{ marginTop: 14, paddingTop: 14, borderTop: '1px solid #1e2a45', fontSize: 11, color: '#4a5568' }}>¡Hasta mañana!</div>
         </div>
-
-        {/* Bloque de ventas semanales — solo si tiene ventas esta semana, meta o semana anterior */}
         <WeekSalesBlock thisWeekSales={thisWeekSales} lastWeekSales={lastWeekSales} goal={weeklyGoal} isDone={true} />
-
         {events.length > 0 && (
           <div style={S.timeline}>
             <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 10 }}>Registro del Día</div>
@@ -650,7 +638,6 @@ export default function CheckinPage({ params }) {
 
       <div style={S.bar}><img src='/logo.jpeg' style={S.logo} alt='GM' /><span style={{ fontSize: 13, fontWeight: 600 }}>{site?.name}</span></div>
       <div style={S.container}>
-
         <div style={S.card}>
           <div style={{ fontSize: 16, fontWeight: 700 }}>{emp?.name}</div>
           <div style={S.sub}>{emp?.role}</div>
@@ -697,7 +684,6 @@ export default function CheckinPage({ params }) {
                 </div>
               </div>
             )}
-            {/* Acumulado semanal discreto — durante el turno */}
             {thisWeekSales > 0 && (
               <div style={{ textAlign: 'center' }}>
                 <div style={{ fontSize: 9, color: '#4a5568', textTransform: 'uppercase', letterSpacing: '.6px' }}>Esta semana</div>
@@ -762,45 +748,6 @@ export default function CheckinPage({ params }) {
         <button onClick={logout} style={{ background: 'none', border: 'none', color: '#ef4444', fontSize: 11, cursor: 'pointer', textAlign: 'center', padding: 8, fontFamily: "'DM Sans'" }}>
           Cerrar sesión (cambiar dispositivo)
         </button>
-      </div>
-    </div>
-  )
-}
-// REEMPLAZA SOLO la función SalesModal en checkin/[code]/page.js
-// Busca: "function SalesModal({ onConfirm, onSkip })"
-// Reemplaza todo el bloque hasta el cierre "}" antes de "function CameraModal"
-
-function SalesModal({ onConfirm, onSkip }) {
-  const [amount, setAmount] = useState('')
-  const [err, setErr] = useState('')
-
-  function handleConfirm() {
-    const val = parseFloat(amount.replace(/,/g, ''))
-    if (isNaN(val) || val < 0) { setErr('Ingresa un monto válido'); return }
-    if (val > 9999999) { setErr('El monto máximo es $9,999,999'); return }
-    onConfirm(val)
-  }
-
-  return (
-    <div style={{ position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', background: 'rgba(0,0,0,.8)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 200, backdropFilter: 'blur(6px)', padding: '0 16px' }}>
-      <div style={{ background: '#1a2035', border: '1px solid #1e2a45', borderRadius: 18, padding: 28, width: '100%', maxWidth: 360, textAlign: 'center' }}>
-        <div style={{ width: 56, height: 56, borderRadius: 16, background: 'rgba(16,185,129,.12)', border: '1px solid rgba(16,185,129,.2)', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 16px', fontSize: 26 }}>💰</div>
-        <div style={{ fontSize: 17, fontWeight: 700, marginBottom: 6 }}>Cierre del Día</div>
-        <div style={{ fontSize: 12, color: '#8892a8', marginBottom: 22 }}>¿Cuánto vendiste hoy?<br /><span style={{ fontSize: 11, color: '#4a5568' }}>Puedes omitirlo si no aplica.</span></div>
-        <div style={{ position: 'relative', marginBottom: err ? 8 : 20 }}>
-          <span style={{ position: 'absolute', left: 16, top: '50%', transform: 'translateY(-50%)', fontSize: 18, fontWeight: 700, color: '#4a5568', pointerEvents: 'none' }}>$</span>
-          <input type='number' inputMode='decimal' placeholder='0' value={amount}
-            onChange={e => { setAmount(e.target.value); setErr('') }}
-            onKeyDown={e => { if (e.key === 'Enter') handleConfirm() }}
-            autoFocus
-            style={{ width: '100%', background: '#0d1220', border: '1px solid ' + (err ? '#ef4444' : '#1e2a45'), color: '#f1f5f9', fontFamily: "'JetBrains Mono', monospace", fontSize: 28, fontWeight: 700, padding: '16px 16px 16px 36px', borderRadius: 12, outline: 'none', textAlign: 'right', boxSizing: 'border-box' }}
-          />
-        </div>
-        {err && <div style={{ fontSize: 12, color: '#ef4444', marginBottom: 16, fontWeight: 600 }}>⚠ {err}</div>}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-          <button onClick={handleConfirm} style={{ width: '100%', padding: '14px', borderRadius: 10, border: 'none', background: '#10b981', color: '#fff', fontFamily: "'DM Sans', sans-serif", fontSize: 14, fontWeight: 700, cursor: 'pointer' }}>Confirmar y Salir</button>
-          <button onClick={onSkip} style={{ width: '100%', padding: '12px', borderRadius: 10, border: '1px solid #1e2a45', background: 'transparent', color: '#4a5568', fontFamily: "'DM Sans', sans-serif", fontSize: 12, cursor: 'pointer' }}>Omitir</button>
-        </div>
       </div>
     </div>
   )
