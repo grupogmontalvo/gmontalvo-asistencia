@@ -66,7 +66,6 @@ export default function AdminPage() {
   const [goals, setGoals]       = useState([])
   const [companies, setCompanies] = useState([])
   const [selectedCompanyId, setSelectedCompanyId] = useState('')
-  // ── NUEVO: asignaciones de empleado → sitio ──────────────────────────────
   const [employeeSiteAssignments, setEmployeeSiteAssignments] = useState([])
   const [tab, setTab]         = useState('dashboard')
   const [modal, setModal]     = useState(null)
@@ -98,12 +97,10 @@ export default function AdminPage() {
     if (!adminUser) return
     setLoading(true)
     const companyId = isSuperAdmin ? (selectedCompanyId || null) : adminUser.company_id
-    // Empresas (solo superadmin)
     if (isSuperAdmin) {
       const { data: comps } = await supabase.from('companies').select('*').order('name')
       setCompanies(comps || [])
     }
-    // Sites
     let sitesQuery = supabase.from('sites').select('*').eq('active', true).order('name')
     let permSiteIds = null
     if (!isSuperAdmin) {
@@ -114,7 +111,6 @@ export default function AdminPage() {
     } else if (companyId) {
       sitesQuery = sitesQuery.eq('company_id', companyId)
     }
-    // Employees — los gerentes solo ven empleados asignados a sus sitios
     let empsQuery = supabase.from('employees').select('*').eq('active', true).order('name')
     if (companyId) empsQuery = empsQuery.eq('company_id', companyId)
     if (!isSuperAdmin && permSiteIds) {
@@ -129,10 +125,8 @@ export default function AdminPage() {
         empsQuery = empsQuery.in('id', visibleEmpIds)
       }
     }
-    // Attendance
     let attQuery = supabase.from('attendance').select('*').order('date', { ascending: false })
     if (companyId) attQuery = attQuery.eq('company_id', companyId)
-    // Schedules — cargamos TODOS los de la empresa (necesario para detectar conflictos)
     let scQuery = supabase.from('schedules').select('*')
     if (companyId) scQuery = scQuery.eq('company_id', companyId)
     const [s, e, a, sc, g, esa] = await Promise.all([
@@ -214,7 +208,6 @@ export default function AdminPage() {
     }
     setToast('Sitio guardado'); setModal(null); load()
   }
-  // ── saveEmp ahora recibe siteIds ─────────────────────────────────────────
   async function saveEmp(data, weeklyGoal, siteIds) {
     const companyId = isSuperAdmin ? (selectedCompanyId || companies[0]?.id) : adminUser.company_id
     let empId = data.id
@@ -232,7 +225,6 @@ export default function AdminPage() {
       } else {
         await supabase.from('employee_goals').delete().eq('employee_id', empId)
       }
-      // Guardar puntos de venta asignados
       await supabase.from('employee_site_assignments').delete().eq('employee_id', empId)
       if (siteIds && siteIds.length > 0) {
         await supabase.from('employee_site_assignments').insert(siteIds.map(site_id => ({ employee_id: empId, site_id })))
@@ -274,11 +266,7 @@ export default function AdminPage() {
           {isSuperAdmin && (
             <div style={{ padding: '8px 10px', borderBottom: '1px solid #1e2a45', background: 'rgba(59,130,246,.05)' }}>
               <div style={{ fontSize: 9, color: '#4a5568', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '.5px', marginBottom: 4 }}>Empresa</div>
-              <select
-                value={selectedCompanyId}
-                onChange={e => setSelectedCompanyId(e.target.value)}
-                style={{ width: '100%', background: '#0d1220', border: '1px solid #1e2a45', color: '#f1f5f9', fontSize: 11, padding: '5px 8px', borderRadius: 5, fontFamily: 'inherit' }}
-              >
+              <select value={selectedCompanyId} onChange={e => setSelectedCompanyId(e.target.value)} style={{ width: '100%', background: '#0d1220', border: '1px solid #1e2a45', color: '#f1f5f9', fontSize: 11, padding: '5px 8px', borderRadius: 5, fontFamily: 'inherit' }}>
                 <option value=''>Todas</option>
                 {companies.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
               </select>
@@ -458,7 +446,6 @@ export default function AdminPage() {
                     const empScheds = schedules.filter(s => s.employee_id === emp.id && s.date >= today).sort((a,b) => a.date.localeCompare(b.date))
                     const nextSched = empScheds[0]; const nextSite = nextSched ? sites.find(s => s.id === nextSched.site_id) : null
                     const goal = goals.find(g => g.employee_id === emp.id)
-                    // Sitios asignados a este empleado
                     const empSiteIds = employeeSiteAssignments.filter(a => a.employee_id === emp.id).map(a => a.site_id)
                     const empSiteNames = empSiteIds.map(sid => sites.find(s => s.id === sid)?.name).filter(Boolean)
                     return (
@@ -474,7 +461,6 @@ export default function AdminPage() {
                           <span style={{ fontSize: 11, color: '#8892a8' }}>{emp.role}</span>
                           {emp.free_roam && <span style={{ marginLeft: 6, color: '#10b981', fontSize: 9, fontWeight: 600, background: 'rgba(16,185,129,.12)', padding: '1px 6px', borderRadius: 3 }}>Libre</span>}
                         </td>
-                        {/* ── NUEVO: columna de sucursales asignadas ── */}
                         <td style={{ padding: '9px 16px' }}>
                           {empSiteNames.length > 0
                             ? <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
@@ -579,10 +565,7 @@ export default function AdminPage() {
                       <div style={{ fontSize: 10, color: '#8892a8', marginTop: 4 }}>{compSites} sucursal{compSites !== 1 ? 'es' : ''} · {compEmps} empleado{compEmps !== 1 ? 's' : ''}</div>
                     </div>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                      <button
-                        onClick={() => setSelectedCompanyId(company.id)}
-                        style={{ padding: '5px 10px', borderRadius: 5, border: '1px solid rgba(59,130,246,.25)', background: selectedCompanyId === company.id ? 'rgba(59,130,246,.2)' : 'rgba(59,130,246,.1)', color: '#3b82f6', fontSize: 10, cursor: 'pointer', fontFamily: 'inherit', fontWeight: 600 }}
-                      >Ver datos</button>
+                      <button onClick={() => setSelectedCompanyId(company.id)} style={{ padding: '5px 10px', borderRadius: 5, border: '1px solid rgba(59,130,246,.25)', background: selectedCompanyId === company.id ? 'rgba(59,130,246,.2)' : 'rgba(59,130,246,.1)', color: '#3b82f6', fontSize: 10, cursor: 'pointer', fontFamily: 'inherit', fontWeight: 600 }}>Ver datos</button>
                       <button onClick={() => setModal({ type: 'company', data: company })} style={{ background: 'none', border: 'none', color: '#8892a8', cursor: 'pointer', fontSize: 11, fontFamily: 'inherit' }}>Editar</button>
                     </div>
                   </div>
@@ -594,7 +577,6 @@ export default function AdminPage() {
         </div>
       </div>
       {sideEmp && <EmpSidePanel emp={sideEmp} att={att.filter(r => r.employee_id === sideEmp.id)} sites={sites} onClose={() => setSideEmp(null)} onRefresh={load} />}
-      {/* ── EmpModal ahora recibe sites y currentSiteIds ── */}
       {modal?.type === 'emp' && <EmpModal
         data={modal.data?.emp || null}
         currentGoal={modal.data?.goal?.weekly_goal || ''}
@@ -605,7 +587,6 @@ export default function AdminPage() {
       />}
       {modal?.type === 'site'      && <SiteModal      data={modal.data} onSave={saveSite} onClose={() => setModal(null)} />}
       {modal?.type === 'qr'        && <QrModal        site={modal.data} url={getSiteUrl(modal.data.code)} onClose={() => setModal(null)} />}
-      {/* ── ScheduleModal recibe sites completos para detectar conflictos ── */}
       {modal?.type === 'schedule'  && <ScheduleModal  emp={modal.data} sites={sites} schedules={schedules.filter(s => s.employee_id === modal.data.id)} onSave={async () => { await load(); setToast('Horarios guardados'); setModal(null) }} onClose={() => setModal(null)} />}
       {modal?.type === 'adminUser' && <AdminUserModal data={modal.data} sites={sites} companies={companies} isSuperAdmin={isSuperAdmin} onSave={async () => { await load(); setToast('Usuario guardado'); setModal(null) }} onClose={() => setModal(null)} />}
       {modal?.type === 'company'   && <CompanyModal   data={modal.data} onSave={saveCompany} onClose={() => setModal(null)} />}
@@ -726,25 +707,14 @@ function EmpSidePanel({ emp, att, sites, onClose, onRefresh }) {
                     <td style={{ padding: '8px 14px', whiteSpace: 'nowrap' }}>
                       {isEditing ? (
                         <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
-                          <input
-                            type='number'
-                            value={editingSale.value}
-                            onChange={e => { setEditingSale(p => ({ ...p, value: e.target.value })); setSaleErr('') }}
-                            onKeyDown={e => { if (e.key === 'Enter') saveSale(r.id); if (e.key === 'Escape') setEditingSale(null) }}
-                            autoFocus
-                            style={{ width: 90, background: '#0d1220', border: '1px solid '+(saleErr?'#ef4444':'#3b82f6'), color: '#f1f5f9', fontSize: 11, padding: '4px 7px', borderRadius: 5, fontFamily: "'JetBrains Mono'", outline: 'none' }}
-                          />
+                          <input type='number' value={editingSale.value} onChange={e => { setEditingSale(p => ({ ...p, value: e.target.value })); setSaleErr('') }} onKeyDown={e => { if (e.key === 'Enter') saveSale(r.id); if (e.key === 'Escape') setEditingSale(null) }} autoFocus style={{ width: 90, background: '#0d1220', border: '1px solid '+(saleErr?'#ef4444':'#3b82f6'), color: '#f1f5f9', fontSize: 11, padding: '4px 7px', borderRadius: 5, fontFamily: "'JetBrains Mono'", outline: 'none' }} />
                           <button onClick={() => saveSale(r.id)} style={{ background: 'rgba(16,185,129,.15)', border: '1px solid rgba(16,185,129,.3)', borderRadius: 4, color: '#10b981', fontSize: 12, cursor: 'pointer', padding: '3px 7px' }}>✓</button>
                           <button onClick={() => { setEditingSale(null); setSaleErr('') }} style={{ background: 'none', border: '1px solid #1e2a45', borderRadius: 4, color: '#8892a8', fontSize: 12, cursor: 'pointer', padding: '3px 7px' }}>✕</button>
                         </div>
                       ) : (
                         <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
                           <span style={{ fontSize: 11, fontFamily: "'JetBrains Mono'", color: r.sales_amount > 0 ? '#10b981' : '#4a5568' }}>{r.sales_amount > 0 ? '$'+Number(r.sales_amount).toLocaleString('es-MX') : '–'}</span>
-                          <button
-                            onClick={() => { setEditingSale({ id: r.id, value: r.sales_amount || 0 }); setSaleErr('') }}
-                            style={{ background: 'none', border: 'none', color: '#4a5568', cursor: 'pointer', fontSize: 11, padding: '1px 4px', borderRadius: 3, lineHeight: 1 }}
-                            title='Editar venta'
-                          >✎</button>
+                          <button onClick={() => { setEditingSale({ id: r.id, value: r.sales_amount || 0 }); setSaleErr('') }} style={{ background: 'none', border: 'none', color: '#4a5568', cursor: 'pointer', fontSize: 11, padding: '1px 4px', borderRadius: 3, lineHeight: 1 }} title='Editar venta'>✎</button>
                         </div>
                       )}
                       {isEditing && saleErr && <div style={{ fontSize: 9, color: '#ef4444', marginTop: 2 }}>{saleErr}</div>}
@@ -768,7 +738,6 @@ function EmpModal({ data, currentGoal, sites, currentSiteIds, onSave, onClose })
   const [f, setF] = useState(data || { name: '', email: '', phone: '', role: 'Vendedor(a)', skip_sales: false, skip_photo: false })
   const [weeklyGoal, setWeeklyGoal] = useState(currentGoal ? String(currentGoal) : '')
   const [goalErr, setGoalErr] = useState('')
-  // ── NUEVO: puntos de venta asignados ────────────────────────────────────
   const [selSites, setSelSites] = useState(currentSiteIds || [])
   const upd = (k, v) => setF(p => ({ ...p, [k]: v }))
   const valid = f.name?.trim() && f.email?.trim()
@@ -798,7 +767,6 @@ function EmpModal({ data, currentGoal, sites, currentSiteIds, onSave, onClose })
             <option>Vendedor(a)</option><option>Encargado(a)</option><option>Gerente Regional</option><option>Supervisor(a)</option>
           </select>
         </div>
-        {/* ── NUEVO: asignación de puntos de venta ── */}
         {sites.length > 0 && (
           <div style={{ marginBottom: 14, borderTop: '1px solid #1e2a45', paddingTop: 12 }}>
             <div style={{ fontSize: 10, fontWeight: 600, color: '#4a5568', textTransform: 'uppercase', letterSpacing: '.5px', marginBottom: 8 }}>Puntos de venta asignados</div>
@@ -863,47 +831,24 @@ function SiteModal({ data, onSave, onClose }) {
       const lat = parseFloat(f.lat) || 21.1619
       const lng = parseFloat(f.lng) || -86.8515
       const map = L.map(mapRef.current, { zoomControl: true }).setView([lat, lng], hasGps ? 16 : 13)
-      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-        attribution: '© <a href="https://openstreetmap.org">OpenStreetMap</a>'
-      }).addTo(map)
+      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution: '© <a href="https://openstreetmap.org">OpenStreetMap</a>' }).addTo(map)
       const marker = L.marker([lat, lng], { draggable: true }).addTo(map)
-      marker.on('dragend', e => {
-        const pos = e.target.getLatLng()
-        setF(p => ({ ...p, lat: parseFloat(pos.lat.toFixed(6)), lng: parseFloat(pos.lng.toFixed(6)) }))
-      })
-      mapInstanceRef.current = map
-      markerRef.current = marker
+      marker.on('dragend', e => { const pos = e.target.getLatLng(); setF(p => ({ ...p, lat: parseFloat(pos.lat.toFixed(6)), lng: parseFloat(pos.lng.toFixed(6)) })) })
+      mapInstanceRef.current = map; markerRef.current = marker
     }
     function loadLeaflet() {
-      if (!document.querySelector('link[href*="leaflet"]')) {
-        const css = document.createElement('link')
-        css.rel = 'stylesheet'
-        css.href = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css'
-        document.head.appendChild(css)
-      }
+      if (!document.querySelector('link[href*="leaflet"]')) { const css = document.createElement('link'); css.rel = 'stylesheet'; css.href = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css'; document.head.appendChild(css) }
       if (window.L) { setTimeout(initMap, 50); return }
-      if (document.querySelector('script[src*="leaflet"]')) {
-        const existing = document.querySelector('script[src*="leaflet"]')
-        if (existing._loaded) { setTimeout(initMap, 50) }
-        else { existing.addEventListener('load', () => setTimeout(initMap, 50)) }
-        return
-      }
-      const script = document.createElement('script')
-      script.src = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js'
-      script.onload = () => { script._loaded = true; setTimeout(initMap, 50) }
-      document.head.appendChild(script)
+      if (document.querySelector('script[src*="leaflet"]')) { const ex = document.querySelector('script[src*="leaflet"]'); if (ex._loaded) setTimeout(initMap, 50); else ex.addEventListener('load', () => setTimeout(initMap, 50)); return }
+      const script = document.createElement('script'); script.src = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js'; script.onload = () => { script._loaded = true; setTimeout(initMap, 50) }; document.head.appendChild(script)
     }
     loadLeaflet()
-    return () => {
-      if (mapInstanceRef.current) { mapInstanceRef.current.remove(); mapInstanceRef.current = null; markerRef.current = null }
-    }
+    return () => { if (mapInstanceRef.current) { mapInstanceRef.current.remove(); mapInstanceRef.current = null; markerRef.current = null } }
   }, [])
   useEffect(() => {
     if (!mapInstanceRef.current || !markerRef.current) return
     const lat = parseFloat(f.lat); const lng = parseFloat(f.lng)
-    if (!isNaN(lat) && !isNaN(lng) && lat !== 0 && lng !== 0) {
-      markerRef.current.setLatLng([lat, lng])
-    }
+    if (!isNaN(lat) && !isNaN(lng) && lat !== 0 && lng !== 0) markerRef.current.setLatLng([lat, lng])
   }, [f.lat, f.lng])
   async function searchLocation() {
     if (!searchQuery.trim()) return
@@ -911,76 +856,35 @@ function SiteModal({ data, onSave, onClose }) {
     try {
       const res = await fetch(`https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(searchQuery)}&format=json&limit=5&countrycodes=mx`)
       const results = await res.json()
-      if (results.length === 0) { setSearchErr('No se encontró la ubicación. Intenta con más detalle.'); setSearching(false); return }
+      if (results.length === 0) { setSearchErr('No se encontró la ubicación.'); setSearching(false); return }
       const { lat, lon, display_name } = results[0]
-      const newLat = parseFloat(parseFloat(lat).toFixed(6))
-      const newLng = parseFloat(parseFloat(lon).toFixed(6))
+      const newLat = parseFloat(parseFloat(lat).toFixed(6)); const newLng = parseFloat(parseFloat(lon).toFixed(6))
       setF(p => ({ ...p, lat: newLat, lng: newLng, address: p.address || display_name.split(',').slice(0,3).join(',').trim() }))
-      if (mapInstanceRef.current && markerRef.current) {
-        mapInstanceRef.current.setView([newLat, newLng], 17)
-        markerRef.current.setLatLng([newLat, newLng])
-      }
-    } catch (e) { setSearchErr('Error al buscar. Revisa tu conexión.') }
+      if (mapInstanceRef.current && markerRef.current) { mapInstanceRef.current.setView([newLat, newLng], 17); markerRef.current.setLatLng([newLat, newLng]) }
+    } catch (e) { setSearchErr('Error al buscar.') }
     setSearching(false)
   }
   return (
     <div onClick={onClose} style={{ position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', background: 'rgba(0,0,0,.7)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 200 }}>
       <div onClick={e => e.stopPropagation()} style={{ background: '#1a2035', border: '1px solid #1e2a45', borderRadius: 12, padding: 22, width: '100%', maxWidth: 520, maxHeight: '92vh', overflow: 'auto' }}>
         <h3 style={{ fontSize: 15, fontWeight: 700, marginBottom: 14 }}>{isNew ? 'Nuevo Sitio' : 'Editar Sitio'}</h3>
-        <div style={{ marginBottom: 10 }}>
-          <label style={{ fontSize: 10, fontWeight: 600, color: '#8892a8', display: 'block', marginBottom: 4 }}>Nombre del sitio</label>
-          <input value={f.name||''} onChange={e => upd('name', e.target.value)} style={{ width:'100%',background:'#0d1220',border:'1px solid #1e2a45',color:'#f1f5f9',fontSize:12,padding:'8px 10px',borderRadius:6,outline:'none',fontFamily:'inherit' }} placeholder='Ej: Plaza Américas Cancún' />
-        </div>
-        <div style={{ marginBottom: 6 }}>
-          <label style={{ fontSize: 10, fontWeight: 600, color: '#8892a8', display: 'block', marginBottom: 4 }}>Buscar ubicación</label>
+        <div style={{ marginBottom: 10 }}><label style={{ fontSize: 10, fontWeight: 600, color: '#8892a8', display: 'block', marginBottom: 4 }}>Nombre del sitio</label><input value={f.name||''} onChange={e => upd('name', e.target.value)} style={{ width:'100%',background:'#0d1220',border:'1px solid #1e2a45',color:'#f1f5f9',fontSize:12,padding:'8px 10px',borderRadius:6,outline:'none',fontFamily:'inherit' }} placeholder='Ej: Plaza Américas Cancún' /></div>
+        <div style={{ marginBottom: 6 }}><label style={{ fontSize: 10, fontWeight: 600, color: '#8892a8', display: 'block', marginBottom: 4 }}>Buscar ubicación</label>
           <div style={{ display: 'flex', gap: 6 }}>
-            <input
-              value={searchQuery}
-              onChange={e => setSearchQuery(e.target.value)}
-              onKeyDown={e => e.key === 'Enter' && searchLocation()}
-              placeholder='Ej: Plaza Américas Cancún, Quintana Roo'
-              style={{ flex:1, background:'#0d1220', border:'1px solid #1e2a45', color:'#f1f5f9', fontSize:12, padding:'8px 10px', borderRadius:6, outline:'none', fontFamily:'inherit' }}
-            />
-            <button onClick={searchLocation} disabled={searching} style={{ padding:'8px 14px', borderRadius:6, border:'none', background:'#3b82f6', color:'#fff', fontSize:12, fontWeight:600, cursor:searching?'wait':'pointer', fontFamily:'inherit', whiteSpace:'nowrap' }}>
-              {searching ? '...' : '🔍 Buscar'}
-            </button>
+            <input value={searchQuery} onChange={e => setSearchQuery(e.target.value)} onKeyDown={e => e.key === 'Enter' && searchLocation()} placeholder='Ej: Plaza Américas Cancún, Quintana Roo' style={{ flex:1,background:'#0d1220',border:'1px solid #1e2a45',color:'#f1f5f9',fontSize:12,padding:'8px 10px',borderRadius:6,outline:'none',fontFamily:'inherit' }} />
+            <button onClick={searchLocation} disabled={searching} style={{ padding:'8px 14px',borderRadius:6,border:'none',background:'#3b82f6',color:'#fff',fontSize:12,fontWeight:600,cursor:searching?'wait':'pointer',fontFamily:'inherit',whiteSpace:'nowrap' }}>{searching ? '...' : '🔍 Buscar'}</button>
           </div>
           {searchErr && <div style={{ fontSize: 11, color: '#f59e0b', marginTop: 4 }}>⚠ {searchErr}</div>}
         </div>
-        <div style={{ marginBottom: 10, borderRadius: 8, overflow: 'hidden', border: '1px solid #1e2a45' }}>
-          <div ref={mapRef} style={{ height: 220, width: '100%', background: '#0d1220' }} />
-        </div>
-        <div style={{ fontSize: 10, color: '#4a5568', marginBottom: 12 }}>
-          {hasGps
-            ? `📍 ${f.lat}, ${f.lng} — arrastra el marcador para ajustar la posición`
-            : '⚠️ Sin coordenadas — busca la ubicación o arrastra el marcador'}
-        </div>
-        <div style={{ marginBottom: 10 }}>
-          <label style={{ fontSize: 10, fontWeight: 600, color: '#8892a8', display: 'block', marginBottom: 4 }}>Dirección (texto)</label>
-          <input value={f.address||''} onChange={e => upd('address', e.target.value)} style={{ width:'100%',background:'#0d1220',border:'1px solid #1e2a45',color:'#f1f5f9',fontSize:12,padding:'8px 10px',borderRadius:6,outline:'none',fontFamily:'inherit' }} placeholder='Dirección completa' />
-        </div>
+        <div style={{ marginBottom: 10, borderRadius: 8, overflow: 'hidden', border: '1px solid #1e2a45' }}><div ref={mapRef} style={{ height: 220, width: '100%', background: '#0d1220' }} /></div>
+        <div style={{ fontSize: 10, color: '#4a5568', marginBottom: 12 }}>{hasGps ? `📍 ${f.lat}, ${f.lng} — arrastra el marcador para ajustar` : '⚠️ Sin coordenadas — busca la ubicación o arrastra el marcador'}</div>
+        <div style={{ marginBottom: 10 }}><label style={{ fontSize: 10, fontWeight: 600, color: '#8892a8', display: 'block', marginBottom: 4 }}>Dirección (texto)</label><input value={f.address||''} onChange={e => upd('address', e.target.value)} style={{ width:'100%',background:'#0d1220',border:'1px solid #1e2a45',color:'#f1f5f9',fontSize:12,padding:'8px 10px',borderRadius:6,outline:'none',fontFamily:'inherit' }} /></div>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 14 }}>
-          <div>
-            <label style={{ fontSize: 10, fontWeight: 600, color: '#8892a8', display: 'block', marginBottom: 4 }}>Radio GPS (metros)</label>
-            <input type='number' step='any' value={f.radius_m??150} onChange={e => upd('radius_m', parseInt(e.target.value)||150)} style={{ width:'100%',background:'#0d1220',border:'1px solid #1e2a45',color:'#f1f5f9',fontSize:12,padding:'8px 10px',borderRadius:6,outline:'none',fontFamily:'inherit' }} />
-          </div>
-          <div>
-            <label style={{ fontSize: 10, fontWeight: 600, color: '#8892a8', display: 'block', marginBottom: 4 }}>Tolerancia (minutos)</label>
-            <input type='number' value={f.grace_mins||0} onChange={e => upd('grace_mins', parseInt(e.target.value)||0)} style={{ width:'100%',background:'#0d1220',border:'1px solid #1e2a45',color:'#f1f5f9',fontSize:12,padding:'8px 10px',borderRadius:6,outline:'none',fontFamily:'inherit' }} />
-          </div>
+          <div><label style={{ fontSize: 10, fontWeight: 600, color: '#8892a8', display: 'block', marginBottom: 4 }}>Radio GPS (metros)</label><input type='number' value={f.radius_m??150} onChange={e => upd('radius_m', parseInt(e.target.value)||150)} style={{ width:'100%',background:'#0d1220',border:'1px solid #1e2a45',color:'#f1f5f9',fontSize:12,padding:'8px 10px',borderRadius:6,outline:'none',fontFamily:'inherit' }} /></div>
+          <div><label style={{ fontSize: 10, fontWeight: 600, color: '#8892a8', display: 'block', marginBottom: 4 }}>Tolerancia (minutos)</label><input type='number' value={f.grace_mins||0} onChange={e => upd('grace_mins', parseInt(e.target.value)||0)} style={{ width:'100%',background:'#0d1220',border:'1px solid #1e2a45',color:'#f1f5f9',fontSize:12,padding:'8px 10px',borderRadius:6,outline:'none',fontFamily:'inherit' }} /></div>
         </div>
-        {isNew && (
-          <div style={{ background: 'rgba(59,130,246,.06)', border: '1px solid rgba(59,130,246,.15)', borderRadius: 8, padding: '10px 14px', marginBottom: 14 }}>
-            <div style={{ fontSize: 10, color: '#3b82f6', fontWeight: 600, marginBottom: 2 }}>Código QR</div>
-            <div style={{ fontSize: 11, color: '#4a5568' }}>Se generará automáticamente al guardar. Podrás verlo e imprimirlo desde la lista de sitios.</div>
-          </div>
-        )}
-        {!isNew && (
-          <div style={{ marginBottom: 14 }}>
-            <label style={{ fontSize: 10, fontWeight: 600, color: '#8892a8', display: 'block', marginBottom: 4 }}>Código QR</label>
-            <input value={f.code||''} onChange={e => upd('code', e.target.value.toUpperCase())} style={{ width:'100%',background:'#0d1220',border:'1px solid #1e2a45',color:'#f1f5f9',fontSize:12,padding:'8px 10px',borderRadius:6,outline:'none',fontFamily:"'JetBrains Mono'" }} />
-          </div>
-        )}
+        {isNew && <div style={{ background: 'rgba(59,130,246,.06)', border: '1px solid rgba(59,130,246,.15)', borderRadius: 8, padding: '10px 14px', marginBottom: 14 }}><div style={{ fontSize: 10, color: '#3b82f6', fontWeight: 600, marginBottom: 2 }}>Código QR</div><div style={{ fontSize: 11, color: '#4a5568' }}>Se generará automáticamente al guardar.</div></div>}
+        {!isNew && <div style={{ marginBottom: 14 }}><label style={{ fontSize: 10, fontWeight: 600, color: '#8892a8', display: 'block', marginBottom: 4 }}>Código QR</label><input value={f.code||''} onChange={e => upd('code', e.target.value.toUpperCase())} style={{ width:'100%',background:'#0d1220',border:'1px solid #1e2a45',color:'#f1f5f9',fontSize:12,padding:'8px 10px',borderRadius:6,outline:'none',fontFamily:"'JetBrains Mono'" }} /></div>}
         <div style={{ display: 'flex', gap: 8 }}>
           <button disabled={!valid} onClick={() => onSave(f)} style={{ flex:1,padding:'10px 16px',borderRadius:7,border:'none',background:valid?'#3b82f6':'#1e2a45',color:'#fff',fontSize:12,fontWeight:600,cursor:valid?'pointer':'not-allowed',fontFamily:'inherit' }}>Guardar</button>
           <button onClick={onClose} style={{ padding:'10px 16px',borderRadius:7,border:'1px solid #1e2a45',background:'transparent',color:'#8892a8',fontSize:12,cursor:'pointer',fontFamily:'inherit' }}>Cancelar</button>
@@ -1002,9 +906,7 @@ function QrModal({ site, url, onClose }) {
       <div onClick={e => e.stopPropagation()} style={{ background: '#1a2035', border: '1px solid #1e2a45', borderRadius: 14, padding: 24, width: '100%', maxWidth: 380, textAlign: 'center' }}>
         <h3 style={{ fontSize: 16, fontWeight: 700, marginBottom: 4 }}>{site.name}</h3>
         <p style={{ fontSize: 12, color: '#8892a8', marginBottom: 16 }}>{site.address}</p>
-        <div style={{ background: '#fff', borderRadius: 12, padding: 20, display: 'inline-block', marginBottom: 16 }}>
-          <img src={qrImgUrl} alt='QR Code' style={{ width: 220, height: 220, display: 'block' }} />
-        </div>
+        <div style={{ background: '#fff', borderRadius: 12, padding: 20, display: 'inline-block', marginBottom: 16 }}><img src={qrImgUrl} alt='QR Code' style={{ width: 220, height: 220, display: 'block' }} /></div>
         <div style={{ fontFamily: "'JetBrains Mono'", fontSize: 18, fontWeight: 700, letterSpacing: 3, marginBottom: 4 }}>{site.code}</div>
         <div style={{ fontSize: 11, color: '#4a5568', marginBottom: 16, wordBreak: 'break-all' }}>{url}</div>
         <div style={{ display: 'flex', gap: 8, justifyContent: 'center' }}>
@@ -1022,33 +924,20 @@ function ScheduleModal({ emp, sites, schedules, onSave, onClose }) {
   const [weekStart, setWeekStart] = useState(() => getWeekStart(new Date()))
   const [week, setWeek] = useState({})
   const [saving, setSaving] = useState(false)
-  const weekDates = Array.from({ length: 7 }, (_, i) => {
-    const d = addDays(weekStart, i); return { date: dateStr(d), label: DAY_NAMES[i], d }
-  })
+  const weekDates = Array.from({ length: 7 }, (_, i) => { const d = addDays(weekStart, i); return { date: dateStr(d), label: DAY_NAMES[i], d } })
   useEffect(() => {
     const w = {}
     weekDates.forEach(({ date }) => {
       const existing = schedules.find(s => s.date === date)
-      // ── NUEVO: detectar si el día está bloqueado (asignado en otra sucursal) ──
       const siteInList = existing ? sites.find(s => s.id === existing.site_id) : null
       const isBlocked = !!(existing && !siteInList)
       w[date] = existing
-        ? {
-            on: true,
-            site_id: existing.site_id,
-            start_time: existing.start_time?.slice(0,5)||'10:00',
-            end_time: existing.end_time?.slice(0,5)||'19:00',
-            lunch_mins: existing.lunch_mins??60,
-            blocked: isBlocked,
-          }
+        ? { on: true, site_id: existing.site_id, start_time: existing.start_time?.slice(0,5)||'10:00', end_time: existing.end_time?.slice(0,5)||'19:00', lunch_mins: existing.lunch_mins??60, blocked: isBlocked }
         : { on: false, site_id: sites[0]?.id||'', start_time: '10:00', end_time: '19:00', lunch_mins: 60, blocked: false }
     })
     setWeek(w)
   }, [weekStart, schedules])
-  const toggle = (date) => {
-    if (week[date]?.blocked) return  // no permitir toggle si está bloqueado
-    setWeek(p => ({ ...p, [date]: { ...p[date], on: !p[date].on } }))
-  }
+  const toggle = (date) => { if (week[date]?.blocked) return; setWeek(p => ({ ...p, [date]: { ...p[date], on: !p[date].on } })) }
   const upd = (date, key, val) => setWeek(p => ({ ...p, [date]: { ...p[date], [key]: val } }))
   const copyToAll = (srcDate) => {
     const src = week[srcDate]; if (!src?.on || src.blocked) return
@@ -1056,25 +945,14 @@ function ScheduleModal({ emp, sites, schedules, onSave, onClose }) {
   }
   const save = async () => {
     setSaving(true)
-    // Solo modificar días NO bloqueados
     const editableDates = weekDates.filter(({date}) => !week[date]?.blocked).map(d => d.date)
-    if (editableDates.length > 0) {
-      await supabase.from('schedules').delete().eq('employee_id', emp.id).in('date', editableDates)
-    }
+    if (editableDates.length > 0) await supabase.from('schedules').delete().eq('employee_id', emp.id).in('date', editableDates)
     const inserts = []
-    weekDates.forEach(({ date }) => {
-      const day = week[date]
-      if (day?.on && !day.blocked && day.site_id) {
-        inserts.push({ employee_id: emp.id, date, site_id: day.site_id, start_time: day.start_time||'10:00', end_time: day.end_time||'19:00', lunch_mins: day.lunch_mins??60 })
-      }
-    })
+    weekDates.forEach(({ date }) => { const day = week[date]; if (day?.on && !day.blocked && day.site_id) inserts.push({ employee_id: emp.id, date, site_id: day.site_id, start_time: day.start_time||'10:00', end_time: day.end_time||'19:00', lunch_mins: day.lunch_mins??60 }) })
     if (inserts.length > 0) await supabase.from('schedules').insert(inserts)
     setSaving(false); onSave()
   }
-  const weekLabel = (() => {
-    const s = weekDates[0].d; const e = weekDates[6].d
-    return `${s.getDate()} ${s.toLocaleDateString('es-MX',{month:'short'})} – ${e.getDate()} ${e.toLocaleDateString('es-MX',{month:'short',year:'numeric'})}`
-  })()
+  const weekLabel = (() => { const s = weekDates[0].d; const e = weekDates[6].d; return `${s.getDate()} ${s.toLocaleDateString('es-MX',{month:'short'})} – ${e.getDate()} ${e.toLocaleDateString('es-MX',{month:'short',year:'numeric'})}` })()
   const iS = { width:'100%',background:'#0d1220',border:'1px solid #1e2a45',color:'#f1f5f9',fontSize:11,padding:'6px 8px',borderRadius:5,outline:'none',fontFamily:'inherit' }
   return (
     <div onClick={onClose} style={{ position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', background: 'rgba(0,0,0,.7)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 200, backdropFilter: 'blur(4px)' }}>
@@ -1095,41 +973,19 @@ function ScheduleModal({ emp, sites, schedules, onSave, onClose }) {
           {weekDates.map(({ date, label }) => {
             const day = week[date] || {}; const isOn = day.on; const isPast = date < todayDate; const isBlocked = day.blocked
             return (
-              <div key={date} style={{
-                background: isBlocked ? 'rgba(245,158,11,.05)' : isOn ? '#0d1220' : 'transparent',
-                border: '1px solid ' + (isBlocked ? 'rgba(245,158,11,.3)' : isOn ? '#1e2a45' : 'rgba(30,42,69,.3)'),
-                borderRadius: 8,
-                padding: isOn || isBlocked ? '10px 12px' : '8px 12px',
-                opacity: isPast && !isBlocked ? 0.55 : 1
-              }}>
+              <div key={date} style={{ background: isBlocked ? 'rgba(245,158,11,.05)' : isOn ? '#0d1220' : 'transparent', border: '1px solid ' + (isBlocked ? 'rgba(245,158,11,.3)' : isOn ? '#1e2a45' : 'rgba(30,42,69,.3)'), borderRadius: 8, padding: isOn || isBlocked ? '10px 12px' : '8px 12px', opacity: isPast && !isBlocked ? 0.55 : 1 }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                  {/* Checkbox — deshabilitado si bloqueado */}
-                  <button
-                    onClick={() => toggle(date)}
-                    disabled={isBlocked}
-                    style={{
-                      width: 22, height: 22, borderRadius: 6, flexShrink: 0, cursor: isBlocked ? 'not-allowed' : 'pointer',
-                      border: '2px solid ' + (isBlocked ? '#f59e0b' : isOn ? '#10b981' : '#4a5568'),
-                      background: isBlocked ? 'rgba(245,158,11,.15)' : isOn ? '#10b981' : 'transparent',
-                      display: 'flex', alignItems: 'center', justifyContent: 'center',
-                      color: isBlocked ? '#f59e0b' : '#fff', fontSize: 12, fontWeight: 700
-                    }}
-                  >
-                    {isBlocked ? '🔒' : isOn ? '✓' : ''}
-                  </button>
-                  <span style={{ fontSize:12, fontWeight:600, width:34, flexShrink:0, color: date===todayDate ? '#3b82f6' : '#f1f5f9' }}>{label}</span>
-                  {!emp.fixed_week && <span style={{ fontSize:10, color:'#4a5568', fontFamily:"'JetBrains Mono'", width:70, flexShrink:0 }}>{date.slice(5).replace('-','/')}</span>}
-                  {/* ── Día bloqueado — ocupado en otra sucursal ── */}
+                  <button onClick={() => toggle(date)} disabled={isBlocked} style={{ width:22,height:22,borderRadius:6,flexShrink:0,cursor:isBlocked?'not-allowed':'pointer',border:'2px solid '+(isBlocked?'#f59e0b':isOn?'#10b981':'#4a5568'),background:isBlocked?'rgba(245,158,11,.15)':isOn?'#10b981':'transparent',display:'flex',alignItems:'center',justifyContent:'center',color:isBlocked?'#f59e0b':'#fff',fontSize:12,fontWeight:700 }}>{isBlocked?'🔒':isOn?'✓':''}</button>
+                  <span style={{ fontSize:12,fontWeight:600,width:34,flexShrink:0,color:date===todayDate?'#3b82f6':'#f1f5f9' }}>{label}</span>
+                  {!emp.fixed_week && <span style={{ fontSize:10,color:'#4a5568',fontFamily:"'JetBrains Mono'",width:70,flexShrink:0 }}>{date.slice(5).replace('-','/')}</span>}
                   {isBlocked ? (
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                       <span style={{ fontSize: 11, color: '#f59e0b', fontWeight: 600 }}>Ocupado — otra sucursal</span>
-                      <span style={{ fontSize: 10, color: '#4a5568', fontFamily: "'JetBrains Mono'" }}>
-                        {day.start_time?.slice(0,5)} – {day.end_time?.slice(0,5)}
-                      </span>
+                      <span style={{ fontSize: 10, color: '#4a5568', fontFamily: "'JetBrains Mono'" }}>{day.start_time?.slice(0,5)} – {day.end_time?.slice(0,5)}</span>
                       <span style={{ fontSize: 9, color: '#4a5568', background: 'rgba(245,158,11,.1)', border: '1px solid rgba(245,158,11,.2)', borderRadius: 4, padding: '1px 7px' }}>No editable</span>
                     </div>
                   ) : isOn ? (
-                    <div style={{ display:'flex', alignItems:'center', gap:6, flex:1, flexWrap:'wrap' }}>
+                    <div style={{ display:'flex',alignItems:'center',gap:6,flex:1,flexWrap:'wrap' }}>
                       <select value={day.site_id||''} onChange={e => upd(date,'site_id',e.target.value)} style={{ ...iS,flex:'1 1 120px',minWidth:100,padding:'6px 8px' }}>
                         {sites.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
                       </select>
@@ -1168,77 +1024,124 @@ function AdminUserModal({ data, sites, companies, isSuperAdmin, onSave, onClose 
   const [selSites, setSelSites] = useState((data?.admin_site_permissions || []).map(p => p.site_id))
   const [saving, setSaving]   = useState(false)
   const [err, setErr]         = useState('')
+  // ── NUEVO: estado para mostrar el link generado ──────────────────────────
+  const [inviteLink, setInviteLink] = useState('')
+  const [copied, setCopied]   = useState(false)
   const valid = name.trim() && email.trim()
   const companySites = companyId ? sites.filter(s => s.company_id === companyId) : sites
+
   async function handleSave() {
     setSaving(true); setErr('')
     try {
       if (data?.id) {
+        // Editar usuario existente — sin invitación
         await supabase.from('admin_users').update({ name, role, company_id: role === 'superadmin' ? null : companyId }).eq('id', data.id)
         await supabase.from('admin_site_permissions').delete().eq('admin_user_id', data.id)
-        if (role !== 'superadmin' && selSites.length > 0) await supabase.from('admin_site_permissions').insert(selSites.map(site_id => ({ admin_user_id: data.id, site_id })))
+        if (role !== 'superadmin' && selSites.length > 0) {
+          await supabase.from('admin_site_permissions').insert(selSites.map(site_id => ({ admin_user_id: data.id, site_id })))
+        }
+        onSave()
       } else {
-        const res = await fetch('/api/admin/invite', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email: email.trim().toLowerCase(), name, role, site_ids: selSites, company_id: role === 'superadmin' ? null : companyId }) })
+        // Nuevo usuario — generar link
+        const res = await fetch('/api/admin/invite', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email: email.trim().toLowerCase(), name, role, site_ids: selSites, company_id: role === 'superadmin' ? null : companyId })
+        })
         const json = await res.json()
-        if (!res.ok) { setErr(json.error || 'Error al invitar usuario'); setSaving(false); return }
+        if (!res.ok) { setErr(json.error || 'Error al generar invitación'); setSaving(false); return }
+        // Mostrar el link para que lo copies y mandes por WhatsApp
+        setInviteLink(json.link)
+        setSaving(false)
       }
-      onSave()
     } catch (e) { setErr('Error inesperado. Intenta de nuevo.'); setSaving(false) }
   }
+
+  function copyLink() {
+    navigator.clipboard.writeText(inviteLink)
+    setCopied(true)
+    setTimeout(() => setCopied(false), 2000)
+  }
+
   const iS = { width:'100%',background:'#0d1220',border:'1px solid #1e2a45',color:'#f1f5f9',fontSize:12,padding:'8px 10px',borderRadius:6,outline:'none',fontFamily:'inherit' }
   return (
-    <div onClick={onClose} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.7)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 200 }}>
+    <div onClick={inviteLink ? undefined : onClose} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.7)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 200 }}>
       <div onClick={e => e.stopPropagation()} style={{ background: '#1a2035', border: '1px solid #1e2a45', borderRadius: 12, padding: 22, width: '100%', maxWidth: 460, maxHeight: '85vh', overflow: 'auto' }}>
         <h3 style={{ fontSize: 15, fontWeight: 700, marginBottom: 14 }}>{data ? 'Editar Usuario' : 'Invitar Usuario Admin'}</h3>
-        {err && <div style={{ background:'rgba(239,68,68,.1)',border:'1px solid rgba(239,68,68,.25)',borderRadius:7,padding:'10px 14px',fontSize:12,color:'#ef4444',marginBottom:14 }}>{err}</div>}
-        <div style={{ marginBottom: 10 }}>
-          <label style={{ fontSize:10,fontWeight:600,color:'#8892a8',display:'block',marginBottom:4 }}>Nombre</label>
-          <input value={name} onChange={e => setName(e.target.value)} style={iS} />
-        </div>
-        {!data && (
-          <div style={{ marginBottom: 10 }}>
-            <label style={{ fontSize:10,fontWeight:600,color:'#8892a8',display:'block',marginBottom:4 }}>Email</label>
-            <input type='email' value={email} onChange={e => setEmail(e.target.value)} style={iS} />
-            <div style={{ fontSize:10,color:'#4a5568',marginTop:4 }}>Recibirá un email para crear su contraseña</div>
+
+        {/* ── Pantalla de link generado ── */}
+        {inviteLink ? (
+          <div>
+            <div style={{ background: 'rgba(16,185,129,.08)', border: '1px solid rgba(16,185,129,.2)', borderRadius: 10, padding: '16px 18px', marginBottom: 16 }}>
+              <div style={{ fontSize: 13, fontWeight: 700, color: '#10b981', marginBottom: 6 }}>✅ Usuario creado — link listo</div>
+              <div style={{ fontSize: 11, color: '#8892a8', marginBottom: 12 }}>Copia este link y mándalo por WhatsApp a <strong style={{ color: '#f1f5f9' }}>{name}</strong>. Debe abrirlo en Chrome, no desde la app de Gmail.</div>
+              <div style={{ background: '#0d1220', border: '1px solid #1e2a45', borderRadius: 7, padding: '10px 12px', fontSize: 10, color: '#8892a8', wordBreak: 'break-all', fontFamily: "'JetBrains Mono'", marginBottom: 12, lineHeight: 1.5 }}>
+                {inviteLink}
+              </div>
+              <button
+                onClick={copyLink}
+                style={{ width: '100%', padding: '11px 16px', borderRadius: 7, border: 'none', background: copied ? '#10b981' : '#3b82f6', color: '#fff', fontSize: 13, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', transition: 'background .2s' }}
+              >
+                {copied ? '¡Copiado! ✓' : '📋 Copiar link para WhatsApp'}
+              </button>
+            </div>
+            <button onClick={onSave} style={{ width: '100%', padding: '10px 16px', borderRadius: 7, border: '1px solid #1e2a45', background: 'transparent', color: '#8892a8', fontSize: 12, cursor: 'pointer', fontFamily: 'inherit' }}>
+              Listo, cerrar
+            </button>
           </div>
-        )}
-        <div style={{ marginBottom: 10 }}>
-          <label style={{ fontSize:10,fontWeight:600,color:'#8892a8',display:'block',marginBottom:4 }}>Rol</label>
-          <select value={role} onChange={e => setRole(e.target.value)} style={iS}>
-            <option value='manager'>Gerente</option><option value='superadmin'>Super Admin</option>
-          </select>
-        </div>
-        {role !== 'superadmin' && companies.length > 0 && (
-          <div style={{ marginBottom: 10 }}>
-            <label style={{ fontSize:10,fontWeight:600,color:'#8892a8',display:'block',marginBottom:4 }}>Empresa</label>
-            <select value={companyId} onChange={e => { setCompanyId(e.target.value); setSelSites([]) }} style={iS}>
-              {companies.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-            </select>
-          </div>
-        )}
-        {role !== 'superadmin' && (
-          <div style={{ marginBottom: 16 }}>
-            <div style={{ fontSize:10,fontWeight:600,color:'#8892a8',textTransform:'uppercase',letterSpacing:'.5px',marginBottom:8 }}>Sucursales que puede ver</div>
-            {companySites.length === 0 ? (
-              <div style={{ fontSize:11,color:'#4a5568',padding:'8px 10px',background:'#0d1220',borderRadius:6 }}>No hay sucursales en esta empresa</div>
-            ) : (
-              <div style={{ display:'flex',flexDirection:'column',gap:6 }}>
-                {companySites.map(s => (
-                  <label key={s.id} style={{ display:'flex',alignItems:'center',gap:8,fontSize:12,cursor:'pointer',color:'#f1f5f9',padding:'6px 10px',borderRadius:6,background:selSites.includes(s.id)?'rgba(59,130,246,.1)':'transparent',border:'1px solid '+(selSites.includes(s.id)?'rgba(59,130,246,.3)':'#1e2a45') }}>
-                    <input type='checkbox' checked={selSites.includes(s.id)} onChange={() => setSelSites(p => p.includes(s.id)?p.filter(x=>x!==s.id):[...p,s.id])} style={{ accentColor:'#3b82f6' }} />
-                    {s.name}
-                  </label>
-                ))}
+        ) : (
+          <>
+            {err && <div style={{ background:'rgba(239,68,68,.1)',border:'1px solid rgba(239,68,68,.25)',borderRadius:7,padding:'10px 14px',fontSize:12,color:'#ef4444',marginBottom:14 }}>{err}</div>}
+            <div style={{ marginBottom: 10 }}>
+              <label style={{ fontSize:10,fontWeight:600,color:'#8892a8',display:'block',marginBottom:4 }}>Nombre</label>
+              <input value={name} onChange={e => setName(e.target.value)} style={iS} />
+            </div>
+            {!data && (
+              <div style={{ marginBottom: 10 }}>
+                <label style={{ fontSize:10,fontWeight:600,color:'#8892a8',display:'block',marginBottom:4 }}>Email</label>
+                <input type='email' value={email} onChange={e => setEmail(e.target.value)} style={iS} />
+                <div style={{ fontSize:10,color:'#4a5568',marginTop:4 }}>Se generará un link que le mandarás por WhatsApp</div>
               </div>
             )}
-          </div>
+            <div style={{ marginBottom: 10 }}>
+              <label style={{ fontSize:10,fontWeight:600,color:'#8892a8',display:'block',marginBottom:4 }}>Rol</label>
+              <select value={role} onChange={e => setRole(e.target.value)} style={iS}>
+                <option value='manager'>Gerente</option><option value='superadmin'>Super Admin</option>
+              </select>
+            </div>
+            {role !== 'superadmin' && companies.length > 0 && (
+              <div style={{ marginBottom: 10 }}>
+                <label style={{ fontSize:10,fontWeight:600,color:'#8892a8',display:'block',marginBottom:4 }}>Empresa</label>
+                <select value={companyId} onChange={e => { setCompanyId(e.target.value); setSelSites([]) }} style={iS}>
+                  {companies.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                </select>
+              </div>
+            )}
+            {role !== 'superadmin' && (
+              <div style={{ marginBottom: 16 }}>
+                <div style={{ fontSize:10,fontWeight:600,color:'#8892a8',textTransform:'uppercase',letterSpacing:'.5px',marginBottom:8 }}>Sucursales que puede ver</div>
+                {companySites.length === 0 ? (
+                  <div style={{ fontSize:11,color:'#4a5568',padding:'8px 10px',background:'#0d1220',borderRadius:6 }}>No hay sucursales en esta empresa</div>
+                ) : (
+                  <div style={{ display:'flex',flexDirection:'column',gap:6 }}>
+                    {companySites.map(s => (
+                      <label key={s.id} style={{ display:'flex',alignItems:'center',gap:8,fontSize:12,cursor:'pointer',color:'#f1f5f9',padding:'6px 10px',borderRadius:6,background:selSites.includes(s.id)?'rgba(59,130,246,.1)':'transparent',border:'1px solid '+(selSites.includes(s.id)?'rgba(59,130,246,.3)':'#1e2a45') }}>
+                        <input type='checkbox' checked={selSites.includes(s.id)} onChange={() => setSelSites(p => p.includes(s.id)?p.filter(x=>x!==s.id):[...p,s.id])} style={{ accentColor:'#3b82f6' }} />
+                        {s.name}
+                      </label>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+            <div style={{ display: 'flex', gap: 8 }}>
+              <button disabled={!valid||saving} onClick={handleSave} style={{ flex:1,padding:'10px 16px',borderRadius:7,border:'none',background:valid&&!saving?'#3b82f6':'#1e2a45',color:'#fff',fontSize:12,fontWeight:600,cursor:valid&&!saving?'pointer':'not-allowed',fontFamily:'inherit' }}>
+                {saving ? 'Generando...' : data ? 'Guardar' : 'Generar link de acceso'}
+              </button>
+              <button onClick={onClose} style={{ padding:'10px 16px',borderRadius:7,border:'1px solid #1e2a45',background:'transparent',color:'#8892a8',fontSize:12,cursor:'pointer',fontFamily:'inherit' }}>Cancelar</button>
+            </div>
+          </>
         )}
-        <div style={{ display: 'flex', gap: 8 }}>
-          <button disabled={!valid||saving} onClick={handleSave} style={{ flex:1,padding:'10px 16px',borderRadius:7,border:'none',background:valid&&!saving?'#3b82f6':'#1e2a45',color:'#fff',fontSize:12,fontWeight:600,cursor:valid&&!saving?'pointer':'not-allowed',fontFamily:'inherit' }}>
-            {saving?'Guardando...':data?'Guardar':'Enviar invitación'}
-          </button>
-          <button onClick={onClose} style={{ padding:'10px 16px',borderRadius:7,border:'1px solid #1e2a45',background:'transparent',color:'#8892a8',fontSize:12,cursor:'pointer',fontFamily:'inherit' }}>Cancelar</button>
-        </div>
       </div>
     </div>
   )
@@ -1249,33 +1152,15 @@ function CompanyModal({ data, onSave, onClose }) {
   const [slug, setSlug]   = useState(data?.slug || '')
   const [autoSlug, setAutoSlug] = useState(!data?.slug)
   const valid = name.trim() && slug.trim()
-  function handleNameChange(val) {
-    setName(val)
-    if (autoSlug) setSlug(slugify(val))
-  }
-  function handleSave() {
-    const d = { ...(data || {}), name: name.trim(), slug: slug.trim() }
-    onSave(d)
-  }
+  function handleNameChange(val) { setName(val); if (autoSlug) setSlug(slugify(val)) }
+  function handleSave() { const d = { ...(data || {}), name: name.trim(), slug: slug.trim() }; onSave(d) }
   const iS = { width:'100%',background:'#0d1220',border:'1px solid #1e2a45',color:'#f1f5f9',fontSize:12,padding:'8px 10px',borderRadius:6,outline:'none',fontFamily:'inherit' }
   return (
     <div onClick={onClose} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.7)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 200 }}>
       <div onClick={e => e.stopPropagation()} style={{ background: '#1a2035', border: '1px solid #1e2a45', borderRadius: 12, padding: 22, width: '100%', maxWidth: 400 }}>
         <h3 style={{ fontSize: 15, fontWeight: 700, marginBottom: 14 }}>{data ? 'Editar Empresa' : 'Nueva Empresa'}</h3>
-        <div style={{ marginBottom: 10 }}>
-          <label style={{ fontSize:10,fontWeight:600,color:'#8892a8',display:'block',marginBottom:4 }}>Nombre de la empresa</label>
-          <input value={name} onChange={e => handleNameChange(e.target.value)} style={iS} placeholder='Ej: Mi Empresa SA de CV' />
-        </div>
-        <div style={{ marginBottom: 18 }}>
-          <label style={{ fontSize:10,fontWeight:600,color:'#8892a8',display:'block',marginBottom:4 }}>Slug (identificador único)</label>
-          <input
-            value={slug}
-            onChange={e => { setSlug(slugify(e.target.value)); setAutoSlug(false) }}
-            style={{ ...iS, fontFamily:"'JetBrains Mono'" }}
-            placeholder='mi-empresa'
-          />
-          <div style={{ fontSize:10,color:'#4a5568',marginTop:4 }}>Solo letras, números y guiones. Se usa en URLs futuras.</div>
-        </div>
+        <div style={{ marginBottom: 10 }}><label style={{ fontSize:10,fontWeight:600,color:'#8892a8',display:'block',marginBottom:4 }}>Nombre de la empresa</label><input value={name} onChange={e => handleNameChange(e.target.value)} style={iS} placeholder='Ej: Mi Empresa SA de CV' /></div>
+        <div style={{ marginBottom: 18 }}><label style={{ fontSize:10,fontWeight:600,color:'#8892a8',display:'block',marginBottom:4 }}>Slug (identificador único)</label><input value={slug} onChange={e => { setSlug(slugify(e.target.value)); setAutoSlug(false) }} style={{ ...iS, fontFamily:"'JetBrains Mono'" }} placeholder='mi-empresa' /><div style={{ fontSize:10,color:'#4a5568',marginTop:4 }}>Solo letras, números y guiones.</div></div>
         <div style={{ display: 'flex', gap: 8 }}>
           <button disabled={!valid} onClick={handleSave} style={{ flex:1,padding:'10px 16px',borderRadius:7,border:'none',background:valid?'#3b82f6':'#1e2a45',color:'#fff',fontSize:12,fontWeight:600,cursor:valid?'pointer':'not-allowed',fontFamily:'inherit' }}>Guardar</button>
           <button onClick={onClose} style={{ padding:'10px 16px',borderRadius:7,border:'1px solid #1e2a45',background:'transparent',color:'#8892a8',fontSize:12,cursor:'pointer',fontFamily:'inherit' }}>Cancelar</button>
