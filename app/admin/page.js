@@ -2,18 +2,14 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { supabase } from '../../lib/supabase'
 import { useRouter } from 'next/navigation'
-
 const stLbl = { on_time: 'Puntual', tolerancia: 'Tolerancia', late: 'Retardo', absent: 'Falta' }
 const stClr = { on_time: '#10b981', tolerancia: '#f59e0b', late: '#ef4444', absent: '#ef4444' }
 const stBg  = { on_time: 'rgba(16,185,129,.12)', tolerancia: 'rgba(245,158,11,.12)', late: 'rgba(239,68,68,.12)', absent: 'rgba(239,68,68,.12)' }
-
 const MAX_SALE = 9999999
-
 function fmtTime(ts, tz) {
   if (!ts) return '-'
   return new Date(ts).toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: tz || 'America/Cancun' })
 }
-
 function fmtHours(h) {
   if (!h || h <= 0) return '–'
   const totalMins = Math.round(h * 60)
@@ -22,13 +18,11 @@ function fmtHours(h) {
   if (mins === 0) return `${hrs}h`
   return `${hrs}h ${mins}m`
 }
-
 function fmtDate(d) {
   if (!d) return '-'
   const [y, m, day] = d.split('-')
   return `${day}/${m}/${y}`
 }
-
 function getWeekStart(date) {
   const d = new Date(date)
   const day = d.getDay()
@@ -36,26 +30,21 @@ function getWeekStart(date) {
   d.setDate(d.getDate() + diff)
   return d
 }
-
 function dateStr(d) {
   return d.toLocaleDateString('en-CA', { timeZone: 'America/Cancun' })
 }
-
 function addDays(date, n) {
   const d = new Date(date)
   d.setDate(d.getDate() + n)
   return d
 }
-
 const DAY_NAMES = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom']
-
 function slugify(str) {
   return str.toLowerCase()
     .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
     .replace(/[^a-z0-9]+/g, '-')
     .replace(/^-+|-+$/g, '')
 }
-
 function autoCode(name) {
   const base = name.toUpperCase()
     .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
@@ -64,13 +53,11 @@ function autoCode(name) {
   const rand = Math.random().toString(36).slice(2, 5).toUpperCase()
   return base + rand
 }
-
 export default function AdminPage() {
   const router = useRouter()
   const [authUser,  setAuthUser]  = useState(null)
   const [adminUser, setAdminUser] = useState(null)
   const [authLoading, setAuthLoading] = useState(true)
-
   const [sites, setSites]       = useState([])
   const [emps, setEmps]         = useState([])
   const [att, setAtt]           = useState([])
@@ -79,23 +66,20 @@ export default function AdminPage() {
   const [goals, setGoals]       = useState([])
   const [companies, setCompanies] = useState([])
   const [selectedCompanyId, setSelectedCompanyId] = useState('')
-
+  // ── NUEVO: asignaciones de empleado → sitio ──────────────────────────────
+  const [employeeSiteAssignments, setEmployeeSiteAssignments] = useState([])
   const [tab, setTab]         = useState('dashboard')
   const [modal, setModal]     = useState(null)
   const [sideEmp, setSideEmp] = useState(null)
   const [loading, setLoading] = useState(true)
   const [toast, setToast]     = useState(null)
-
   const [filterEmp,    setFilterEmp]    = useState('')
   const [filterSite,   setFilterSite]   = useState('')
   const [filterFrom,   setFilterFrom]   = useState('')
   const [filterTo,     setFilterTo]     = useState('')
   const [filterStatus, setFilterStatus] = useState('')
-
   const [sidebarOpen, setSidebarOpen] = useState(true)
-
   const today = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Cancun' })
-
   useEffect(() => {
     supabase.auth.getUser().then(async ({ data: { user } }) => {
       if (!user) { router.push('/admin/login'); return }
@@ -105,80 +89,79 @@ export default function AdminPage() {
       setAuthLoading(false)
     })
   }, [])
-
   const isSuperAdmin = adminUser?.role === 'superadmin'
-
   async function handleLogout() {
     await supabase.auth.signOut()
     router.push('/admin/login')
   }
-
   const load = useCallback(async () => {
     if (!adminUser) return
     setLoading(true)
-
     const companyId = isSuperAdmin ? (selectedCompanyId || null) : adminUser.company_id
-
     // Empresas (solo superadmin)
     if (isSuperAdmin) {
       const { data: comps } = await supabase.from('companies').select('*').order('name')
       setCompanies(comps || [])
     }
-
     // Sites
     let sitesQuery = supabase.from('sites').select('*').eq('active', true).order('name')
+    let permSiteIds = null
     if (!isSuperAdmin) {
       const { data: perms } = await supabase.from('admin_site_permissions').select('site_id').eq('admin_user_id', adminUser.id)
-      const permSiteIds = (perms || []).map(p => p.site_id)
+      permSiteIds = (perms || []).map(p => p.site_id)
       if (permSiteIds.length === 0) { setSites([]); setEmps([]); setAtt([]); setSchedules([]); setLoading(false); return }
       sitesQuery = sitesQuery.in('id', permSiteIds)
     } else if (companyId) {
       sitesQuery = sitesQuery.eq('company_id', companyId)
     }
-
-    // Employees
+    // Employees — los gerentes solo ven empleados asignados a sus sitios
     let empsQuery = supabase.from('employees').select('*').eq('active', true).order('name')
     if (companyId) empsQuery = empsQuery.eq('company_id', companyId)
-
+    if (!isSuperAdmin && permSiteIds) {
+      const { data: empAssignments } = await supabase
+        .from('employee_site_assignments')
+        .select('employee_id')
+        .in('site_id', permSiteIds)
+      const visibleEmpIds = [...new Set((empAssignments || []).map(a => a.employee_id))]
+      if (visibleEmpIds.length === 0) {
+        empsQuery = empsQuery.in('id', ['00000000-0000-0000-0000-000000000000'])
+      } else {
+        empsQuery = empsQuery.in('id', visibleEmpIds)
+      }
+    }
     // Attendance
     let attQuery = supabase.from('attendance').select('*').order('date', { ascending: false })
     if (companyId) attQuery = attQuery.eq('company_id', companyId)
-
-    // Schedules
+    // Schedules — cargamos TODOS los de la empresa (necesario para detectar conflictos)
     let scQuery = supabase.from('schedules').select('*')
     if (companyId) scQuery = scQuery.eq('company_id', companyId)
-
-    const [s, e, a, sc, g] = await Promise.all([
+    const [s, e, a, sc, g, esa] = await Promise.all([
       sitesQuery, empsQuery, attQuery, scQuery,
       supabase.from('employee_goals').select('*'),
+      supabase.from('employee_site_assignments').select('*'),
     ])
     setSites(s.data || [])
     setEmps(e.data || [])
     setAtt(a.data || [])
     setSchedules(sc.data || [])
     setGoals(g.data || [])
-
+    setEmployeeSiteAssignments(esa.data || [])
     if (isSuperAdmin) {
       const { data: au } = await supabase.from('admin_users').select('*, admin_site_permissions(site_id)').order('created_at')
       setAdminUsers(au || [])
     }
-
     setLoading(false)
   }, [adminUser, isSuperAdmin, selectedCompanyId])
-
   useEffect(() => { if (adminUser) load() }, [adminUser, load])
   useEffect(() => {
     if (toast) { const t = setTimeout(() => setToast(null), 2500); return () => clearTimeout(t) }
   }, [toast])
   useEffect(() => { if (adminUser) load() }, [tab])
-
   if (authLoading) return (
     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100vh', background: '#0a0e1a', color: '#8892a8', fontFamily: "'DM Sans'" }}>Cargando...</div>
   )
-
   const todaySchedules = schedules.filter(s => s.date === today)
   const todayAtt       = att.filter(r => r.date === today)
-
   const dashRows = todaySchedules.map(sc => {
     const emp     = emps.find(e => e.id === sc.employee_id)
     const site    = sites.find(s => s.id === sc.site_id)
@@ -186,7 +169,6 @@ export default function AdminPage() {
     const now     = new Date()
     const tz      = site?.timezone || 'America/Cancun'
     const nowTime = now.toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: tz })
-
     let color, bg, statusLabel
     if (record?.check_out) {
       color = '#3b82f6'; bg = 'rgba(59,130,246,.12)'; statusLabel = 'Completó turno'
@@ -205,16 +187,13 @@ export default function AdminPage() {
     }
     return { sc, emp, site, record, color, bg, statusLabel }
   })
-
   const scheduledEmpIds = new Set(todaySchedules.map(s => s.employee_id))
   const unscheduledAtt  = todayAtt.filter(r => !scheduledEmpIds.has(r.employee_id))
-
   const statOnTime  = dashRows.filter(r => r.record && !r.record.check_out && r.record.status === 'on_time').length
   const statTol     = dashRows.filter(r => r.record && !r.record.check_out && (r.record.status === 'tolerancia' || r.record.status === 'late')).length
   const statDone    = dashRows.filter(r => r.record?.check_out).length + unscheduledAtt.filter(r => r.check_out).length
   const statMissing = dashRows.filter(r => !r.record && r.statusLabel === 'No se presentó').length
   const statPending = dashRows.filter(r => !r.record && r.statusLabel !== 'No se presentó').length
-
   const filteredAtt = att.filter(r => {
     if (filterEmp    && r.employee_id !== filterEmp)   return false
     if (filterSite   && r.site_id !== filterSite)       return false
@@ -223,7 +202,6 @@ export default function AdminPage() {
     if (filterStatus && r.status !== filterStatus)      return false
     return true
   })
-
   async function saveSite(data) {
     const companyId = isSuperAdmin ? (selectedCompanyId || companies[0]?.id) : adminUser.company_id
     if (!data.id) {
@@ -236,8 +214,8 @@ export default function AdminPage() {
     }
     setToast('Sitio guardado'); setModal(null); load()
   }
-
-  async function saveEmp(data, weeklyGoal) {
+  // ── saveEmp ahora recibe siteIds ─────────────────────────────────────────
+  async function saveEmp(data, weeklyGoal, siteIds) {
     const companyId = isSuperAdmin ? (selectedCompanyId || companies[0]?.id) : adminUser.company_id
     let empId = data.id
     if (empId) {
@@ -254,39 +232,36 @@ export default function AdminPage() {
       } else {
         await supabase.from('employee_goals').delete().eq('employee_id', empId)
       }
+      // Guardar puntos de venta asignados
+      await supabase.from('employee_site_assignments').delete().eq('employee_id', empId)
+      if (siteIds && siteIds.length > 0) {
+        await supabase.from('employee_site_assignments').insert(siteIds.map(site_id => ({ employee_id: empId, site_id })))
+      }
     }
     setToast('Empleado guardado'); setModal(null); load()
   }
-
   async function saveCompany(data) {
     if (data.id) { await supabase.from('companies').update(data).eq('id', data.id) }
     else { delete data.id; await supabase.from('companies').insert(data) }
     setToast('Empresa guardada'); setModal(null); load()
   }
-
   async function delEmp(id) { await supabase.from('employees').update({ active: false }).eq('id', id); setToast('Empleado eliminado'); setModal(null); load() }
   async function delSite(id) { await supabase.from('sites').update({ active: false }).eq('id', id); setToast('Sitio eliminado'); setModal(null); load() }
-
   function getSiteUrl(code) {
     if (typeof window === 'undefined') return ''
     return `${window.location.origin}/checkin/${code}`
   }
-
   if (loading) return (
     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100vh', background: '#0a0e1a', color: '#8892a8', fontFamily: "'DM Sans'" }}>Cargando...</div>
   )
-
   const inputStyle = { width: '100%', background: '#0d1220', border: '1px solid #1e2a45', color: '#f1f5f9', fontSize: 12, padding: '7px 10px', borderRadius: 6, outline: 'none', fontFamily: 'inherit' }
   const selectStyle = { ...inputStyle }
-
   const activeCompany = isSuperAdmin
     ? (selectedCompanyId ? companies.find(c => c.id === selectedCompanyId) : null)
     : companies.find(c => c.id === adminUser?.company_id)
-
   return (
     <div style={{ display: 'flex', height: '100vh', overflow: 'hidden', fontFamily: "'DM Sans', sans-serif", background: '#0a0e1a', color: '#f1f5f9' }}>
       {sidebarOpen && <div onClick={() => setSidebarOpen(false)} style={{ display: 'none', position: 'fixed', inset: 0, background: 'rgba(0,0,0,.5)', zIndex: 99 }} className="sidebar-overlay" />}
-
       <div style={{ width: sidebarOpen ? 210 : 0, minWidth: sidebarOpen ? 210 : 0, background: '#111827', borderRight: sidebarOpen ? '1px solid #1e2a45' : 'none', display: 'flex', flexDirection: 'column', flexShrink: 0, overflow: 'hidden', transition: 'width .2s ease, min-width .2s ease', position: 'relative', zIndex: 100 }}>
         <div style={{ width: 210, display: 'flex', flexDirection: 'column', height: '100%' }}>
           <div style={{ padding: 16, borderBottom: '1px solid #1e2a45', display: 'flex', alignItems: 'center', gap: 10 }}>
@@ -296,8 +271,6 @@ export default function AdminPage() {
               <div style={{ fontSize: 9, color: '#8892a8' }}>Control de Asistencia</div>
             </div>
           </div>
-
-          {/* Selector de empresa — solo superadmin */}
           {isSuperAdmin && (
             <div style={{ padding: '8px 10px', borderBottom: '1px solid #1e2a45', background: 'rgba(59,130,246,.05)' }}>
               <div style={{ fontSize: 9, color: '#4a5568', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '.5px', marginBottom: 4 }}>Empresa</div>
@@ -311,7 +284,6 @@ export default function AdminPage() {
               </select>
             </div>
           )}
-
           <nav style={{ flex: 1, padding: 8, display: 'flex', flexDirection: 'column', gap: 2 }}>
             <div style={{ fontSize: 9, fontWeight: 600, textTransform: 'uppercase', letterSpacing: 1, color: '#4a5568', padding: '8px 8px 4px' }}>Principal</div>
             {[{ id: 'dashboard', lb: 'Dashboard' }, { id: 'attendance', lb: 'Asistencia' }].map(n => (
@@ -334,7 +306,6 @@ export default function AdminPage() {
           </div>
         </div>
       </div>
-
       <div style={{ flex: 1, overflow: 'auto', display: 'flex', flexDirection: 'column' }}>
         <div style={{ padding: '16px 22px', borderBottom: '1px solid #1e2a45', background: '#111827', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexShrink: 0 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
@@ -352,9 +323,7 @@ export default function AdminPage() {
           {tab === 'users'      && isSuperAdmin && <button onClick={() => setModal({ type: 'adminUser', data: null })} style={{ padding: '7px 14px', borderRadius: 7, border: 'none', background: '#3b82f6', color: '#fff', fontSize: 12, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}>+ Nuevo Usuario</button>}
           {tab === 'companies'  && isSuperAdmin && <button onClick={() => setModal({ type: 'company', data: null })} style={{ padding: '7px 14px', borderRadius: 7, border: 'none', background: '#3b82f6', color: '#fff', fontSize: 12, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}>+ Nueva Empresa</button>}
         </div>
-
         <div style={{ flex: 1, padding: '18px 22px', overflow: 'auto' }}>
-
           {tab === 'dashboard' && <>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 12, marginBottom: 18 }}>
               {[['Puntuales',statOnTime,'#10b981'],['Con retardo',statTol,'#f59e0b'],['Completaron',statDone,'#3b82f6'],['No llegaron',statMissing,'#ef4444'],['Por llegar',statPending,'#8892a8']].map(([l,v,c]) => (
@@ -423,14 +392,13 @@ export default function AdminPage() {
               <div style={{ padding: 32, textAlign: 'center', color: '#4a5568', fontSize: 13, background: '#1a2035', borderRadius: 10, border: '1px solid #1e2a45' }}>No hay horarios cargados para hoy.</div>
             )}
           </>}
-
           {tab === 'attendance' && <>
             <div style={{ background: '#1a2035', border: '1px solid #1e2a45', borderRadius: 10, padding: '14px 16px', marginBottom: 14, display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 10 }}>
               {[['Empleado', filterEmp, setFilterEmp, emps.map(e => [e.id, e.name])],['Sucursal', filterSite, setFilterSite, sites.map(s => [s.id, s.name])]].map(([l, val, set, opts]) => (
                 <div key={l}>
                   <div style={{ fontSize: 10, color: '#4a5568', marginBottom: 4, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '.5px' }}>{l}</div>
                   <select value={val} onChange={e => set(e.target.value)} style={selectStyle}>
-                    <option value=''>Todo{l === 'Sucursal' ? 's' : 's'}</option>
+                    <option value=''>Todos</option>
                     {opts.map(([v, n]) => <option key={v} value={v}>{n}</option>)}
                   </select>
                 </div>
@@ -479,11 +447,10 @@ export default function AdminPage() {
               </table>
             </div>
           </>}
-
           {tab === 'employees' && (
             <div style={{ background: '#1a2035', border: '1px solid #1e2a45', borderRadius: 10, overflow: 'hidden' }}>
               <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-                <thead><tr>{['Empleado','Email','Rol','Meta semanal','Próx. turno',''].map(h => (
+                <thead><tr>{['Empleado','Email','Rol','Sucursales','Meta semanal','Próx. turno',''].map(h => (
                   <th key={h} style={{ textAlign: 'left', fontSize: 9, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '.6px', color: '#4a5568', padding: '9px 16px', borderBottom: '1px solid #1e2a45' }}>{h}</th>
                 ))}</tr></thead>
                 <tbody>
@@ -491,6 +458,9 @@ export default function AdminPage() {
                     const empScheds = schedules.filter(s => s.employee_id === emp.id && s.date >= today).sort((a,b) => a.date.localeCompare(b.date))
                     const nextSched = empScheds[0]; const nextSite = nextSched ? sites.find(s => s.id === nextSched.site_id) : null
                     const goal = goals.find(g => g.employee_id === emp.id)
+                    // Sitios asignados a este empleado
+                    const empSiteIds = employeeSiteAssignments.filter(a => a.employee_id === emp.id).map(a => a.site_id)
+                    const empSiteNames = empSiteIds.map(sid => sites.find(s => s.id === sid)?.name).filter(Boolean)
                     return (
                       <tr key={emp.id} style={{ borderBottom: '1px solid rgba(30,42,69,.3)' }}>
                         <td style={{ padding: '9px 16px' }}>
@@ -503,6 +473,17 @@ export default function AdminPage() {
                         <td style={{ padding: '9px 16px' }}>
                           <span style={{ fontSize: 11, color: '#8892a8' }}>{emp.role}</span>
                           {emp.free_roam && <span style={{ marginLeft: 6, color: '#10b981', fontSize: 9, fontWeight: 600, background: 'rgba(16,185,129,.12)', padding: '1px 6px', borderRadius: 3 }}>Libre</span>}
+                        </td>
+                        {/* ── NUEVO: columna de sucursales asignadas ── */}
+                        <td style={{ padding: '9px 16px' }}>
+                          {empSiteNames.length > 0
+                            ? <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+                                {empSiteNames.map(n => (
+                                  <span key={n} style={{ fontSize: 10, color: '#3b82f6', background: 'rgba(59,130,246,.1)', border: '1px solid rgba(59,130,246,.2)', borderRadius: 4, padding: '1px 7px' }}>{n}</span>
+                                ))}
+                              </div>
+                            : <span style={{ fontSize: 10, color: '#f59e0b' }}>Sin asignar</span>
+                          }
                         </td>
                         <td style={{ padding: '9px 16px' }}>
                           {goal ? <span style={{ fontSize: 11, fontFamily: "'JetBrains Mono'", color: '#10b981', fontWeight: 600 }}>${Number(goal.weekly_goal).toLocaleString('es-MX')}</span>
@@ -532,7 +513,6 @@ export default function AdminPage() {
               {emps.length === 0 && <div style={{ padding: 20, textAlign: 'center', color: '#4a5568', fontSize: 12 }}>No hay empleados. Agrega el primero.</div>}
             </div>
           )}
-
           {tab === 'sites' && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
               {sites.map(site => (
@@ -555,7 +535,6 @@ export default function AdminPage() {
               {sites.length === 0 && <div style={{ padding: 20, textAlign: 'center', color: '#4a5568', fontSize: 12, background: '#1a2035', borderRadius: 10, border: '1px solid #1e2a45' }}>No hay sitios. Agrega el primero.</div>}
             </div>
           )}
-
           {tab === 'users' && isSuperAdmin && (
             <div style={{ background: '#1a2035', border: '1px solid #1e2a45', borderRadius: 10, overflow: 'hidden' }}>
               <table style={{ width: '100%', borderCollapse: 'collapse' }}>
@@ -587,7 +566,6 @@ export default function AdminPage() {
               </table>
             </div>
           )}
-
           {tab === 'companies' && isSuperAdmin && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
               {companies.map(company => {
@@ -615,21 +593,26 @@ export default function AdminPage() {
           )}
         </div>
       </div>
-
       {sideEmp && <EmpSidePanel emp={sideEmp} att={att.filter(r => r.employee_id === sideEmp.id)} sites={sites} onClose={() => setSideEmp(null)} onRefresh={load} />}
-
-      {modal?.type === 'emp'       && <EmpModal       data={modal.data?.emp || null} currentGoal={modal.data?.goal?.weekly_goal || ''} onSave={saveEmp} onClose={() => setModal(null)} />}
+      {/* ── EmpModal ahora recibe sites y currentSiteIds ── */}
+      {modal?.type === 'emp' && <EmpModal
+        data={modal.data?.emp || null}
+        currentGoal={modal.data?.goal?.weekly_goal || ''}
+        sites={sites}
+        currentSiteIds={modal.data?.emp ? employeeSiteAssignments.filter(a => a.employee_id === modal.data.emp.id).map(a => a.site_id) : []}
+        onSave={saveEmp}
+        onClose={() => setModal(null)}
+      />}
       {modal?.type === 'site'      && <SiteModal      data={modal.data} onSave={saveSite} onClose={() => setModal(null)} />}
       {modal?.type === 'qr'        && <QrModal        site={modal.data} url={getSiteUrl(modal.data.code)} onClose={() => setModal(null)} />}
+      {/* ── ScheduleModal recibe sites completos para detectar conflictos ── */}
       {modal?.type === 'schedule'  && <ScheduleModal  emp={modal.data} sites={sites} schedules={schedules.filter(s => s.employee_id === modal.data.id)} onSave={async () => { await load(); setToast('Horarios guardados'); setModal(null) }} onClose={() => setModal(null)} />}
       {modal?.type === 'adminUser' && <AdminUserModal data={modal.data} sites={sites} companies={companies} isSuperAdmin={isSuperAdmin} onSave={async () => { await load(); setToast('Usuario guardado'); setModal(null) }} onClose={() => setModal(null)} />}
       {modal?.type === 'company'   && <CompanyModal   data={modal.data} onSave={saveCompany} onClose={() => setModal(null)} />}
-
       {toast && <div style={{ position: 'fixed', bottom: 20, right: 20, background: '#1a2035', border: '1px solid rgba(16,185,129,.25)', borderRadius: 8, padding: '10px 16px', fontSize: 12, fontWeight: 500, zIndex: 200, color: '#10b981' }}>{toast}</div>}
     </div>
   )
 }
-
 // ─── Emp Side Panel ───────────────────────────────────────────────────────────
 const ALL_COLS = [
   { key: 'date', label: 'Fecha' }, { key: 'site', label: 'Sucursal' }, { key: 'checkin', label: 'Entrada' },
@@ -637,29 +620,24 @@ const ALL_COLS = [
   { key: 'sales', label: 'Venta' }, { key: 'photo_in', label: 'Foto In' }, { key: 'photo_out', label: 'Foto Out' },
   { key: 'gps', label: 'GPS' }, { key: 'status', label: 'Estado' },
 ]
-
 function EmpSidePanel({ emp, att, sites, onClose, onRefresh }) {
   const [from, setFrom] = useState('')
   const [to,   setTo]   = useState('')
   const [visibleCols, setVisibleCols] = useState(['date','site','checkin','checkout','hours','time_out','sales','photo_in','photo_out','gps','status'])
   const [showColPicker, setShowColPicker] = useState(false)
-  const [editingSale, setEditingSale] = useState(null) // { id, value }
+  const [editingSale, setEditingSale] = useState(null)
   const [saleErr, setSaleErr] = useState('')
-
   const filtered = att.filter(r => {
     if (from && r.date < from) return false
     if (to   && r.date > to)   return false
     return true
   }).sort((a, b) => b.date.localeCompare(a.date))
-
   const totalHours = filtered.reduce((s, r) => s + (r.hours_worked || 0), 0)
   const totalSales = filtered.reduce((s, r) => s + (r.sales_amount || 0), 0)
   const onTime = filtered.filter(r => r.status === 'on_time').length
   const late   = filtered.filter(r => r.status === 'late').length
   const absent = filtered.filter(r => r.status === 'absent').length
-
   const iS = { background: '#1a2035', border: '1px solid #2d3d5a', color: '#f1f5f9', fontSize: 11, padding: '7px 10px', borderRadius: 6, outline: 'none', fontFamily: 'inherit', colorScheme: 'dark' }
-
   async function saveSale(attId) {
     setSaleErr('')
     const val = parseFloat(editingSale.value)
@@ -669,7 +647,6 @@ function EmpSidePanel({ emp, att, sites, onClose, onRefresh }) {
     setEditingSale(null)
     if (onRefresh) onRefresh()
   }
-
   return (
     <div style={{ position: 'fixed', top: 0, right: 0, width: 480, height: '100vh', background: '#111827', borderLeft: '1px solid #1e2a45', display: 'flex', flexDirection: 'column', zIndex: 150, boxShadow: '-8px 0 32px rgba(0,0,0,.4)' }}>
       <div style={{ padding: '18px 20px', borderBottom: '1px solid #1e2a45', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexShrink: 0 }}>
@@ -786,16 +763,16 @@ function EmpSidePanel({ emp, att, sites, onClose, onRefresh }) {
     </div>
   )
 }
-
 // ─── Emp Modal ────────────────────────────────────────────────────────────────
-function EmpModal({ data, currentGoal, onSave, onClose }) {
+function EmpModal({ data, currentGoal, sites, currentSiteIds, onSave, onClose }) {
   const [f, setF] = useState(data || { name: '', email: '', phone: '', role: 'Vendedor(a)', skip_sales: false, skip_photo: false })
   const [weeklyGoal, setWeeklyGoal] = useState(currentGoal ? String(currentGoal) : '')
   const [goalErr, setGoalErr] = useState('')
+  // ── NUEVO: puntos de venta asignados ────────────────────────────────────
+  const [selSites, setSelSites] = useState(currentSiteIds || [])
   const upd = (k, v) => setF(p => ({ ...p, [k]: v }))
   const valid = f.name?.trim() && f.email?.trim()
   const isVendor = !f.skip_sales
-
   function handleSave() {
     setGoalErr('')
     if (weeklyGoal !== '') {
@@ -803,9 +780,8 @@ function EmpModal({ data, currentGoal, onSave, onClose }) {
       if (isNaN(g) || g <= 0) { setGoalErr('Ingresa un número mayor a 0'); return }
       if (g > MAX_SALE) { setGoalErr(`El máximo es $${MAX_SALE.toLocaleString('es-MX')}`); return }
     }
-    onSave(f, weeklyGoal)
+    onSave(f, weeklyGoal, selSites)
   }
-
   return (
     <div onClick={onClose} style={{ position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', background: 'rgba(0,0,0,.7)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 200 }}>
       <div onClick={e => e.stopPropagation()} style={{ background: '#1a2035', border: '1px solid #1e2a45', borderRadius: 12, padding: 22, width: '100%', maxWidth: 440, maxHeight: '85vh', overflow: 'auto' }}>
@@ -822,6 +798,21 @@ function EmpModal({ data, currentGoal, onSave, onClose }) {
             <option>Vendedor(a)</option><option>Encargado(a)</option><option>Gerente Regional</option><option>Supervisor(a)</option>
           </select>
         </div>
+        {/* ── NUEVO: asignación de puntos de venta ── */}
+        {sites.length > 0 && (
+          <div style={{ marginBottom: 14, borderTop: '1px solid #1e2a45', paddingTop: 12 }}>
+            <div style={{ fontSize: 10, fontWeight: 600, color: '#4a5568', textTransform: 'uppercase', letterSpacing: '.5px', marginBottom: 8 }}>Puntos de venta asignados</div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
+              {sites.map(s => (
+                <label key={s.id} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, cursor: 'pointer', color: '#f1f5f9', padding: '6px 10px', borderRadius: 6, background: selSites.includes(s.id) ? 'rgba(59,130,246,.1)' : 'transparent', border: '1px solid ' + (selSites.includes(s.id) ? 'rgba(59,130,246,.3)' : '#1e2a45') }}>
+                  <input type='checkbox' checked={selSites.includes(s.id)} onChange={() => setSelSites(p => p.includes(s.id) ? p.filter(x => x !== s.id) : [...p, s.id])} style={{ accentColor: '#3b82f6' }} />
+                  {s.name}
+                </label>
+              ))}
+            </div>
+            <div style={{ fontSize: 10, color: '#4a5568', marginTop: 6 }}>Los gerentes de las sucursales marcadas podrán ver y asignar horarios a este empleado.</div>
+          </div>
+        )}
         <div style={{ marginBottom: 14, background: 'rgba(16,185,129,.05)', border: `1px solid ${goalErr ? 'rgba(239,68,68,.4)' : 'rgba(16,185,129,.15)'}`, borderRadius: 8, padding: '12px 14px' }}>
           <label style={{ fontSize: 10, fontWeight: 600, color: '#10b981', display: 'block', marginBottom: 6, textTransform: 'uppercase', letterSpacing: '.5px' }}>Meta de ventas semanal</label>
           <div style={{ position: 'relative' }}>
@@ -852,7 +843,6 @@ function EmpModal({ data, currentGoal, onSave, onClose }) {
     </div>
   )
 }
-
 // ─── Site Modal con Leaflet ───────────────────────────────────────────────────
 function SiteModal({ data, onSave, onClose }) {
   const isNew = !data?.id
@@ -866,8 +856,6 @@ function SiteModal({ data, onSave, onClose }) {
   const upd = (k, v) => setF(p => ({ ...p, [k]: v }))
   const valid = f.name?.trim()
   const hasGps = f.lat !== '' && f.lng !== '' && parseFloat(f.lat) !== 0 && parseFloat(f.lng) !== 0
-
-  // Cargar Leaflet y crear mapa
   useEffect(() => {
     function initMap() {
       if (!mapRef.current || mapInstanceRef.current) return
@@ -886,7 +874,6 @@ function SiteModal({ data, onSave, onClose }) {
       mapInstanceRef.current = map
       markerRef.current = marker
     }
-
     function loadLeaflet() {
       if (!document.querySelector('link[href*="leaflet"]')) {
         const css = document.createElement('link')
@@ -906,14 +893,11 @@ function SiteModal({ data, onSave, onClose }) {
       script.onload = () => { script._loaded = true; setTimeout(initMap, 50) }
       document.head.appendChild(script)
     }
-
     loadLeaflet()
     return () => {
       if (mapInstanceRef.current) { mapInstanceRef.current.remove(); mapInstanceRef.current = null; markerRef.current = null }
     }
   }, [])
-
-  // Actualizar marcador cuando cambian lat/lng manualmente
   useEffect(() => {
     if (!mapInstanceRef.current || !markerRef.current) return
     const lat = parseFloat(f.lat); const lng = parseFloat(f.lng)
@@ -921,7 +905,6 @@ function SiteModal({ data, onSave, onClose }) {
       markerRef.current.setLatLng([lat, lng])
     }
   }, [f.lat, f.lng])
-
   async function searchLocation() {
     if (!searchQuery.trim()) return
     setSearching(true); setSearchErr('')
@@ -940,18 +923,14 @@ function SiteModal({ data, onSave, onClose }) {
     } catch (e) { setSearchErr('Error al buscar. Revisa tu conexión.') }
     setSearching(false)
   }
-
   return (
     <div onClick={onClose} style={{ position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', background: 'rgba(0,0,0,.7)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 200 }}>
       <div onClick={e => e.stopPropagation()} style={{ background: '#1a2035', border: '1px solid #1e2a45', borderRadius: 12, padding: 22, width: '100%', maxWidth: 520, maxHeight: '92vh', overflow: 'auto' }}>
         <h3 style={{ fontSize: 15, fontWeight: 700, marginBottom: 14 }}>{isNew ? 'Nuevo Sitio' : 'Editar Sitio'}</h3>
-
         <div style={{ marginBottom: 10 }}>
           <label style={{ fontSize: 10, fontWeight: 600, color: '#8892a8', display: 'block', marginBottom: 4 }}>Nombre del sitio</label>
           <input value={f.name||''} onChange={e => upd('name', e.target.value)} style={{ width:'100%',background:'#0d1220',border:'1px solid #1e2a45',color:'#f1f5f9',fontSize:12,padding:'8px 10px',borderRadius:6,outline:'none',fontFamily:'inherit' }} placeholder='Ej: Plaza Américas Cancún' />
         </div>
-
-        {/* Búsqueda de ubicación */}
         <div style={{ marginBottom: 6 }}>
           <label style={{ fontSize: 10, fontWeight: 600, color: '#8892a8', display: 'block', marginBottom: 4 }}>Buscar ubicación</label>
           <div style={{ display: 'flex', gap: 6 }}>
@@ -968,8 +947,6 @@ function SiteModal({ data, onSave, onClose }) {
           </div>
           {searchErr && <div style={{ fontSize: 11, color: '#f59e0b', marginTop: 4 }}>⚠ {searchErr}</div>}
         </div>
-
-        {/* Mapa */}
         <div style={{ marginBottom: 10, borderRadius: 8, overflow: 'hidden', border: '1px solid #1e2a45' }}>
           <div ref={mapRef} style={{ height: 220, width: '100%', background: '#0d1220' }} />
         </div>
@@ -978,12 +955,10 @@ function SiteModal({ data, onSave, onClose }) {
             ? `📍 ${f.lat}, ${f.lng} — arrastra el marcador para ajustar la posición`
             : '⚠️ Sin coordenadas — busca la ubicación o arrastra el marcador'}
         </div>
-
         <div style={{ marginBottom: 10 }}>
           <label style={{ fontSize: 10, fontWeight: 600, color: '#8892a8', display: 'block', marginBottom: 4 }}>Dirección (texto)</label>
           <input value={f.address||''} onChange={e => upd('address', e.target.value)} style={{ width:'100%',background:'#0d1220',border:'1px solid #1e2a45',color:'#f1f5f9',fontSize:12,padding:'8px 10px',borderRadius:6,outline:'none',fontFamily:'inherit' }} placeholder='Dirección completa' />
         </div>
-
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 14 }}>
           <div>
             <label style={{ fontSize: 10, fontWeight: 600, color: '#8892a8', display: 'block', marginBottom: 4 }}>Radio GPS (metros)</label>
@@ -994,21 +969,18 @@ function SiteModal({ data, onSave, onClose }) {
             <input type='number' value={f.grace_mins||0} onChange={e => upd('grace_mins', parseInt(e.target.value)||0)} style={{ width:'100%',background:'#0d1220',border:'1px solid #1e2a45',color:'#f1f5f9',fontSize:12,padding:'8px 10px',borderRadius:6,outline:'none',fontFamily:'inherit' }} />
           </div>
         </div>
-
         {isNew && (
           <div style={{ background: 'rgba(59,130,246,.06)', border: '1px solid rgba(59,130,246,.15)', borderRadius: 8, padding: '10px 14px', marginBottom: 14 }}>
             <div style={{ fontSize: 10, color: '#3b82f6', fontWeight: 600, marginBottom: 2 }}>Código QR</div>
             <div style={{ fontSize: 11, color: '#4a5568' }}>Se generará automáticamente al guardar. Podrás verlo e imprimirlo desde la lista de sitios.</div>
           </div>
         )}
-
         {!isNew && (
           <div style={{ marginBottom: 14 }}>
             <label style={{ fontSize: 10, fontWeight: 600, color: '#8892a8', display: 'block', marginBottom: 4 }}>Código QR</label>
             <input value={f.code||''} onChange={e => upd('code', e.target.value.toUpperCase())} style={{ width:'100%',background:'#0d1220',border:'1px solid #1e2a45',color:'#f1f5f9',fontSize:12,padding:'8px 10px',borderRadius:6,outline:'none',fontFamily:"'JetBrains Mono'" }} />
           </div>
         )}
-
         <div style={{ display: 'flex', gap: 8 }}>
           <button disabled={!valid} onClick={() => onSave(f)} style={{ flex:1,padding:'10px 16px',borderRadius:7,border:'none',background:valid?'#3b82f6':'#1e2a45',color:'#fff',fontSize:12,fontWeight:600,cursor:valid?'pointer':'not-allowed',fontFamily:'inherit' }}>Guardar</button>
           <button onClick={onClose} style={{ padding:'10px 16px',borderRadius:7,border:'1px solid #1e2a45',background:'transparent',color:'#8892a8',fontSize:12,cursor:'pointer',fontFamily:'inherit' }}>Cancelar</button>
@@ -1017,7 +989,6 @@ function SiteModal({ data, onSave, onClose }) {
     </div>
   )
 }
-
 // ─── QR Modal ─────────────────────────────────────────────────────────────────
 function QrModal({ site, url, onClose }) {
   const qrImgUrl = `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(url)}`
@@ -1045,56 +1016,66 @@ function QrModal({ site, url, onClose }) {
     </div>
   )
 }
-
 // ─── Schedule Modal ───────────────────────────────────────────────────────────
 function ScheduleModal({ emp, sites, schedules, onSave, onClose }) {
   const todayDate = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Cancun' })
   const [weekStart, setWeekStart] = useState(() => getWeekStart(new Date()))
   const [week, setWeek] = useState({})
   const [saving, setSaving] = useState(false)
-
   const weekDates = Array.from({ length: 7 }, (_, i) => {
     const d = addDays(weekStart, i); return { date: dateStr(d), label: DAY_NAMES[i], d }
   })
-
   useEffect(() => {
     const w = {}
     weekDates.forEach(({ date }) => {
       const existing = schedules.find(s => s.date === date)
+      // ── NUEVO: detectar si el día está bloqueado (asignado en otra sucursal) ──
+      const siteInList = existing ? sites.find(s => s.id === existing.site_id) : null
+      const isBlocked = !!(existing && !siteInList)
       w[date] = existing
-        ? { on: true, site_id: existing.site_id, start_time: existing.start_time?.slice(0,5)||'10:00', end_time: existing.end_time?.slice(0,5)||'19:00', lunch_mins: existing.lunch_mins??60 }
-        : { on: false, site_id: sites[0]?.id||'', start_time: '10:00', end_time: '19:00', lunch_mins: 60 }
+        ? {
+            on: true,
+            site_id: existing.site_id,
+            start_time: existing.start_time?.slice(0,5)||'10:00',
+            end_time: existing.end_time?.slice(0,5)||'19:00',
+            lunch_mins: existing.lunch_mins??60,
+            blocked: isBlocked,
+          }
+        : { on: false, site_id: sites[0]?.id||'', start_time: '10:00', end_time: '19:00', lunch_mins: 60, blocked: false }
     })
     setWeek(w)
   }, [weekStart, schedules])
-
-  const toggle = (date) => setWeek(p => ({ ...p, [date]: { ...p[date], on: !p[date].on } }))
-  const upd    = (date, key, val) => setWeek(p => ({ ...p, [date]: { ...p[date], [key]: val } }))
-  const copyToAll = (srcDate) => {
-    const src = week[srcDate]; if (!src?.on) return
-    setWeek(p => { const nw = {...p}; weekDates.forEach(({date}) => { if (nw[date]?.on && date !== srcDate) nw[date] = {...nw[date], site_id: src.site_id, start_time: src.start_time, end_time: src.end_time, lunch_mins: src.lunch_mins} }); return nw })
+  const toggle = (date) => {
+    if (week[date]?.blocked) return  // no permitir toggle si está bloqueado
+    setWeek(p => ({ ...p, [date]: { ...p[date], on: !p[date].on } }))
   }
-
+  const upd = (date, key, val) => setWeek(p => ({ ...p, [date]: { ...p[date], [key]: val } }))
+  const copyToAll = (srcDate) => {
+    const src = week[srcDate]; if (!src?.on || src.blocked) return
+    setWeek(p => { const nw = {...p}; weekDates.forEach(({date}) => { if (nw[date]?.on && !nw[date]?.blocked && date !== srcDate) nw[date] = {...nw[date], site_id: src.site_id, start_time: src.start_time, end_time: src.end_time, lunch_mins: src.lunch_mins} }); return nw })
+  }
   const save = async () => {
     setSaving(true)
-    const dates = weekDates.map(d => d.date)
-    await supabase.from('schedules').delete().eq('employee_id', emp.id).in('date', dates)
+    // Solo modificar días NO bloqueados
+    const editableDates = weekDates.filter(({date}) => !week[date]?.blocked).map(d => d.date)
+    if (editableDates.length > 0) {
+      await supabase.from('schedules').delete().eq('employee_id', emp.id).in('date', editableDates)
+    }
     const inserts = []
     weekDates.forEach(({ date }) => {
       const day = week[date]
-      if (day?.on && day.site_id) inserts.push({ employee_id: emp.id, date, site_id: day.site_id, start_time: day.start_time||'10:00', end_time: day.end_time||'19:00', lunch_mins: day.lunch_mins??60 })
+      if (day?.on && !day.blocked && day.site_id) {
+        inserts.push({ employee_id: emp.id, date, site_id: day.site_id, start_time: day.start_time||'10:00', end_time: day.end_time||'19:00', lunch_mins: day.lunch_mins??60 })
+      }
     })
     if (inserts.length > 0) await supabase.from('schedules').insert(inserts)
     setSaving(false); onSave()
   }
-
   const weekLabel = (() => {
     const s = weekDates[0].d; const e = weekDates[6].d
     return `${s.getDate()} ${s.toLocaleDateString('es-MX',{month:'short'})} – ${e.getDate()} ${e.toLocaleDateString('es-MX',{month:'short',year:'numeric'})}`
   })()
-
   const iS = { width:'100%',background:'#0d1220',border:'1px solid #1e2a45',color:'#f1f5f9',fontSize:11,padding:'6px 8px',borderRadius:5,outline:'none',fontFamily:'inherit' }
-
   return (
     <div onClick={onClose} style={{ position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', background: 'rgba(0,0,0,.7)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 200, backdropFilter: 'blur(4px)' }}>
       <div onClick={e => e.stopPropagation()} style={{ background: '#1a2035', border: '1px solid #1e2a45', borderRadius: 12, padding: 22, width: '100%', maxWidth: 640, maxHeight: '92vh', overflow: 'auto' }}>
@@ -1112,15 +1093,43 @@ function ScheduleModal({ emp, sites, schedules, onSave, onClose }) {
         <p style={{ fontSize: 11, color: '#8892a8', marginBottom: 16 }}>Activa los días que trabaja. Cada día puede tener diferente sucursal y horario.</p>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
           {weekDates.map(({ date, label }) => {
-            const day = week[date] || {}; const isOn = day.on; const isPast = date < todayDate
+            const day = week[date] || {}; const isOn = day.on; const isPast = date < todayDate; const isBlocked = day.blocked
             return (
-              <div key={date} style={{ background: isOn?'#0d1220':'transparent', border:'1px solid '+(isOn?'#1e2a45':'rgba(30,42,69,.3)'), borderRadius:8, padding: isOn?'10px 12px':'8px 12px', opacity: isPast?0.55:1 }}>
+              <div key={date} style={{
+                background: isBlocked ? 'rgba(245,158,11,.05)' : isOn ? '#0d1220' : 'transparent',
+                border: '1px solid ' + (isBlocked ? 'rgba(245,158,11,.3)' : isOn ? '#1e2a45' : 'rgba(30,42,69,.3)'),
+                borderRadius: 8,
+                padding: isOn || isBlocked ? '10px 12px' : '8px 12px',
+                opacity: isPast && !isBlocked ? 0.55 : 1
+              }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                  <button onClick={() => toggle(date)} style={{ width:22,height:22,borderRadius:6,flexShrink:0,cursor:'pointer',border:'2px solid '+(isOn?'#10b981':'#4a5568'),background:isOn?'#10b981':'transparent',display:'flex',alignItems:'center',justifyContent:'center',color:'#fff',fontSize:12,fontWeight:700 }}>{isOn?'✓':''}</button>
-                  <span style={{ fontSize:12,fontWeight:600,width:34,flexShrink:0,color:date===todayDate?'#3b82f6':'#f1f5f9' }}>{label}</span>
-                  {!emp.fixed_week && <span style={{ fontSize:10,color:'#4a5568',fontFamily:"'JetBrains Mono'",width:70,flexShrink:0 }}>{date.slice(5).replace('-','/')}</span>}
-                  {isOn ? (
-                    <div style={{ display:'flex',alignItems:'center',gap:6,flex:1,flexWrap:'wrap' }}>
+                  {/* Checkbox — deshabilitado si bloqueado */}
+                  <button
+                    onClick={() => toggle(date)}
+                    disabled={isBlocked}
+                    style={{
+                      width: 22, height: 22, borderRadius: 6, flexShrink: 0, cursor: isBlocked ? 'not-allowed' : 'pointer',
+                      border: '2px solid ' + (isBlocked ? '#f59e0b' : isOn ? '#10b981' : '#4a5568'),
+                      background: isBlocked ? 'rgba(245,158,11,.15)' : isOn ? '#10b981' : 'transparent',
+                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      color: isBlocked ? '#f59e0b' : '#fff', fontSize: 12, fontWeight: 700
+                    }}
+                  >
+                    {isBlocked ? '🔒' : isOn ? '✓' : ''}
+                  </button>
+                  <span style={{ fontSize:12, fontWeight:600, width:34, flexShrink:0, color: date===todayDate ? '#3b82f6' : '#f1f5f9' }}>{label}</span>
+                  {!emp.fixed_week && <span style={{ fontSize:10, color:'#4a5568', fontFamily:"'JetBrains Mono'", width:70, flexShrink:0 }}>{date.slice(5).replace('-','/')}</span>}
+                  {/* ── Día bloqueado — ocupado en otra sucursal ── */}
+                  {isBlocked ? (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                      <span style={{ fontSize: 11, color: '#f59e0b', fontWeight: 600 }}>Ocupado — otra sucursal</span>
+                      <span style={{ fontSize: 10, color: '#4a5568', fontFamily: "'JetBrains Mono'" }}>
+                        {day.start_time?.slice(0,5)} – {day.end_time?.slice(0,5)}
+                      </span>
+                      <span style={{ fontSize: 9, color: '#4a5568', background: 'rgba(245,158,11,.1)', border: '1px solid rgba(245,158,11,.2)', borderRadius: 4, padding: '1px 7px' }}>No editable</span>
+                    </div>
+                  ) : isOn ? (
+                    <div style={{ display:'flex', alignItems:'center', gap:6, flex:1, flexWrap:'wrap' }}>
                       <select value={day.site_id||''} onChange={e => upd(date,'site_id',e.target.value)} style={{ ...iS,flex:'1 1 120px',minWidth:100,padding:'6px 8px' }}>
                         {sites.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
                       </select>
@@ -1150,7 +1159,6 @@ function ScheduleModal({ emp, sites, schedules, onSave, onClose }) {
     </div>
   )
 }
-
 // ─── Admin User Modal ─────────────────────────────────────────────────────────
 function AdminUserModal({ data, sites, companies, isSuperAdmin, onSave, onClose }) {
   const [name, setName]       = useState(data?.name || '')
@@ -1161,10 +1169,7 @@ function AdminUserModal({ data, sites, companies, isSuperAdmin, onSave, onClose 
   const [saving, setSaving]   = useState(false)
   const [err, setErr]         = useState('')
   const valid = name.trim() && email.trim()
-
-  // Filtrar sitios por empresa seleccionada
   const companySites = companyId ? sites.filter(s => s.company_id === companyId) : sites
-
   async function handleSave() {
     setSaving(true); setErr('')
     try {
@@ -1180,9 +1185,7 @@ function AdminUserModal({ data, sites, companies, isSuperAdmin, onSave, onClose 
       onSave()
     } catch (e) { setErr('Error inesperado. Intenta de nuevo.'); setSaving(false) }
   }
-
   const iS = { width:'100%',background:'#0d1220',border:'1px solid #1e2a45',color:'#f1f5f9',fontSize:12,padding:'8px 10px',borderRadius:6,outline:'none',fontFamily:'inherit' }
-
   return (
     <div onClick={onClose} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.7)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 200 }}>
       <div onClick={e => e.stopPropagation()} style={{ background: '#1a2035', border: '1px solid #1e2a45', borderRadius: 12, padding: 22, width: '100%', maxWidth: 460, maxHeight: '85vh', overflow: 'auto' }}>
@@ -1240,26 +1243,21 @@ function AdminUserModal({ data, sites, companies, isSuperAdmin, onSave, onClose 
     </div>
   )
 }
-
 // ─── Company Modal ────────────────────────────────────────────────────────────
 function CompanyModal({ data, onSave, onClose }) {
   const [name, setName]   = useState(data?.name || '')
   const [slug, setSlug]   = useState(data?.slug || '')
   const [autoSlug, setAutoSlug] = useState(!data?.slug)
   const valid = name.trim() && slug.trim()
-
   function handleNameChange(val) {
     setName(val)
     if (autoSlug) setSlug(slugify(val))
   }
-
   function handleSave() {
     const d = { ...(data || {}), name: name.trim(), slug: slug.trim() }
     onSave(d)
   }
-
   const iS = { width:'100%',background:'#0d1220',border:'1px solid #1e2a45',color:'#f1f5f9',fontSize:12,padding:'8px 10px',borderRadius:6,outline:'none',fontFamily:'inherit' }
-
   return (
     <div onClick={onClose} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.7)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 200 }}>
       <div onClick={e => e.stopPropagation()} style={{ background: '#1a2035', border: '1px solid #1e2a45', borderRadius: 12, padding: 22, width: '100%', maxWidth: 400 }}>
