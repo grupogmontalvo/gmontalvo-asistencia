@@ -69,6 +69,7 @@ export default function AdminPage() {
   const [companies, setCompanies] = useState([])
   const [selectedCompanyId, setSelectedCompanyId] = useState('')
   const [employeeSiteAssignments, setEmployeeSiteAssignments] = useState([])
+  const [siteHours, setSiteHours] = useState([])
   const [tab, setTab]         = useState('dashboard')
   const [modal, setModal]     = useState(null)
   const [empPage, setEmpPage] = useState(null)
@@ -150,10 +151,11 @@ export default function AdminPage() {
     } else if (companyId) {
       scQuery = scQuery.eq('company_id', companyId)
     }
-    const [s, e, ae, a, sc, g, esa] = await Promise.all([
+    const [s, e, ae, a, sc, g, esa, sh] = await Promise.all([
       sitesQuery, empsQuery, allEmpsQuery, attQuery, scQuery,
       supabase.from('employee_goals').select('*'),
       supabase.from('employee_site_assignments').select('*'),
+      supabase.from('site_hours').select('*'),
     ])
     setSites(s.data || [])
     setEmps(e.data || [])
@@ -162,6 +164,7 @@ export default function AdminPage() {
     setSchedules(sc.data || [])
     setGoals(g.data || [])
     setEmployeeSiteAssignments(esa.data || [])
+    setSiteHours(sh.data || [])
     if (isSuperAdmin) {
       const { data: au } = await supabase.from('admin_users').select('*, admin_site_permissions(site_id)').order('created_at')
       setAdminUsers(au || [])
@@ -317,7 +320,7 @@ export default function AdminPage() {
           )}
           <nav style={{ flex: 1, padding: 8, display: 'flex', flexDirection: 'column', gap: 2 }}>
             <div style={{ fontSize: 9, fontWeight: 600, textTransform: 'uppercase', letterSpacing: 1, color: '#4a5568', padding: '8px 8px 4px' }}>Principal</div>
-            {[{ id: 'dashboard', lb: 'Dashboard' }, { id: 'stores', lb: '🏪 Tiendas' }, { id: 'attendance', lb: 'Asistencia' }].map(n => (
+            {[{ id: 'dashboard', lb: 'Dashboard' }, { id: 'stores', lb: '🏪 Tiendas' }, { id: 'schedules', lb: '📅 Horarios' }, { id: 'attendance', lb: 'Asistencia' }].map(n => (
               <button key={n.id} onClick={() => { setTab(n.id); if (window.innerWidth < 768) setSidebarOpen(false) }} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 10px', borderRadius: 6, cursor: 'pointer', fontSize: 12, fontWeight: 500, color: tab === n.id ? '#3b82f6' : '#8892a8', background: tab === n.id ? 'rgba(59,130,246,.12)' : 'transparent', border: 'none', width: '100%', textAlign: 'left', fontFamily: 'inherit' }}>{n.lb}</button>
             ))}
             <div style={{ fontSize: 9, fontWeight: 600, textTransform: 'uppercase', letterSpacing: 1, color: '#4a5568', padding: '12px 8px 4px' }}>Gestión</div>
@@ -343,7 +346,7 @@ export default function AdminPage() {
             <button onClick={() => setSidebarOpen(o => !o)} style={{ background: 'none', border: '1px solid #1e2a45', borderRadius: 6, color: '#8892a8', cursor: 'pointer', padding: '5px 9px', fontSize: 16, lineHeight: 1, fontFamily: 'inherit' }}>☰</button>
             <div>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                <h1 style={{ fontSize: 17, fontWeight: 700 }}>{{ dashboard: 'Dashboard', stores: 'Tiendas', attendance: 'Asistencia', employees: 'Empleados', sites: 'Sitios', users: 'Usuarios', companies: 'Empresas' }[tab]}</h1>
+                <h1 style={{ fontSize: 17, fontWeight: 700 }}>{{ dashboard: 'Dashboard', stores: 'Tiendas', schedules: 'Horarios', attendance: 'Asistencia', employees: 'Empleados', sites: 'Sitios', users: 'Usuarios', companies: 'Empresas' }[tab]}</h1>
                 {activeCompany && <span style={{ fontSize: 10, color: '#3b82f6', background: 'rgba(59,130,246,.1)', border: '1px solid rgba(59,130,246,.2)', borderRadius: 4, padding: '2px 8px', fontWeight: 600 }}>{activeCompany.name}</span>}
               </div>
               <p style={{ fontSize: 11, color: '#8892a8', marginTop: 1 }}>{new Date().toLocaleDateString('es-MX', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric', timeZone: 'America/Cancun' })}</p>
@@ -493,10 +496,12 @@ export default function AdminPage() {
               </div>
             </div>
           </>}
-          {tab === 'stores' && <StoresDashboard sites={sites} att={todayAtt} schedules={todaySchedules} allEmps={allEmps} onEditSite={s => setModal({ type: 'site', data: s })} />}
+          {tab === 'stores' && <StoresDashboard sites={sites} att={todayAtt} schedules={todaySchedules} allEmps={allEmps} siteHours={siteHours} today={today} onEditSite={s => setModal({ type: 'site', data: s })} />}
+          {tab === 'schedules' && <ScheduleBoard sites={sites} allEmps={allEmps} schedules={schedules} employeeSiteAssignments={employeeSiteAssignments} siteHours={siteHours} isSuperAdmin={isSuperAdmin} adminUser={adminUser} onRefresh={load} setToast={setToast} />}
           {tab === 'employees' && (
             <div style={{ background: '#1a2035', border: '1px solid #1e2a45', borderRadius: 10, overflow: 'hidden' }}>
-              <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+              <div style={{ overflowX: 'auto' }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 700 }}>
                 <thead><tr>{['Empleado','Email','Rol','Sucursales','Meta semanal','Próx. turno',''].map(h => (
                   <th key={h} style={{ textAlign: 'left', fontSize: 9, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '.6px', color: '#4a5568', padding: '9px 16px', borderBottom: '1px solid #1e2a45' }}>{h}</th>
                 ))}</tr></thead>
@@ -555,6 +560,7 @@ export default function AdminPage() {
                   })}
                 </tbody>
               </table>
+              </div>
               {emps.length === 0 && <div style={{ padding: 20, textAlign: 'center', color: '#4a5568', fontSize: 12 }}>No hay empleados. Agrega el primero.</div>}
             </div>
           )}
@@ -1258,13 +1264,21 @@ function AdminUserModal({ data, sites, companies, isSuperAdmin, onSave, onClose 
   )
 }
 // ─── Stores Dashboard ─────────────────────────────────────────────────────────
-function StoresDashboard({ sites, att, schedules, allEmps, onEditSite }) {
+function StoresDashboard({ sites, att, schedules, allEmps, siteHours, today, onEditSite }) {
   const now = new Date()
   const nowTimeStr = now.toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: 'America/Cancun' })
+  // day_of_week: 0=Lun...6=Dom; JS getDay: 0=Sun..6=Sat → convert
+  const todayDate = today || new Date().toLocaleDateString('en-CA', { timeZone: 'America/Cancun' })
+  const jsDow = new Date(todayDate + 'T12:00:00').getDay() // 0=Sun
+  const todayDow = jsDow === 0 ? 6 : jsDow - 1 // 0=Lun..6=Dom
 
   function isStoreOpen(site) {
-    // Tienda "abierta" si al menos un empleado hizo check-in hoy y no ha hecho check-out
     return att.some(r => r.site_id === site.id && r.check_in && !r.check_out)
+  }
+
+  function shouldBeOpen(site) {
+    const h = (siteHours || []).find(h => h.site_id === site.id && h.day_of_week === todayDow)
+    return h?.is_open === true
   }
 
   function storeStats(site) {
@@ -1347,18 +1361,22 @@ function StoresDashboard({ sites, att, schedules, allEmps, onEditSite }) {
         <div>
           <div style={{ fontSize: 11, fontWeight: 700, color: '#4a5568', textTransform: 'uppercase', letterSpacing: '.8px', marginBottom: 10 }}>Sin actividad hoy</div>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 10 }}>
-            {closedSites.map(site => (
-              <div key={site.id} style={{ background: '#1a2035', border: '1px solid #1e2a45', borderRadius: 12, padding: '12px 16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                <div>
-                  <div style={{ fontSize: 12, fontWeight: 600, color: '#8892a8' }}>{site.name}</div>
-                  <div style={{ fontSize: 10, color: '#4a5568', marginTop: 1 }}>{site.address}</div>
+            {closedSites.map(site => {
+              const noApertura = shouldBeOpen(site)
+              return (
+                <div key={site.id} style={{ background: '#1a2035', border: `1px solid ${noApertura ? 'rgba(245,158,11,.4)' : '#1e2a45'}`, borderRadius: 12, padding: '12px 16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                  <div>
+                    <div style={{ fontSize: 12, fontWeight: 600, color: '#8892a8' }}>{site.name}</div>
+                    <div style={{ fontSize: 10, color: '#4a5568', marginTop: 1 }}>{site.address}</div>
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+                    {noApertura && <span style={{ fontSize: 9, fontWeight: 700, color: '#f59e0b', background: 'rgba(245,158,11,.12)', border: '1px solid rgba(245,158,11,.35)', borderRadius: 5, padding: '2px 8px' }}>⚠ SIN APERTURA</span>}
+                    {!noApertura && <span style={{ fontSize: 9, fontWeight: 700, color: '#4a5568', background: 'rgba(74,85,104,.1)', border: '1px solid #1e2a45', borderRadius: 5, padding: '2px 8px' }}>SIN ACTIVIDAD</span>}
+                    <button onClick={() => onEditSite(site)} style={{ background: 'none', border: '1px solid #1e2a45', borderRadius: 5, color: '#4a5568', fontSize: 10, padding: '2px 8px', cursor: 'pointer', fontFamily: 'inherit' }}>Editar</button>
+                  </div>
                 </div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                  <span style={{ fontSize: 9, fontWeight: 700, color: '#4a5568', background: 'rgba(74,85,104,.1)', border: '1px solid #1e2a45', borderRadius: 5, padding: '2px 8px' }}>SIN ACTIVIDAD</span>
-                  <button onClick={() => onEditSite(site)} style={{ background: 'none', border: '1px solid #1e2a45', borderRadius: 5, color: '#4a5568', fontSize: 10, padding: '2px 8px', cursor: 'pointer', fontFamily: 'inherit' }}>Editar</button>
-                </div>
-              </div>
-            ))}
+              )
+            })}
           </div>
         </div>
       )}
@@ -1366,6 +1384,273 @@ function StoresDashboard({ sites, att, schedules, allEmps, onEditSite }) {
       {sites.length === 0 && (
         <div style={{ padding: 32, textAlign: 'center', color: '#4a5568', fontSize: 13, background: '#1a2035', borderRadius: 10, border: '1px solid #1e2a45' }}>No hay sucursales configuradas.</div>
       )}
+    </div>
+  )
+}
+// ─── Schedule Board ───────────────────────────────────────────────────────────
+function ScheduleBoard({ sites, allEmps, schedules, employeeSiteAssignments, siteHours, isSuperAdmin, adminUser, onRefresh, setToast }) {
+  const [selSiteId, setSelSiteId] = useState(sites[0]?.id || '')
+  const [weekStart, setWeekStart] = useState(() => getWeekStart(new Date()))
+  const [editCell, setEditCell]   = useState(null) // { empId, date, start, end }
+  const [showSiteHours, setShowSiteHours] = useState(false)
+  const [saving, setSaving]       = useState(false)
+  const [dragOver, setDragOver]   = useState(null) // date being dragged over
+
+  const today = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Cancun' })
+  const weekDates = Array.from({ length: 7 }, (_, i) => {
+    const d = addDays(weekStart, i)
+    return { date: dateStr(d), label: DAY_NAMES[i], d, isPast: dateStr(d) < today, isToday: dateStr(d) === today }
+  })
+  const weekLabel = `${weekDates[0].label} ${weekDates[0].date.slice(8)} – ${weekDates[6].label} ${weekDates[6].date.slice(8)} ${weekDates[0].date.slice(0,7).replace('-','/')}`
+
+  // Employees assigned to the selected site
+  const siteEmpIds = employeeSiteAssignments.filter(a => a.site_id === selSiteId).map(a => a.employee_id)
+  const filteredEmps = allEmps.filter(e => siteEmpIds.includes(e.id))
+
+  // Schedules for this site & week
+  const weekSchedForSite = schedules.filter(s =>
+    s.site_id === selSiteId &&
+    weekDates.some(d => d.date === s.date)
+  )
+
+  function getEmpSchedule(empId, date) {
+    return weekSchedForSite.find(s => s.employee_id === empId && s.date === date) || null
+  }
+
+  // day_of_week: 0=Lun...6=Dom
+  function getDayHours(date) {
+    const jsDow = new Date(date + 'T12:00:00').getDay()
+    const dow = jsDow === 0 ? 6 : jsDow - 1
+    return (siteHours || []).find(h => h.site_id === selSiteId && h.day_of_week === dow) || null
+  }
+
+  async function dropEmp(empId, date) {
+    if (!selSiteId) return
+    const existing = getEmpSchedule(empId, date)
+    if (existing) return // already scheduled, no-op
+    setSaving(true)
+    const dh = getDayHours(date)
+    const defaultStart = dh?.open_time?.slice(0,5) || '10:00'
+    const defaultEnd   = dh?.close_time?.slice(0,5) || '19:00'
+    const companyId = isSuperAdmin ? null : adminUser?.company_id
+    await supabase.from('schedules').insert({
+      employee_id: empId, site_id: selSiteId, date,
+      start_time: defaultStart, end_time: defaultEnd,
+      lunch_mins: 60,
+      ...(companyId ? { company_id: companyId } : {})
+    })
+    setSaving(false); onRefresh()
+  }
+
+  async function removeSchedule(schedId) {
+    setSaving(true)
+    await supabase.from('schedules').delete().eq('id', schedId)
+    setSaving(false); onRefresh()
+  }
+
+  async function saveEditCell() {
+    if (!editCell) return
+    setSaving(true)
+    const s = getEmpSchedule(editCell.empId, editCell.date)
+    if (s) {
+      await supabase.from('schedules').update({ start_time: editCell.start, end_time: editCell.end }).eq('id', s.id)
+    }
+    setEditCell(null); setSaving(false); onRefresh()
+  }
+
+  const timeOpts = Array.from({ length: 48 }, (_, i) => {
+    const h = String(Math.floor(i / 2)).padStart(2, '0')
+    const m = i % 2 === 0 ? '00' : '30'
+    return `${h}:${m}`
+  })
+
+  if (sites.length === 0) return (
+    <div style={{ padding: 40, textAlign: 'center', color: '#4a5568', fontSize: 13 }}>No hay sucursales configuradas.</div>
+  )
+
+  return (
+    <div style={{ fontFamily: "'DM Sans', sans-serif" }}>
+      {/* Header bar */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14, flexWrap: 'wrap' }}>
+        <select value={selSiteId} onChange={e => setSelSiteId(e.target.value)}
+          style={{ background: '#1a2035', border: '1px solid #1e2a45', color: '#f1f5f9', fontSize: 13, fontWeight: 600, padding: '7px 12px', borderRadius: 8, fontFamily: 'inherit', cursor: 'pointer' }}>
+          {sites.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+        </select>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          <button onClick={() => setWeekStart(w => addDays(w, -7))} style={{ background: '#1a2035', border: '1px solid #1e2a45', color: '#8892a8', borderRadius: 7, padding: '6px 10px', cursor: 'pointer', fontSize: 14, fontFamily: 'inherit' }}>‹</button>
+          <span style={{ fontSize: 12, color: '#8892a8', minWidth: 170, textAlign: 'center' }}>{weekLabel}</span>
+          <button onClick={() => setWeekStart(w => addDays(w, 7))} style={{ background: '#1a2035', border: '1px solid #1e2a45', color: '#8892a8', borderRadius: 7, padding: '6px 10px', cursor: 'pointer', fontSize: 14, fontFamily: 'inherit' }}>›</button>
+        </div>
+        <button onClick={() => setShowSiteHours(true)}
+          style={{ background: 'rgba(59,130,246,.1)', border: '1px solid rgba(59,130,246,.25)', color: '#3b82f6', borderRadius: 7, padding: '6px 12px', cursor: 'pointer', fontSize: 12, fontWeight: 600, fontFamily: 'inherit', marginLeft: 'auto' }}>
+          ⏰ Horario tienda
+        </button>
+      </div>
+
+      <div style={{ display: 'flex', gap: 12, alignItems: 'flex-start' }}>
+        {/* Left: employee chips (mobile: horizontal scroll row) */}
+        <div style={{ flexShrink: 0, width: 140 }}>
+          <div style={{ fontSize: 9, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '.6px', color: '#4a5568', marginBottom: 8 }}>Empleados</div>
+          {filteredEmps.length === 0 && (
+            <div style={{ fontSize: 11, color: '#4a5568', padding: '8px 0' }}>Sin empleados asignados a esta tienda.</div>
+          )}
+          {filteredEmps.map(emp => (
+            <div key={emp.id} draggable
+              onDragStart={e => { e.dataTransfer.setData('empId', emp.id); e.dataTransfer.effectAllowed = 'copy' }}
+              style={{ background: '#1a2035', border: '1px solid #1e2a45', borderRadius: 8, padding: '8px 10px', marginBottom: 6, cursor: 'grab', userSelect: 'none', fontSize: 12, display: 'flex', alignItems: 'center', gap: 6 }}>
+              <span style={{ fontSize: 14, color: '#4a5568' }}>⠿</span>
+              <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{emp.name}</span>
+            </div>
+          ))}
+        </div>
+
+        {/* Right: 7-day columns */}
+        <div style={{ flex: 1, overflowX: 'auto' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, minmax(100px, 1fr))', gap: 6, minWidth: 700 }}>
+            {weekDates.map(({ date, label, isToday, isPast }) => {
+              const dh = getDayHours(date)
+              const dayEmps = weekSchedForSite.filter(s => s.date === date)
+              const isOver = dragOver === date
+              return (
+                <div key={date}
+                  onDragOver={e => { e.preventDefault(); setDragOver(date) }}
+                  onDragLeave={() => setDragOver(null)}
+                  onDrop={e => { e.preventDefault(); setDragOver(null); dropEmp(e.dataTransfer.getData('empId'), date) }}
+                  style={{ background: isOver ? 'rgba(59,130,246,.08)' : '#1a2035', border: `1px solid ${isOver ? '#3b82f6' : isToday ? 'rgba(59,130,246,.3)' : '#1e2a45'}`, borderRadius: 10, minHeight: 120, display: 'flex', flexDirection: 'column', transition: 'border-color .15s, background .15s' }}>
+                  {/* Day header */}
+                  <div style={{ padding: '8px 10px', borderBottom: '1px solid #1e2a45' }}>
+                    <div style={{ fontSize: 11, fontWeight: 700, color: isToday ? '#3b82f6' : isPast ? '#4a5568' : '#f1f5f9' }}>{label} {date.slice(8)}</div>
+                    {dh ? (
+                      <div style={{ fontSize: 9, color: dh.is_open ? '#10b981' : '#4a5568', marginTop: 2 }}>
+                        {dh.is_open ? `${dh.open_time?.slice(0,5)}–${dh.close_time?.slice(0,5)}` : '⛔ Cerrado'}
+                      </div>
+                    ) : (
+                      <div style={{ fontSize: 9, color: '#2d3d5a', marginTop: 2 }}>Sin horario</div>
+                    )}
+                  </div>
+                  {/* Assigned employees */}
+                  <div style={{ padding: '6px 8px', flex: 1, display: 'flex', flexDirection: 'column', gap: 4 }}>
+                    {dayEmps.map(s => {
+                      const emp = allEmps.find(e => e.id === s.employee_id)
+                      const isEditing = editCell?.empId === s.employee_id && editCell?.date === date
+                      const dh2 = getDayHours(date)
+                      const isSetup = dh2?.is_open && s.start_time && dh2.open_time && s.start_time < dh2.open_time
+                      return (
+                        <div key={s.id} style={{ background: isEditing ? '#0d1220' : 'rgba(59,130,246,.1)', border: `1px solid ${isEditing ? '#3b82f6' : 'rgba(59,130,246,.2)'}`, borderRadius: 6, padding: '5px 8px', fontSize: 11 }}>
+                          {isEditing ? (
+                            <div>
+                              <div style={{ fontSize: 11, fontWeight: 600, color: '#f1f5f9', marginBottom: 5 }}>{emp?.name}</div>
+                              <div style={{ display: 'flex', gap: 4, marginBottom: 5 }}>
+                                <select value={editCell.start} onChange={e => setEditCell(p => ({...p, start: e.target.value}))}
+                                  style={{ flex: 1, background: '#1a2035', border: '1px solid #1e2a45', color: '#f1f5f9', fontSize: 10, padding: '3px 4px', borderRadius: 4, fontFamily: 'inherit' }}>
+                                  {timeOpts.map(t => <option key={t} value={t}>{t}</option>)}
+                                </select>
+                                <span style={{ color: '#4a5568', alignSelf: 'center', fontSize: 10 }}>–</span>
+                                <select value={editCell.end} onChange={e => setEditCell(p => ({...p, end: e.target.value}))}
+                                  style={{ flex: 1, background: '#1a2035', border: '1px solid #1e2a45', color: '#f1f5f9', fontSize: 10, padding: '3px 4px', borderRadius: 4, fontFamily: 'inherit' }}>
+                                  {timeOpts.map(t => <option key={t} value={t}>{t}</option>)}
+                                </select>
+                              </div>
+                              <div style={{ display: 'flex', gap: 4 }}>
+                                <button onClick={saveEditCell} disabled={saving} style={{ flex: 1, background: '#3b82f6', border: 'none', color: '#fff', borderRadius: 4, padding: '3px 0', fontSize: 10, cursor: 'pointer', fontFamily: 'inherit' }}>✓ Guardar</button>
+                                <button onClick={() => setEditCell(null)} style={{ background: 'none', border: '1px solid #1e2a45', color: '#8892a8', borderRadius: 4, padding: '3px 6px', fontSize: 10, cursor: 'pointer', fontFamily: 'inherit' }}>✕</button>
+                              </div>
+                            </div>
+                          ) : (
+                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 4 }}>
+                              <div style={{ flex: 1, overflow: 'hidden' }}>
+                                <div style={{ fontWeight: 600, color: '#f1f5f9', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{emp?.name || '?'}</div>
+                                <div style={{ fontSize: 9, color: '#8892a8', fontFamily: "'JetBrains Mono'" }}>
+                                  {s.start_time?.slice(0,5)}–{s.end_time?.slice(0,5)}
+                                  {isSetup && <span style={{ marginLeft: 4, color: '#f59e0b' }}>📦</span>}
+                                </div>
+                              </div>
+                              <div style={{ display: 'flex', gap: 3, flexShrink: 0 }}>
+                                <button onClick={() => setEditCell({ empId: s.employee_id, date, start: s.start_time?.slice(0,5)||'10:00', end: s.end_time?.slice(0,5)||'19:00' })}
+                                  style={{ background: 'none', border: 'none', color: '#8892a8', cursor: 'pointer', fontSize: 12, padding: '1px 3px', lineHeight: 1 }} title='Editar horas'>✎</button>
+                                <button onClick={() => removeSchedule(s.id)}
+                                  style={{ background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer', fontSize: 12, padding: '1px 3px', lineHeight: 1 }} title='Eliminar'>✕</button>
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      )
+                    })}
+                    {dayEmps.length === 0 && (
+                      <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10, color: '#2d3d5a', padding: '8px 0', textAlign: 'center', borderRadius: 6, border: '1px dashed #1e2a45', minHeight: 40 }}>
+                        Arrastra un empleado aquí
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        </div>
+      </div>
+
+      {showSiteHours && selSiteId && (
+        <SiteHoursModal
+          siteId={selSiteId}
+          siteName={sites.find(s => s.id === selSiteId)?.name || ''}
+          siteHours={siteHours}
+          onSave={async rows => {
+            const upserts = rows.map((r, i) => ({ site_id: selSiteId, day_of_week: i, open_time: r.open, close_time: r.close, is_open: r.isOpen }))
+            await supabase.from('site_hours').upsert(upserts, { onConflict: 'site_id,day_of_week' })
+            setShowSiteHours(false); onRefresh(); setToast('Horario de tienda guardado')
+          }}
+          onClose={() => setShowSiteHours(false)}
+        />
+      )}
+    </div>
+  )
+}
+// ─── Site Hours Modal ─────────────────────────────────────────────────────────
+function SiteHoursModal({ siteId, siteName, siteHours, onSave, onClose }) {
+  const init = Array.from({ length: 7 }, (_, i) => {
+    const existing = (siteHours || []).find(h => h.site_id === siteId && h.day_of_week === i)
+    return { isOpen: existing?.is_open ?? true, open: existing?.open_time?.slice(0,5) ?? '10:00', close: existing?.close_time?.slice(0,5) ?? '22:00' }
+  })
+  const [rows, setRows] = useState(init)
+  const [saving, setSaving] = useState(false)
+  const upd = (i, k, v) => setRows(r => r.map((row, idx) => idx === i ? { ...row, [k]: v } : row))
+  const timeOpts = Array.from({ length: 48 }, (_, i) => { const h = String(Math.floor(i/2)).padStart(2,'0'); const m = i%2===0?'00':'30'; return `${h}:${m}` })
+  async function handleSave() { setSaving(true); await onSave(rows); setSaving(false) }
+  return (
+    <div onClick={onClose} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.7)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 300, padding: '0 12px' }}>
+      <div onClick={e => e.stopPropagation()} style={{ background: '#1a2035', border: '1px solid #1e2a45', borderRadius: 14, padding: 22, width: '100%', maxWidth: 420, maxHeight: '90vh', overflowY: 'auto' }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
+          <div>
+            <div style={{ fontSize: 14, fontWeight: 700 }}>Horario de la tienda</div>
+            <div style={{ fontSize: 11, color: '#8892a8', marginTop: 2 }}>{siteName}</div>
+          </div>
+          <button onClick={onClose} style={{ background: 'none', border: '1px solid #1e2a45', borderRadius: 6, color: '#8892a8', fontSize: 18, cursor: 'pointer', padding: '2px 10px', lineHeight: 1 }}>×</button>
+        </div>
+        {DAY_NAMES.map((day, i) => (
+          <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10, padding: '10px 12px', background: '#0d1220', borderRadius: 8, border: '1px solid #1e2a45' }}>
+            <div style={{ width: 28, fontSize: 12, fontWeight: 600, color: rows[i].isOpen ? '#f1f5f9' : '#4a5568' }}>{day}</div>
+            <button onClick={() => upd(i, 'isOpen', !rows[i].isOpen)}
+              style={{ padding: '3px 10px', borderRadius: 5, border: 'none', background: rows[i].isOpen ? 'rgba(16,185,129,.2)' : 'rgba(239,68,68,.15)', color: rows[i].isOpen ? '#10b981' : '#ef4444', fontSize: 10, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit', flexShrink: 0 }}>
+              {rows[i].isOpen ? 'Abierto' : 'Cerrado'}
+            </button>
+            {rows[i].isOpen && <>
+              <select value={rows[i].open} onChange={e => upd(i, 'open', e.target.value)}
+                style={{ flex: 1, background: '#1a2035', border: '1px solid #1e2a45', color: '#f1f5f9', fontSize: 11, padding: '4px 6px', borderRadius: 5, fontFamily: 'inherit' }}>
+                {timeOpts.map(t => <option key={t} value={t}>{t}</option>)}
+              </select>
+              <span style={{ color: '#4a5568', fontSize: 11 }}>–</span>
+              <select value={rows[i].close} onChange={e => upd(i, 'close', e.target.value)}
+                style={{ flex: 1, background: '#1a2035', border: '1px solid #1e2a45', color: '#f1f5f9', fontSize: 11, padding: '4px 6px', borderRadius: 5, fontFamily: 'inherit' }}>
+                {timeOpts.map(t => <option key={t} value={t}>{t}</option>)}
+              </select>
+            </>}
+          </div>
+        ))}
+        <button onClick={handleSave} disabled={saving}
+          style={{ width: '100%', marginTop: 4, padding: '11px 0', borderRadius: 8, border: 'none', background: '#3b82f6', color: '#fff', fontSize: 13, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit', opacity: saving ? .6 : 1 }}>
+          {saving ? 'Guardando...' : 'Guardar horario'}
+        </button>
+      </div>
     </div>
   )
 }
