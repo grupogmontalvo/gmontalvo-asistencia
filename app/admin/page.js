@@ -71,7 +71,7 @@ export default function AdminPage() {
   const [employeeSiteAssignments, setEmployeeSiteAssignments] = useState([])
   const [tab, setTab]         = useState('dashboard')
   const [modal, setModal]     = useState(null)
-  const [sideEmp, setSideEmp] = useState(null)
+  const [empPage, setEmpPage] = useState(null)
   const [loading, setLoading] = useState(true)
   const [toast, setToast]     = useState(null)
   const [filterEmp,    setFilterEmp]    = useState('')
@@ -81,6 +81,9 @@ export default function AdminPage() {
   const [filterStatus, setFilterStatus] = useState('')
   const [sidebarOpen, setSidebarOpen] = useState(true)
   const today = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Cancun' })
+  useEffect(() => {
+    if (typeof window !== 'undefined' && window.innerWidth < 768) setSidebarOpen(false)
+  }, [])
   useEffect(() => {
     supabase.auth.getUser().then(async ({ data: { user } }) => {
       if (!user) { router.push('/admin/login'); return }
@@ -206,11 +209,12 @@ export default function AdminPage() {
   const scheduledEmpIds = new Set(todaySchedules.map(s => s.employee_id))
   // FIX BUG 1: unscheduledAtt también resuelve nombres usando allEmps
   const unscheduledAtt  = todayAtt.filter(r => !scheduledEmpIds.has(r.employee_id))
-  const statOnTime  = dashRows.filter(r => r.record && !r.record.check_out && r.record.status === 'on_time').length
-  const statTol     = dashRows.filter(r => r.record && !r.record.check_out && (r.record.status === 'tolerancia' || r.record.status === 'late')).length
-  const statDone    = dashRows.filter(r => r.record?.check_out).length + unscheduledAtt.filter(r => r.check_out).length
-  const statMissing = dashRows.filter(r => !r.record && r.statusLabel === 'No se presentó').length
-  const statPending = dashRows.filter(r => !r.record && r.statusLabel !== 'No se presentó').length
+  const sitesWorking = new Set([
+    ...dashRows.filter(r => r.record && !r.record.check_out).map(r => r.sc.site_id),
+    ...unscheduledAtt.filter(r => !r.check_out).map(r => r.site_id)
+  ]).size
+  const peopleWorking = dashRows.filter(r => r.record && !r.record.check_out).length
+    + unscheduledAtt.filter(r => !r.check_out).length
   const filteredAtt = att.filter(r => {
     if (filterEmp    && r.employee_id !== filterEmp)   return false
     if (filterSite   && r.site_id !== filterSite)       return false
@@ -269,6 +273,21 @@ export default function AdminPage() {
   if (loading) return (
     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100vh', background: '#0a0e1a', color: '#8892a8', fontFamily: "'DM Sans'" }}>Cargando...</div>
   )
+  if (empPage) {
+    const empAtt = att.filter(r => r.employee_id === empPage.id)
+    return (
+      <div style={{ background: '#0a0e1a', minHeight: '100vh', fontFamily: "'DM Sans', sans-serif", color: '#f1f5f9', display: 'flex', flexDirection: 'column' }}>
+        <div style={{ padding: '12px 18px', borderBottom: '1px solid #1e2a45', background: '#111827', display: 'flex', alignItems: 'center', gap: 12, flexShrink: 0 }}>
+          <button onClick={() => setEmpPage(null)} style={{ background: 'none', border: '1px solid #1e2a45', borderRadius: 7, color: '#8892a8', cursor: 'pointer', padding: '6px 14px', fontSize: 13, fontFamily: 'inherit', display: 'flex', alignItems: 'center', gap: 6 }}>← Volver</button>
+          <div>
+            <div style={{ fontSize: 15, fontWeight: 700 }}>{empPage.name}</div>
+            <div style={{ fontSize: 11, color: '#8892a8' }}>{empPage.email} · {empPage.role}</div>
+          </div>
+        </div>
+        <EmpSidePanel emp={empPage} att={empAtt} sites={sites} onClose={() => setEmpPage(null)} onRefresh={load} fullPage />
+      </div>
+    )
+  }
   const inputStyle = { width: '100%', background: '#0d1220', border: '1px solid #1e2a45', color: '#f1f5f9', fontSize: 12, padding: '7px 10px', borderRadius: 6, outline: 'none', fontFamily: 'inherit' }
   const selectStyle = { ...inputStyle }
   const activeCompany = isSuperAdmin
@@ -276,7 +295,8 @@ export default function AdminPage() {
     : companies.find(c => c.id === adminUser?.company_id)
   return (
     <div style={{ display: 'flex', height: '100vh', overflow: 'hidden', fontFamily: "'DM Sans', sans-serif", background: '#0a0e1a', color: '#f1f5f9' }}>
-      {sidebarOpen && <div onClick={() => setSidebarOpen(false)} style={{ display: 'none', position: 'fixed', inset: 0, background: 'rgba(0,0,0,.5)', zIndex: 99 }} className="sidebar-overlay" />}
+      <style>{`@media(max-width:767px){.sb-overlay{display:block!important}}`}</style>
+      {sidebarOpen && <div onClick={() => setSidebarOpen(false)} className="sb-overlay" style={{ display: 'none', position: 'fixed', inset: 0, background: 'rgba(0,0,0,.5)', zIndex: 99 }} />}
       <div style={{ width: sidebarOpen ? 210 : 0, minWidth: sidebarOpen ? 210 : 0, background: '#111827', borderRight: sidebarOpen ? '1px solid #1e2a45' : 'none', display: 'flex', flexDirection: 'column', flexShrink: 0, overflow: 'hidden', transition: 'width .2s ease, min-width .2s ease', position: 'relative', zIndex: 100 }}>
         <div style={{ width: 210, display: 'flex', flexDirection: 'column', height: '100%' }}>
           <div style={{ padding: 16, borderBottom: '1px solid #1e2a45', display: 'flex', alignItems: 'center', gap: 10 }}>
@@ -334,15 +354,23 @@ export default function AdminPage() {
           {tab === 'users'      && isSuperAdmin && <button onClick={() => setModal({ type: 'adminUser', data: null })} style={{ padding: '7px 14px', borderRadius: 7, border: 'none', background: '#3b82f6', color: '#fff', fontSize: 12, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}>+ Nuevo Usuario</button>}
           {tab === 'companies'  && isSuperAdmin && <button onClick={() => setModal({ type: 'company', data: null })} style={{ padding: '7px 14px', borderRadius: 7, border: 'none', background: '#3b82f6', color: '#fff', fontSize: 12, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}>+ Nueva Empresa</button>}
         </div>
-        <div style={{ flex: 1, padding: '18px 22px', overflow: 'auto' }}>
+        <div style={{ flex: 1, padding: '14px 12px', overflow: 'auto' }}>
           {tab === 'dashboard' && <>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 12, marginBottom: 18 }}>
-              {[['Puntuales',statOnTime,'#10b981'],['Con retardo',statTol,'#f59e0b'],['Completaron',statDone,'#3b82f6'],['No llegaron',statMissing,'#ef4444'],['Por llegar',statPending,'#8892a8']].map(([l,v,c]) => (
-                <div key={l} style={{ background: '#1a2035', border: '1px solid #1e2a45', borderRadius: 10, padding: '14px 16px' }}>
-                  <div style={{ fontSize: 10, color: '#8892a8', marginBottom: 4 }}>{l}</div>
-                  <div style={{ fontSize: 24, fontWeight: 700, fontFamily: "'JetBrains Mono'", color: c }}>{v}</div>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 12, marginBottom: 18 }}>
+              <div style={{ background: '#1a2035', border: '1px solid #1e2a45', borderRadius: 10, padding: '18px 20px', display: 'flex', alignItems: 'center', gap: 14 }}>
+                <div style={{ fontSize: 28 }}>🏪</div>
+                <div>
+                  <div style={{ fontSize: 11, color: '#8892a8', marginBottom: 4 }}>Tiendas abiertas</div>
+                  <div style={{ fontSize: 36, fontWeight: 700, fontFamily: "'JetBrains Mono'", color: '#10b981', lineHeight: 1 }}>{sitesWorking}</div>
                 </div>
-              ))}
+              </div>
+              <div style={{ background: '#1a2035', border: '1px solid #1e2a45', borderRadius: 10, padding: '18px 20px', display: 'flex', alignItems: 'center', gap: 14 }}>
+                <div style={{ fontSize: 28 }}>👥</div>
+                <div>
+                  <div style={{ fontSize: 11, color: '#8892a8', marginBottom: 4 }}>Personas trabajando</div>
+                  <div style={{ fontSize: 36, fontWeight: 700, fontFamily: "'JetBrains Mono'", color: '#3b82f6', lineHeight: 1 }}>{peopleWorking}</div>
+                </div>
+              </div>
             </div>
             {sites.map(site => {
               const siteRows = dashRows.filter(r => r.sc.site_id === site.id)
@@ -355,7 +383,8 @@ export default function AdminPage() {
                     <div style={{ fontWeight: 600, fontSize: 13 }}>{site.name}</div>
                     <div style={{ fontSize: 10, color: '#4a5568' }}>{totalCount} empleado{totalCount !== 1 ? 's' : ''} hoy</div>
                   </div>
-                  <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                  <div style={{ overflowX: 'auto' }}>
+                  <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 520 }}>
                     <thead><tr>{['Empleado','Horario','Entrada','Salida','Ventas','Estado'].map(h => (
                       <th key={h} style={{ textAlign: 'left', fontSize: 9, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '.6px', color: '#4a5568', padding: '8px 16px', borderBottom: '1px solid #1e2a45' }}>{h}</th>
                     ))}</tr></thead>
@@ -363,7 +392,7 @@ export default function AdminPage() {
                       {siteRows.map(({ sc, emp, record, color, bg, statusLabel }) => (
                         <tr key={sc.id} style={{ borderBottom: '1px solid rgba(30,42,69,.3)' }}>
                           <td style={{ padding: '10px 16px' }}>
-                            <button onClick={() => setSideEmp(emp)} style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', textAlign: 'left', fontFamily: 'inherit' }}>
+                            <button onClick={() => setEmpPage(emp)} style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', textAlign: 'left', fontFamily: 'inherit' }}>
                               <div style={{ fontSize: 12, fontWeight: 600, color: '#3b82f6', textDecoration: 'underline', textDecorationColor: 'rgba(59,130,246,.3)' }}>{emp?.name || '?'}</div>
                               <div style={{ fontSize: 10, color: '#4a5568' }}>{emp?.role}</div>
                             </button>
@@ -382,7 +411,7 @@ export default function AdminPage() {
                         return (
                           <tr key={r.id} style={{ borderBottom: '1px solid rgba(30,42,69,.3)', background: 'rgba(16,185,129,.03)' }}>
                             <td style={{ padding: '10px 16px' }}>
-                              <button onClick={() => setSideEmp(emp)} style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', textAlign: 'left', fontFamily: 'inherit' }}>
+                              <button onClick={() => setEmpPage(emp)} style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', textAlign: 'left', fontFamily: 'inherit' }}>
                                 <div style={{ fontSize: 12, fontWeight: 600, color: '#3b82f6', textDecoration: 'underline', textDecorationColor: 'rgba(59,130,246,.3)' }}>{emp?.name || '?'}</div>
                                 <div style={{ fontSize: 10, color: '#4a5568' }}>{emp?.role}</div>
                               </button>
@@ -397,6 +426,7 @@ export default function AdminPage() {
                       })}
                     </tbody>
                   </table>
+                  </div>
                 </div>
               )
             })}
@@ -405,7 +435,7 @@ export default function AdminPage() {
             )}
           </>}
           {tab === 'attendance' && <>
-            <div style={{ background: '#1a2035', border: '1px solid #1e2a45', borderRadius: 10, padding: '14px 16px', marginBottom: 14, display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 10 }}>
+            <div style={{ background: '#1a2035', border: '1px solid #1e2a45', borderRadius: 10, padding: '14px 16px', marginBottom: 14, display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: 10 }}>
               {/* FIX BUG 2: usar allEmps para el filtro de empleados */}
               {[['Empleado', filterEmp, setFilterEmp, allEmps.map(e => [e.id, e.name])],['Sucursal', filterSite, setFilterSite, sites.map(s => [s.id, s.name])]].map(([l, val, set, opts]) => (
                 <div key={l}>
@@ -435,7 +465,8 @@ export default function AdminPage() {
               <button onClick={() => { setFilterEmp(''); setFilterSite(''); setFilterFrom(''); setFilterTo(''); setFilterStatus('') }} style={{ background: (filterEmp||filterSite||filterFrom||filterTo||filterStatus) ? 'rgba(59,130,246,.12)' : 'transparent', border: '1px solid '+((filterEmp||filterSite||filterFrom||filterTo||filterStatus)?'#3b82f6':'#1e2a45'), borderRadius: 5, color: (filterEmp||filterSite||filterFrom||filterTo||filterStatus)?'#3b82f6':'#4a5568', fontSize: 10, padding: '4px 12px', cursor: 'pointer', fontFamily: 'inherit', fontWeight: 600 }}>Limpiar filtros</button>
             </div>
             <div style={{ background: '#1a2035', border: '1px solid #1e2a45', borderRadius: 10, overflow: 'hidden' }}>
-              <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+              <div style={{ overflowX: 'auto' }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 600 }}>
                 <thead><tr>{['Fecha','Empleado','Sucursal','Entrada','Salida','Horas','Ventas','Estado'].map(h => (
                   <th key={h} style={{ textAlign: 'left', fontSize: 9, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '.6px', color: '#4a5568', padding: '9px 16px', borderBottom: '1px solid #1e2a45' }}>{h}</th>
                 ))}</tr></thead>
@@ -446,7 +477,7 @@ export default function AdminPage() {
                     return (
                       <tr key={r.id} style={{ borderBottom: '1px solid rgba(30,42,69,.3)' }}>
                         <td style={{ padding: '9px 16px', fontSize: 11, fontFamily: "'JetBrains Mono'" }}>{fmtDate(r.date)}</td>
-                        <td style={{ padding: '9px 16px' }}><button onClick={() => setSideEmp(emp)} style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', textAlign: 'left', fontFamily: 'inherit' }}><span style={{ fontSize: 12, fontWeight: 600, color: '#3b82f6', textDecoration: 'underline', textDecorationColor: 'rgba(59,130,246,.3)' }}>{emp?.name || '?'}</span></button></td>
+                        <td style={{ padding: '9px 16px' }}><button onClick={() => setEmpPage(emp)} style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', textAlign: 'left', fontFamily: 'inherit' }}><span style={{ fontSize: 12, fontWeight: 600, color: '#3b82f6', textDecoration: 'underline', textDecorationColor: 'rgba(59,130,246,.3)' }}>{emp?.name || '?'}</span></button></td>
                         <td style={{ padding: '9px 16px', fontSize: 11, color: '#8892a8' }}>{site?.name || '?'}</td>
                         <td style={{ padding: '9px 16px', fontSize: 11, fontFamily: "'JetBrains Mono'" }}>{fmtTime(r.check_in, site?.timezone)}</td>
                         <td style={{ padding: '9px 16px', fontSize: 11, fontFamily: "'JetBrains Mono'" }}>{fmtTime(r.check_out, site?.timezone)}</td>
@@ -459,6 +490,7 @@ export default function AdminPage() {
                   {filteredAtt.length === 0 && <tr><td colSpan={8} style={{ padding: 24, textAlign: 'center', color: '#4a5568', fontSize: 12 }}>Sin registros con los filtros seleccionados</td></tr>}
                 </tbody>
               </table>
+              </div>
             </div>
           </>}
           {tab === 'stores' && <StoresDashboard sites={sites} att={todayAtt} schedules={todaySchedules} allEmps={allEmps} onEditSite={s => setModal({ type: 'site', data: s })} />}
@@ -478,7 +510,7 @@ export default function AdminPage() {
                     return (
                       <tr key={emp.id} style={{ borderBottom: '1px solid rgba(30,42,69,.3)' }}>
                         <td style={{ padding: '9px 16px' }}>
-                          <button onClick={() => setSideEmp(emp)} style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', textAlign: 'left', fontFamily: 'inherit' }}>
+                          <button onClick={() => setEmpPage(emp)} style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', textAlign: 'left', fontFamily: 'inherit' }}>
                             <div style={{ fontSize: 12, fontWeight: 600, color: '#3b82f6', textDecoration: 'underline', textDecorationColor: 'rgba(59,130,246,.3)' }}>{emp.name}</div>
                             <div style={{ fontSize: 10, color: '#4a5568' }}>{emp.phone || ''}</div>
                           </button>
@@ -512,7 +544,7 @@ export default function AdminPage() {
                         </td>
                         <td style={{ padding: '9px 16px' }}>
                           <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-                            <button onClick={() => setSideEmp(emp)} style={{ padding: '4px 10px', borderRadius: 5, border: '1px solid rgba(16,185,129,.25)', background: 'rgba(16,185,129,.1)', color: '#10b981', fontSize: 10, cursor: 'pointer', fontFamily: 'inherit', fontWeight: 600 }}>Historial</button>
+                            <button onClick={() => setEmpPage(emp)} style={{ padding: '4px 10px', borderRadius: 5, border: '1px solid rgba(16,185,129,.25)', background: 'rgba(16,185,129,.1)', color: '#10b981', fontSize: 10, cursor: 'pointer', fontFamily: 'inherit', fontWeight: 600 }}>Historial</button>
                             <button onClick={() => setModal({ type: 'schedule', data: emp })} style={{ padding: '4px 10px', borderRadius: 5, border: '1px solid rgba(59,130,246,.25)', background: 'rgba(59,130,246,.12)', color: '#3b82f6', fontSize: 10, cursor: 'pointer', fontFamily: 'inherit', fontWeight: 600 }}>Horarios</button>
                             <button onClick={() => setModal({ type: 'emp', data: { emp, goal } })} style={{ background: 'none', border: 'none', color: '#8892a8', cursor: 'pointer', fontSize: 11, fontFamily: 'inherit' }}>Editar</button>
                             <button onClick={() => { if (confirm('Eliminar ' + emp.name + '?')) delEmp(emp.id) }} style={{ background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer', fontSize: 11, fontFamily: 'inherit' }}>Eliminar</button>
@@ -603,7 +635,6 @@ export default function AdminPage() {
           )}
         </div>
       </div>
-      {sideEmp && <EmpSidePanel emp={sideEmp} att={att.filter(r => r.employee_id === sideEmp.id)} sites={sites} onClose={() => setSideEmp(null)} onRefresh={load} />}
       {modal?.type === 'emp' && <EmpModal
         data={modal.data?.emp || null}
         currentGoal={modal.data?.goal?.weekly_goal || ''}
@@ -628,7 +659,7 @@ const ALL_COLS = [
   { key: 'sales', label: 'Venta' }, { key: 'photo_in', label: 'Foto In' }, { key: 'photo_out', label: 'Foto Out' },
   { key: 'gps', label: 'GPS' }, { key: 'status', label: 'Estado' },
 ]
-function EmpSidePanel({ emp, att, sites, onClose, onRefresh }) {
+function EmpSidePanel({ emp, att, sites, onClose, onRefresh, fullPage }) {
   const [from, setFrom] = useState('')
   const [to,   setTo]   = useState('')
   const [visibleCols, setVisibleCols] = useState(['date','site','checkin','checkout','hours','time_out','sales','photo_in','photo_out','gps','status'])
@@ -656,13 +687,35 @@ function EmpSidePanel({ emp, att, sites, onClose, onRefresh }) {
     if (onRefresh) onRefresh()
   }
   return (
-    <div style={{ position: 'fixed', top: 0, right: 0, width: 480, height: '100vh', background: '#111827', borderLeft: '1px solid #1e2a45', display: 'flex', flexDirection: 'column', zIndex: 150, boxShadow: '-8px 0 32px rgba(0,0,0,.4)' }}>
-      <div style={{ padding: '18px 20px', borderBottom: '1px solid #1e2a45', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexShrink: 0 }}>
-        <div>
-          <div style={{ fontSize: 15, fontWeight: 700 }}>{emp.name}</div>
-          <div style={{ fontSize: 11, color: '#8892a8', marginTop: 2 }}>{emp.email} · {emp.role}</div>
+    <div style={fullPage
+      ? { flex: 1, background: '#111827', display: 'flex', flexDirection: 'column', overflow: 'auto' }
+      : { position: 'fixed', top: 0, right: 0, width: 480, height: '100vh', background: '#111827', borderLeft: '1px solid #1e2a45', display: 'flex', flexDirection: 'column', zIndex: 150, boxShadow: '-8px 0 32px rgba(0,0,0,.4)' }}>
+      {!fullPage && (
+        <div style={{ padding: '18px 20px', borderBottom: '1px solid #1e2a45', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexShrink: 0 }}>
+          <div>
+            <div style={{ fontSize: 15, fontWeight: 700 }}>{emp.name}</div>
+            <div style={{ fontSize: 11, color: '#8892a8', marginTop: 2 }}>{emp.email} · {emp.role}</div>
+          </div>
+          <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+            <div style={{ position: 'relative' }}>
+              <button onClick={() => setShowColPicker(p => !p)} style={{ background: showColPicker ? 'rgba(59,130,246,.12)' : 'none', border: '1px solid '+(showColPicker?'#3b82f6':'#1e2a45'), borderRadius: 6, color: showColPicker?'#3b82f6':'#8892a8', fontSize: 11, cursor: 'pointer', padding: '4px 10px', fontFamily: 'inherit' }}>Columnas</button>
+              {showColPicker && (
+                <div onClick={e => e.stopPropagation()} style={{ position: 'absolute', right: 0, top: 34, background: '#1a2035', border: '1px solid #1e2a45', borderRadius: 10, padding: 12, zIndex: 10, minWidth: 160, boxShadow: '0 8px 24px rgba(0,0,0,.4)' }}>
+                  {ALL_COLS.map(c => (
+                    <label key={c.key} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, cursor: 'pointer', color: '#f1f5f9', padding: '4px 0' }}>
+                      <input type='checkbox' checked={visibleCols.includes(c.key)} onChange={() => setVisibleCols(p => p.includes(c.key) ? p.filter(k => k !== c.key) : [...p, c.key])} style={{ accentColor: '#3b82f6' }} />
+                      {c.label}
+                    </label>
+                  ))}
+                </div>
+              )}
+            </div>
+            <button onClick={onClose} style={{ background: 'none', border: '1px solid #1e2a45', borderRadius: 6, color: '#8892a8', fontSize: 18, cursor: 'pointer', padding: '2px 10px', lineHeight: 1 }}>×</button>
+          </div>
         </div>
-        <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+      )}
+      {fullPage && (
+        <div style={{ padding: '10px 16px', borderBottom: '1px solid #1e2a45', display: 'flex', justifyContent: 'flex-end', flexShrink: 0 }}>
           <div style={{ position: 'relative' }}>
             <button onClick={() => setShowColPicker(p => !p)} style={{ background: showColPicker ? 'rgba(59,130,246,.12)' : 'none', border: '1px solid '+(showColPicker?'#3b82f6':'#1e2a45'), borderRadius: 6, color: showColPicker?'#3b82f6':'#8892a8', fontSize: 11, cursor: 'pointer', padding: '4px 10px', fontFamily: 'inherit' }}>Columnas</button>
             {showColPicker && (
@@ -676,9 +729,8 @@ function EmpSidePanel({ emp, att, sites, onClose, onRefresh }) {
               </div>
             )}
           </div>
-          <button onClick={onClose} style={{ background: 'none', border: '1px solid #1e2a45', borderRadius: 6, color: '#8892a8', fontSize: 18, cursor: 'pointer', padding: '2px 10px', lineHeight: 1 }}>×</button>
         </div>
-      </div>
+      )}
       <div style={{ padding: '12px 20px', borderBottom: '1px solid #1e2a45', display: 'flex', gap: 10, alignItems: 'center', flexShrink: 0 }}>
         <div style={{ flex: 1 }}>
           <div style={{ fontSize: 9, color: '#4a5568', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '.5px', marginBottom: 3 }}>Desde</div>
@@ -690,7 +742,7 @@ function EmpSidePanel({ emp, att, sites, onClose, onRefresh }) {
         </div>
         {(from || to) && <button onClick={() => { setFrom(''); setTo('') }} style={{ background: 'none', border: '1px solid #1e2a45', borderRadius: 5, color: '#8892a8', fontSize: 10, padding: '5px 10px', cursor: 'pointer', fontFamily: 'inherit', marginTop: 14 }}>Limpiar</button>}
       </div>
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', borderBottom: '1px solid #1e2a45', flexShrink: 0 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(80px, 1fr))', borderBottom: '1px solid #1e2a45', flexShrink: 0 }}>
         {[['Registros',filtered.length,'#3b82f6'],['Puntuales',onTime,'#10b981'],['Retardos',late,'#f59e0b'],['Faltas',absent,'#ef4444'],['Horas',fmtHours(totalHours),'#8892a8']].map(([l,v,c],i) => (
           <div key={l} style={{ padding: '10px 14px', borderRight: i < 4 ? '1px solid #1e2a45' : 'none' }}>
             <div style={{ fontSize: 9, color: '#4a5568', textTransform: 'uppercase', letterSpacing: '.5px', marginBottom: 3 }}>{l}</div>
@@ -704,8 +756,8 @@ function EmpSidePanel({ emp, att, sites, onClose, onRefresh }) {
           <div><span style={{ fontSize: 10, color: '#4a5568', textTransform: 'uppercase', letterSpacing: '.5px', marginRight: 8 }}>Prom. diario</span><span style={{ fontSize: 13, fontWeight: 600, fontFamily: "'JetBrains Mono'", color: '#10b981' }}>${Number(totalSales / Math.max(filtered.filter(r => r.sales_amount > 0).length, 1)).toLocaleString('es-MX', { maximumFractionDigits: 0 })}</span></div>
         </div>
       )}
-      <div style={{ flex: 1, overflowY: 'auto' }} onClick={() => showColPicker && setShowColPicker(false)}>
-        <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+      <div style={{ flex: 1, overflowY: fullPage ? 'visible' : 'auto', overflowX: 'auto' }} onClick={() => showColPicker && setShowColPicker(false)}>
+        <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 540 }}>
           <thead style={{ position: 'sticky', top: 0, background: '#111827', zIndex: 1 }}>
             <tr>{ALL_COLS.filter(c => visibleCols.includes(c.key)).map(c => (
               <th key={c.key} style={{ textAlign: 'left', fontSize: 9, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '.6px', color: '#4a5568', padding: '8px 14px', borderBottom: '1px solid #1e2a45', whiteSpace: 'nowrap' }}>{c.label}</th>

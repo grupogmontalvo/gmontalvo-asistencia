@@ -236,6 +236,7 @@ export default function CheckinPage({ params }) {
   const [checkoutErr, setCheckoutErr] = useState('')
   const [showCamera, setShowCamera]   = useState(null)
   const [confirmAction, setConfirmAction] = useState(null)
+  const [checkoutGpsWarn, setCheckoutGpsWarn] = useState(null)
 
   const [thisWeekSales, setThisWeekSales] = useState(0)
   const [lastWeekSales, setLastWeekSales] = useState(0)
@@ -437,11 +438,28 @@ export default function CheckinPage({ params }) {
     setLoading(false)
   }
 
-  function doCheckout() {
+  function proceedToCheckoutConfirm() {
     setConfirmAction({
       label: 'Registrar Salida', desc: '¿Confirmas que estás terminando tu turno?', icon: '✕', color: '#ef4444',
       onConfirm: () => { setConfirmAction(null); emp?.skip_photo ? proceedCheckout() : setShowCamera('out') }
     })
+  }
+
+  function doCheckout() {
+    const hasSiteGps = site?.lat && site.lat !== 0
+    if (!hasSiteGps || !navigator.geolocation) { proceedToCheckoutConfirm(); return }
+    navigator.geolocation.getCurrentPosition(
+      pos => {
+        const dist = haversine(pos.coords.latitude, pos.coords.longitude, site.lat, site.lng)
+        if (dist > site.radius_m) {
+          setCheckoutGpsWarn({ dist: Math.round(dist), max: site.radius_m })
+        } else {
+          proceedToCheckoutConfirm()
+        }
+      },
+      () => proceedToCheckoutConfirm(),
+      { enableHighAccuracy: true, timeout: 8000 }
+    )
   }
 
   function proceedCheckout() {
@@ -782,5 +800,21 @@ export default function CheckinPage({ params }) {
         </button>
       </div>
     </div>
+
+    {checkoutGpsWarn && (
+      <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.75)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 200, padding: '0 16px', backdropFilter: 'blur(4px)' }}>
+        <div style={{ background: '#1a2035', border: '1px solid rgba(239,68,68,.35)', borderRadius: 16, padding: 26, maxWidth: 320, width: '100%', textAlign: 'center' }}>
+          <div style={{ fontSize: 34, marginBottom: 10 }}>📍</div>
+          <div style={{ fontSize: 15, fontWeight: 700, color: '#ef4444', marginBottom: 8 }}>Fuera de rango</div>
+          <div style={{ fontSize: 13, color: '#8892a8', marginBottom: 20 }}>
+            Estás a <strong style={{ color: '#f1f5f9' }}>{checkoutGpsWarn.dist}m</strong> del sitio (máximo {checkoutGpsWarn.max}m).<br />¿Registrar salida de todas formas?
+          </div>
+          <div style={{ display: 'flex', gap: 10 }}>
+            <button onClick={() => { setCheckoutGpsWarn(null); proceedToCheckoutConfirm() }} style={{ flex: 1, padding: '11px 0', borderRadius: 9, border: 'none', background: '#ef4444', color: '#fff', fontSize: 13, fontWeight: 600, cursor: 'pointer', fontFamily: "'DM Sans'" }}>Registrar salida</button>
+            <button onClick={() => setCheckoutGpsWarn(null)} style={{ flex: 1, padding: '11px 0', borderRadius: 9, border: '1px solid #1e2a45', background: 'transparent', color: '#8892a8', fontSize: 13, cursor: 'pointer', fontFamily: "'DM Sans'" }}>Cancelar</button>
+          </div>
+        </div>
+      </div>
+    )}
   )
 }
