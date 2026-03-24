@@ -324,15 +324,25 @@ export default function CheckinPage({ params }) {
   }
 
   function checkGPS(s) {
-    if (!s?.lat || s.lat === 0) { setGps({ status: 'ok', dist: 0 }); return }
+    const noSiteGps = !s?.lat || s.lat === 0
     setGps({ status: 'loading' })
-    if (!navigator.geolocation) { setGps({ status: 'denied' }); return }
+    if (!navigator.geolocation) {
+      // Sin geolocation: si tampoco hay GPS del sitio, permitir; si hay, denegar
+      setGps(noSiteGps ? { status: 'ok', dist: 0 } : { status: 'denied' })
+      return
+    }
     navigator.geolocation.getCurrentPosition(
       pos => {
-        const dist = haversine(pos.coords.latitude, pos.coords.longitude, s.lat, s.lng)
-        setGps({ status: dist <= s.radius_m ? 'ok' : 'far', dist: Math.round(dist), max: s.radius_m, lat: pos.coords.latitude, lng: pos.coords.longitude })
+        const lat = pos.coords.latitude; const lng = pos.coords.longitude
+        if (noSiteGps) {
+          // Sitio sin GPS configurado: guardar coordenadas del empleado pero no bloquear
+          setGps({ status: 'ok', dist: 0, lat, lng })
+        } else {
+          const dist = haversine(lat, lng, s.lat, s.lng)
+          setGps({ status: dist <= s.radius_m ? 'ok' : 'far', dist: Math.round(dist), max: s.radius_m, lat, lng })
+        }
       },
-      () => setGps({ status: 'denied' }),
+      () => setGps(noSiteGps ? { status: 'ok', dist: 0 } : { status: 'denied' }),
       { enableHighAccuracy: true, timeout: 10000 }
     )
   }
@@ -340,8 +350,30 @@ export default function CheckinPage({ params }) {
   async function tryEmail() {
     const e = email.trim().toLowerCase()
     if (!e) { setEmailErr('Ingresa tu email'); return }
-    const { data: empData } = await supabase.from('employees').select('*').eq('email', e).eq('active', true).single()
+
+    // 1. Buscar en empleados activos
+    let { data: empData } = await supabase.from('employees').select('*').eq('email', e).eq('active', true).single()
+
+    // 2. Si no está como empleado, checar si es admin/gerente
+    if (!empData) {
+      const { data: adminData } = await supabase.from('admin_users').select('*').eq('email', e).single()
+      if (adminData) {
+        // Crear automáticamente perfil de empleado para el admin
+        const { data: newEmp } = await supabase.from('employees').insert({
+          name: adminData.name,
+          email: adminData.email,
+          role: adminData.role === 'superadmin' ? 'Administrador' : 'Gerente',
+          company_id: adminData.company_id,
+          active: true,
+          skip_sales: true,
+          skip_photo: false,
+        }).select().single()
+        empData = newEmp
+      }
+    }
+
     if (!empData) { setEmailErr('Email no registrado. Contacta a tu administrador.'); return }
+
     const token = crypto.randomUUID()
     localStorage.setItem('gm-device-token', token)
     await supabase.from('devices').insert({ device_token: token, employee_id: empData.id, user_agent: navigator.userAgent })

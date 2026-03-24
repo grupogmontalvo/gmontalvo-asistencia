@@ -141,7 +141,12 @@ export default function AdminPage() {
     }
 
     let scQuery = supabase.from('schedules').select('*')
-    if (companyId) scQuery = scQuery.eq('company_id', companyId)
+    // Para gerentes: filtrar por site_id (confiable) en lugar de company_id (muchos registros no lo tienen)
+    if (!isSuperAdmin && permSiteIds && permSiteIds.length > 0) {
+      scQuery = scQuery.in('site_id', permSiteIds)
+    } else if (companyId) {
+      scQuery = scQuery.eq('company_id', companyId)
+    }
     const [s, e, ae, a, sc, g, esa] = await Promise.all([
       sitesQuery, empsQuery, allEmpsQuery, attQuery, scQuery,
       supabase.from('employee_goals').select('*'),
@@ -292,7 +297,7 @@ export default function AdminPage() {
           )}
           <nav style={{ flex: 1, padding: 8, display: 'flex', flexDirection: 'column', gap: 2 }}>
             <div style={{ fontSize: 9, fontWeight: 600, textTransform: 'uppercase', letterSpacing: 1, color: '#4a5568', padding: '8px 8px 4px' }}>Principal</div>
-            {[{ id: 'dashboard', lb: 'Dashboard' }, { id: 'attendance', lb: 'Asistencia' }].map(n => (
+            {[{ id: 'dashboard', lb: 'Dashboard' }, { id: 'stores', lb: '🏪 Tiendas' }, { id: 'attendance', lb: 'Asistencia' }].map(n => (
               <button key={n.id} onClick={() => { setTab(n.id); if (window.innerWidth < 768) setSidebarOpen(false) }} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 10px', borderRadius: 6, cursor: 'pointer', fontSize: 12, fontWeight: 500, color: tab === n.id ? '#3b82f6' : '#8892a8', background: tab === n.id ? 'rgba(59,130,246,.12)' : 'transparent', border: 'none', width: '100%', textAlign: 'left', fontFamily: 'inherit' }}>{n.lb}</button>
             ))}
             <div style={{ fontSize: 9, fontWeight: 600, textTransform: 'uppercase', letterSpacing: 1, color: '#4a5568', padding: '12px 8px 4px' }}>Gestión</div>
@@ -318,7 +323,7 @@ export default function AdminPage() {
             <button onClick={() => setSidebarOpen(o => !o)} style={{ background: 'none', border: '1px solid #1e2a45', borderRadius: 6, color: '#8892a8', cursor: 'pointer', padding: '5px 9px', fontSize: 16, lineHeight: 1, fontFamily: 'inherit' }}>☰</button>
             <div>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                <h1 style={{ fontSize: 17, fontWeight: 700 }}>{{ dashboard: 'Dashboard', attendance: 'Asistencia', employees: 'Empleados', sites: 'Sitios', users: 'Usuarios', companies: 'Empresas' }[tab]}</h1>
+                <h1 style={{ fontSize: 17, fontWeight: 700 }}>{{ dashboard: 'Dashboard', stores: 'Tiendas', attendance: 'Asistencia', employees: 'Empleados', sites: 'Sitios', users: 'Usuarios', companies: 'Empresas' }[tab]}</h1>
                 {activeCompany && <span style={{ fontSize: 10, color: '#3b82f6', background: 'rgba(59,130,246,.1)', border: '1px solid rgba(59,130,246,.2)', borderRadius: 4, padding: '2px 8px', fontWeight: 600 }}>{activeCompany.name}</span>}
               </div>
               <p style={{ fontSize: 11, color: '#8892a8', marginTop: 1 }}>{new Date().toLocaleDateString('es-MX', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric', timeZone: 'America/Cancun' })}</p>
@@ -456,6 +461,7 @@ export default function AdminPage() {
               </table>
             </div>
           </>}
+          {tab === 'stores' && <StoresDashboard sites={sites} att={todayAtt} schedules={todaySchedules} allEmps={allEmps} onEditSite={s => setModal({ type: 'site', data: s })} />}
           {tab === 'employees' && (
             <div style={{ background: '#1a2035', border: '1px solid #1e2a45', borderRadius: 10, overflow: 'hidden' }}>
               <table style={{ width: '100%', borderCollapse: 'collapse' }}>
@@ -759,12 +765,16 @@ function EmpModal({ data, currentGoal, sites, currentSiteIds, onSave, onClose })
   const [f, setF] = useState(data || { name: '', email: '', phone: '', role: 'Vendedor(a)', skip_sales: false, skip_photo: false })
   const [weeklyGoal, setWeeklyGoal] = useState(currentGoal ? String(currentGoal) : '')
   const [goalErr, setGoalErr] = useState('')
+  const [emailErr, setEmailErr] = useState('')
   const [selSites, setSelSites] = useState(currentSiteIds || [])
-  const upd = (k, v) => setF(p => ({ ...p, [k]: v }))
-  const valid = f.name?.trim() && f.email?.trim()
+  const upd = (k, v) => { setF(p => ({ ...p, [k]: v })); if (k === 'email') setEmailErr('') }
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+  const emailOk = f.email?.trim() && emailRegex.test(f.email.trim())
+  const valid = f.name?.trim() && emailOk
   const isVendor = !f.skip_sales
   function handleSave() {
-    setGoalErr('')
+    setGoalErr(''); setEmailErr('')
+    if (!emailOk) { setEmailErr('Ingresa un email válido (ej: nombre@correo.com)'); return }
     if (weeklyGoal !== '') {
       const g = parseFloat(weeklyGoal)
       if (isNaN(g) || g <= 0) { setGoalErr('Ingresa un número mayor a 0'); return }
@@ -779,7 +789,8 @@ function EmpModal({ data, currentGoal, sites, currentSiteIds, onSave, onClose })
         {[['Nombre','name','text'],['Email','email','email'],['Teléfono','phone','tel']].map(([l,k,t]) => (
           <div key={k} style={{ marginBottom: 10 }}>
             <label style={{ fontSize: 10, fontWeight: 600, color: '#8892a8', display: 'block', marginBottom: 4 }}>{l}</label>
-            <input type={t} value={f[k]||''} onChange={e => upd(k, e.target.value)} style={{ width:'100%',background:'#0d1220',border:'1px solid #1e2a45',color:'#f1f5f9',fontSize:12,padding:'8px 10px',borderRadius:6,outline:'none',fontFamily:'inherit' }} />
+            <input type={t} value={f[k]||''} onChange={e => upd(k, e.target.value)} style={{ width:'100%',background:'#0d1220',border:`1px solid ${k==='email'&&emailErr?'#ef4444':'#1e2a45'}`,color:'#f1f5f9',fontSize:12,padding:'8px 10px',borderRadius:6,outline:'none',fontFamily:'inherit' }} />
+            {k === 'email' && emailErr && <div style={{ fontSize: 11, color: '#ef4444', marginTop: 4, fontWeight: 600 }}>⚠ {emailErr}</div>}
           </div>
         ))}
         <div style={{ marginBottom: 10 }}>
@@ -942,6 +953,7 @@ function QrModal({ site, url, onClose }) {
 // ─── Schedule Modal ───────────────────────────────────────────────────────────
 function ScheduleModal({ emp, sites, schedules, onSave, onClose }) {
   const todayDate = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Cancun' })
+  const [fixedWeek, setFixedWeek] = useState(emp.fixed_week || false)
   const [weekStart, setWeekStart] = useState(() => getWeekStart(new Date()))
   const [week, setWeek] = useState({})
   const [saving, setSaving] = useState(false)
@@ -966,6 +978,8 @@ function ScheduleModal({ emp, sites, schedules, onSave, onClose }) {
   }
   const save = async () => {
     setSaving(true)
+    // Guardar flag de semana fija en el empleado
+    await supabase.from('employees').update({ fixed_week: fixedWeek }).eq('id', emp.id)
     const editableDates = weekDates.filter(({date}) => !week[date]?.blocked).map(d => d.date)
     if (editableDates.length > 0) await supabase.from('schedules').delete().eq('employee_id', emp.id).in('date', editableDates)
     const inserts = []
@@ -979,16 +993,25 @@ function ScheduleModal({ emp, sites, schedules, onSave, onClose }) {
   return (
     <div onClick={onClose} style={{ position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', background: 'rgba(0,0,0,.7)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 200, backdropFilter: 'blur(4px)' }}>
       <div onClick={e => e.stopPropagation()} style={{ background: '#1a2035', border: '1px solid #1e2a45', borderRadius: 12, padding: 22, width: '100%', maxWidth: 480, maxHeight: '92vh', overflow: 'auto' }}>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4, flexWrap: 'wrap', gap: 8 }}>
           <h3 style={{ fontSize: 15, fontWeight: 700 }}>Horarios — {emp.name}</h3>
-          {!emp.fixed_week && (
-            <div style={{ display: 'flex', alignItems: 'center', gap: 6, background: '#0d1220', border: '1px solid #1e2a45', borderRadius: 8, padding: '4px 6px' }}>
-              <button onClick={() => setWeekStart(d => addDays(d,-7))} style={{ background:'rgba(59,130,246,.15)',border:'none',borderRadius:5,color:'#3b82f6',padding:'5px 12px',cursor:'pointer',fontFamily:'inherit',fontSize:15,fontWeight:700,lineHeight:1 }}>‹</button>
-              <span style={{ fontSize:11,color:'#f1f5f9',fontWeight:600,minWidth:140,textAlign:'center' }}>{weekLabel}</span>
-              <button onClick={() => setWeekStart(d => addDays(d,7))} style={{ background:'rgba(59,130,246,.15)',border:'none',borderRadius:5,color:'#3b82f6',padding:'5px 12px',cursor:'pointer',fontFamily:'inherit',fontSize:15,fontWeight:700,lineHeight:1 }}>›</button>
-            </div>
-          )}
-          {emp.fixed_week && <span style={{ fontSize:10,color:'#f59e0b',background:'rgba(245,158,11,.1)',border:'1px solid rgba(245,158,11,.25)',borderRadius:5,padding:'3px 10px' }}>Semana fija</span>}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            {/* Toggle semana fija */}
+            <button
+              onClick={() => setFixedWeek(v => !v)}
+              style={{ fontSize:10, fontWeight:600, padding:'4px 10px', borderRadius:5, cursor:'pointer', fontFamily:'inherit', border:'1px solid '+(fixedWeek?'rgba(245,158,11,.5)':'#1e2a45'), background:fixedWeek?'rgba(245,158,11,.15)':'transparent', color:fixedWeek?'#f59e0b':'#4a5568', transition:'all .15s' }}
+            >
+              {fixedWeek ? '📌 Semana fija ON' : 'Semana fija OFF'}
+            </button>
+            {/* Selector de semana (solo si NO es semana fija) */}
+            {!fixedWeek && (
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6, background: '#0d1220', border: '1px solid #1e2a45', borderRadius: 8, padding: '4px 6px' }}>
+                <button onClick={() => setWeekStart(d => addDays(d,-7))} style={{ background:'rgba(59,130,246,.15)',border:'none',borderRadius:5,color:'#3b82f6',padding:'5px 12px',cursor:'pointer',fontFamily:'inherit',fontSize:15,fontWeight:700,lineHeight:1 }}>‹</button>
+                <span style={{ fontSize:11,color:'#f1f5f9',fontWeight:600,minWidth:140,textAlign:'center' }}>{weekLabel}</span>
+                <button onClick={() => setWeekStart(d => addDays(d,7))} style={{ background:'rgba(59,130,246,.15)',border:'none',borderRadius:5,color:'#3b82f6',padding:'5px 12px',cursor:'pointer',fontFamily:'inherit',fontSize:15,fontWeight:700,lineHeight:1 }}>›</button>
+              </div>
+            )}
+          </div>
         </div>
         <p style={{ fontSize: 11, color: '#8892a8', marginBottom: 16 }}>Activa los días que trabaja. Cada día puede tener diferente sucursal y horario.</p>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
@@ -1000,7 +1023,7 @@ function ScheduleModal({ emp, sites, schedules, onSave, onClose }) {
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: isOn && !isBlocked ? 10 : 0 }}>
                   <button onClick={() => toggle(date)} disabled={isBlocked} style={{ width:22,height:22,borderRadius:6,flexShrink:0,cursor:isBlocked?'not-allowed':'pointer',border:'2px solid '+(isBlocked?'#f59e0b':isOn?'#10b981':'#4a5568'),background:isBlocked?'rgba(245,158,11,.15)':isOn?'#10b981':'transparent',display:'flex',alignItems:'center',justifyContent:'center',color:isBlocked?'#f59e0b':'#fff',fontSize:12,fontWeight:700 }}>{isBlocked?'🔒':isOn?'✓':''}</button>
                   <span style={{ fontSize:12,fontWeight:700,color:date===todayDate?'#3b82f6':'#f1f5f9' }}>{label}</span>
-                  {!emp.fixed_week && <span style={{ fontSize:10,color:'#4a5568',fontFamily:"'JetBrains Mono'" }}>{date.slice(5).replace('-','/')}</span>}
+                  {!fixedWeek && <span style={{ fontSize:10,color:'#4a5568',fontFamily:"'JetBrains Mono'" }}>{date.slice(5).replace('-','/')}</span>}
                   {isBlocked && <span style={{ fontSize:11,color:'#f59e0b',fontWeight:600,marginLeft:4 }}>Ocupado — otra sucursal</span>}
                   {!isOn && !isBlocked && <span style={{ fontSize:11,color:'#4a5568',marginLeft:4 }}>Descansa</span>}
                 </div>
@@ -1179,6 +1202,118 @@ function AdminUserModal({ data, sites, companies, isSuperAdmin, onSave, onClose 
           </>
         )}
       </div>
+    </div>
+  )
+}
+// ─── Stores Dashboard ─────────────────────────────────────────────────────────
+function StoresDashboard({ sites, att, schedules, allEmps, onEditSite }) {
+  const now = new Date()
+  const nowTimeStr = now.toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: 'America/Cancun' })
+
+  function isStoreOpen(site) {
+    // Tienda "abierta" si al menos un empleado hizo check-in hoy y no ha hecho check-out
+    return att.some(r => r.site_id === site.id && r.check_in && !r.check_out)
+  }
+
+  function storeStats(site) {
+    const siteAtt = att.filter(r => r.site_id === site.id)
+    const siteScheds = schedules.filter(s => s.site_id === site.id)
+    const activeNow = siteAtt.filter(r => r.check_in && !r.check_out).length
+    const completedToday = siteAtt.filter(r => r.check_out).length
+    const totalExpected = siteScheds.length
+    const totalSalesToday = siteAtt.reduce((s, r) => s + (parseFloat(r.sales_amount) || 0), 0)
+    const firstIn = siteAtt.filter(r => r.check_in).sort((a, b) => new Date(a.check_in) - new Date(b.check_in))[0]
+    return { activeNow, completedToday, totalExpected, totalSalesToday, firstIn }
+  }
+
+  const openSites = sites.filter(s => isStoreOpen(s))
+  const closedSites = sites.filter(s => !isStoreOpen(s))
+
+  return (
+    <div>
+      {/* Resumen global */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12, marginBottom: 20 }}>
+        {[
+          ['Tiendas abiertas', openSites.length, '#10b981', 'rgba(16,185,129,.12)'],
+          ['Tiendas sin actividad', closedSites.length, '#f59e0b', 'rgba(245,158,11,.12)'],
+          ['Total sucursales', sites.length, '#3b82f6', 'rgba(59,130,246,.12)'],
+        ].map(([l, v, c, bg]) => (
+          <div key={l} style={{ background: bg, border: `1px solid ${c}33`, borderRadius: 10, padding: '16px 18px' }}>
+            <div style={{ fontSize: 10, color: c, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '.6px', marginBottom: 6 }}>{l}</div>
+            <div style={{ fontSize: 30, fontWeight: 700, fontFamily: "'JetBrains Mono'", color: c }}>{v}</div>
+          </div>
+        ))}
+      </div>
+
+      {/* Tiendas ABIERTAS */}
+      {openSites.length > 0 && (
+        <div style={{ marginBottom: 20 }}>
+          <div style={{ fontSize: 11, fontWeight: 700, color: '#10b981', textTransform: 'uppercase', letterSpacing: '.8px', marginBottom: 10, display: 'flex', alignItems: 'center', gap: 6 }}>
+            <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#10b981', display: 'inline-block', animation: 'pulse 2s infinite' }} />
+            Abiertas ahora
+          </div>
+          <style>{`@keyframes pulse { 0%,100% { opacity:1 } 50% { opacity:.4 } }`}</style>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: 12 }}>
+            {openSites.map(site => {
+              const { activeNow, completedToday, totalExpected, totalSalesToday, firstIn } = storeStats(site)
+              const tz = site.timezone || 'America/Cancun'
+              return (
+                <div key={site.id} style={{ background: '#1a2035', border: '2px solid rgba(16,185,129,.35)', borderRadius: 12, overflow: 'hidden' }}>
+                  <div style={{ padding: '12px 16px', borderBottom: '1px solid rgba(16,185,129,.15)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                    <div>
+                      <div style={{ fontSize: 13, fontWeight: 700 }}>{site.name}</div>
+                      <div style={{ fontSize: 10, color: '#8892a8', marginTop: 1 }}>{site.address}</div>
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                      <span style={{ fontSize: 10, fontWeight: 700, color: '#10b981', background: 'rgba(16,185,129,.12)', border: '1px solid rgba(16,185,129,.3)', borderRadius: 5, padding: '2px 8px' }}>ABIERTA</span>
+                      <button onClick={() => onEditSite(site)} style={{ background: 'none', border: '1px solid #1e2a45', borderRadius: 5, color: '#4a5568', fontSize: 10, padding: '2px 8px', cursor: 'pointer', fontFamily: 'inherit' }}>Editar</button>
+                    </div>
+                  </div>
+                  <div style={{ padding: '10px 16px', display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8 }}>
+                    {[['Activos', activeNow, '#10b981'], ['Completaron', completedToday, '#3b82f6'], ['Esperados', totalExpected, '#8892a8']].map(([l, v, c]) => (
+                      <div key={l} style={{ textAlign: 'center' }}>
+                        <div style={{ fontSize: 9, color: '#4a5568', textTransform: 'uppercase', letterSpacing: '.5px' }}>{l}</div>
+                        <div style={{ fontSize: 20, fontWeight: 700, fontFamily: "'JetBrains Mono'", color: c }}>{v}</div>
+                      </div>
+                    ))}
+                  </div>
+                  {(totalSalesToday > 0 || firstIn) && (
+                    <div style={{ padding: '8px 16px', borderTop: '1px solid #1e2a45', display: 'flex', gap: 16, flexWrap: 'wrap' }}>
+                      {firstIn && <span style={{ fontSize: 10, color: '#8892a8' }}>1ra entrada: <span style={{ fontFamily: "'JetBrains Mono'", color: '#f1f5f9' }}>{new Date(firstIn.check_in).toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: tz })}</span></span>}
+                      {totalSalesToday > 0 && <span style={{ fontSize: 10, color: '#10b981', fontWeight: 600 }}>Ventas: <span style={{ fontFamily: "'JetBrains Mono'" }}>${Number(totalSalesToday).toLocaleString('es-MX')}</span></span>}
+                    </div>
+                  )}
+                </div>
+              )
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* Tiendas SIN ACTIVIDAD */}
+      {closedSites.length > 0 && (
+        <div>
+          <div style={{ fontSize: 11, fontWeight: 700, color: '#4a5568', textTransform: 'uppercase', letterSpacing: '.8px', marginBottom: 10 }}>Sin actividad hoy</div>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 10 }}>
+            {closedSites.map(site => (
+              <div key={site.id} style={{ background: '#1a2035', border: '1px solid #1e2a45', borderRadius: 12, padding: '12px 16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <div>
+                  <div style={{ fontSize: 12, fontWeight: 600, color: '#8892a8' }}>{site.name}</div>
+                  <div style={{ fontSize: 10, color: '#4a5568', marginTop: 1 }}>{site.address}</div>
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <span style={{ fontSize: 9, fontWeight: 700, color: '#4a5568', background: 'rgba(74,85,104,.1)', border: '1px solid #1e2a45', borderRadius: 5, padding: '2px 8px' }}>SIN ACTIVIDAD</span>
+                  <button onClick={() => onEditSite(site)} style={{ background: 'none', border: '1px solid #1e2a45', borderRadius: 5, color: '#4a5568', fontSize: 10, padding: '2px 8px', cursor: 'pointer', fontFamily: 'inherit' }}>Editar</button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {sites.length === 0 && (
+        <div style={{ padding: 32, textAlign: 'center', color: '#4a5568', fontSize: 13, background: '#1a2035', borderRadius: 10, border: '1px solid #1e2a45' }}>No hay sucursales configuradas.</div>
+      )}
     </div>
   )
 }
