@@ -49,10 +49,10 @@ export default function LoginPage() {
     <div style={S.page}>
       <div style={S.card}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 28 }}>
-          <img src='/logo.jpeg' style={{ width: 40, height: 40, borderRadius: 10 }} alt='GM' />
+          <div style={{ width: 40, height: 40, borderRadius: 10, background: '#050810', border: '1.5px solid #1D9E75', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 20, fontWeight: 700, color: '#1D9E75', fontFamily: 'Georgia, serif', flexShrink: 0 }}>W</div>
           <div>
-            <div style={{ fontSize: 16, fontWeight: 700, color: '#f1f5f9' }}>G.Montalvo</div>
-            <div style={{ fontSize: 11, color: '#8892a8' }}>Control de Asistencia</div>
+            <div style={{ fontSize: 16, fontWeight: 700, color: '#f1f5f9' }}>Worktic</div>
+            <div style={{ fontSize: 11, color: '#8892a8' }}>Panel de Administración</div>
           </div>
         </div>
 

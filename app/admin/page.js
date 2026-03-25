@@ -95,6 +95,7 @@ export default function AdminPage() {
     })
   }, [])
   const isSuperAdmin = adminUser?.role === 'superadmin'
+  const isCompanyAdmin = adminUser?.role === 'company_admin'
   async function handleLogout() {
     await supabase.auth.signOut()
     router.push('/admin/login')
@@ -106,10 +107,13 @@ export default function AdminPage() {
     if (isSuperAdmin) {
       const { data: comps } = await supabase.from('companies').select('*').order('name')
       setCompanies(comps || [])
+    } else if (isCompanyAdmin) {
+      const { data: comps } = await supabase.from('companies').select('*').eq('id', adminUser.company_id)
+      setCompanies(comps || [])
     }
     let sitesQuery = supabase.from('sites').select('*').eq('active', true).order('name')
     let permSiteIds = null
-    if (!isSuperAdmin) {
+    if (!isSuperAdmin && !isCompanyAdmin) {
       const { data: perms } = await supabase.from('admin_site_permissions').select('site_id').eq('admin_user_id', adminUser.id)
       permSiteIds = (perms || []).map(p => p.site_id)
       if (permSiteIds.length === 0) { setSites([]); setEmps([]); setAllEmps([]); setAtt([]); setSchedules([]); setLoading(false); return }
@@ -120,7 +124,7 @@ export default function AdminPage() {
     // emps: empleados para gestión (filtrados por sucursal asignada)
     let empsQuery = supabase.from('employees').select('*').eq('active', true).order('name')
     if (companyId) empsQuery = empsQuery.eq('company_id', companyId)
-    if (!isSuperAdmin && permSiteIds) {
+    if (!isSuperAdmin && !isCompanyAdmin && permSiteIds) {
       const { data: empAssignments } = await supabase
         .from('employee_site_assignments')
         .select('employee_id')
@@ -140,13 +144,13 @@ export default function AdminPage() {
     if (companyId) attQuery = attQuery.eq('company_id', companyId)
 
     // FIX BUG 1: para gerentes, también cargamos attendance de sus sucursales (no solo de empleados asignados)
-    if (!isSuperAdmin && permSiteIds) {
+    if (!isSuperAdmin && !isCompanyAdmin && permSiteIds) {
       attQuery = attQuery.in('site_id', permSiteIds)
     }
 
     let scQuery = supabase.from('schedules').select('*')
     // Para gerentes: filtrar por site_id (confiable) en lugar de company_id (muchos registros no lo tienen)
-    if (!isSuperAdmin && permSiteIds && permSiteIds.length > 0) {
+    if (!isSuperAdmin && !isCompanyAdmin && permSiteIds && permSiteIds.length > 0) {
       scQuery = scQuery.in('site_id', permSiteIds)
     } else if (companyId) {
       scQuery = scQuery.eq('company_id', companyId)
@@ -168,9 +172,12 @@ export default function AdminPage() {
     if (isSuperAdmin) {
       const { data: au } = await supabase.from('admin_users').select('*, admin_site_permissions(site_id)').order('created_at')
       setAdminUsers(au || [])
+    } else if (isCompanyAdmin) {
+      const { data: au } = await supabase.from('admin_users').select('*, admin_site_permissions(site_id)').eq('company_id', adminUser.company_id).order('created_at')
+      setAdminUsers(au || [])
     }
     setLoading(false)
-  }, [adminUser, isSuperAdmin, selectedCompanyId])
+  }, [adminUser, isSuperAdmin, isCompanyAdmin, selectedCompanyId])
   useEffect(() => { if (adminUser) load() }, [adminUser, load])
   useEffect(() => {
     if (toast) { const t = setTimeout(() => setToast(null), 2500); return () => clearTimeout(t) }
@@ -327,9 +334,9 @@ export default function AdminPage() {
             {[{ id: 'employees', lb: 'Empleados' }, { id: 'sites', lb: 'Sitios' }].map(n => (
               <button key={n.id} onClick={() => { setTab(n.id); if (window.innerWidth < 768) setSidebarOpen(false) }} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 10px', borderRadius: 6, cursor: 'pointer', fontSize: 12, fontWeight: 500, color: tab === n.id ? '#3b82f6' : '#8892a8', background: tab === n.id ? 'rgba(59,130,246,.12)' : 'transparent', border: 'none', width: '100%', textAlign: 'left', fontFamily: 'inherit' }}>{n.lb}</button>
             ))}
-            {isSuperAdmin && <>
+            {(isSuperAdmin || isCompanyAdmin) && <>
               <div style={{ fontSize: 9, fontWeight: 600, textTransform: 'uppercase', letterSpacing: 1, color: '#4a5568', padding: '12px 8px 4px' }}>Admin</div>
-              {[{ id: 'users', lb: 'Usuarios' }, { id: 'companies', lb: 'Empresas' }].map(n => (
+              {[{ id: 'users', lb: 'Usuarios' }, ...(isSuperAdmin ? [{ id: 'companies', lb: 'Empresas' }] : [])].map(n => (
                 <button key={n.id} onClick={() => { setTab(n.id); if (window.innerWidth < 768) setSidebarOpen(false) }} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 10px', borderRadius: 6, cursor: 'pointer', fontSize: 12, fontWeight: 500, color: tab === n.id ? '#3b82f6' : '#8892a8', background: tab === n.id ? 'rgba(59,130,246,.12)' : 'transparent', border: 'none', width: '100%', textAlign: 'left', fontFamily: 'inherit' }}>{n.lb}</button>
               ))}
             </>}
@@ -354,7 +361,7 @@ export default function AdminPage() {
           </div>
           {tab === 'employees'  && <button onClick={() => setModal({ type: 'emp', data: null })} style={{ padding: '7px 14px', borderRadius: 7, border: 'none', background: '#3b82f6', color: '#fff', fontSize: 12, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}>+ Nuevo Empleado</button>}
           {tab === 'sites'      && <button onClick={() => setModal({ type: 'site', data: null })} style={{ padding: '7px 14px', borderRadius: 7, border: 'none', background: '#3b82f6', color: '#fff', fontSize: 12, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}>+ Nuevo Sitio</button>}
-          {tab === 'users'      && isSuperAdmin && <button onClick={() => setModal({ type: 'adminUser', data: null })} style={{ padding: '7px 14px', borderRadius: 7, border: 'none', background: '#3b82f6', color: '#fff', fontSize: 12, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}>+ Nuevo Usuario</button>}
+          {tab === 'users'      && (isSuperAdmin || isCompanyAdmin) && <button onClick={() => setModal({ type: 'adminUser', data: null })} style={{ padding: '7px 14px', borderRadius: 7, border: 'none', background: '#3b82f6', color: '#fff', fontSize: 12, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}>+ Nuevo Usuario</button>}
           {tab === 'companies'  && isSuperAdmin && <button onClick={() => setModal({ type: 'company', data: null })} style={{ padding: '7px 14px', borderRadius: 7, border: 'none', background: '#3b82f6', color: '#fff', fontSize: 12, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}>+ Nueva Empresa</button>}
         </div>
         <div style={{ flex: 1, padding: '14px 12px', overflow: 'auto' }}>
@@ -586,7 +593,7 @@ export default function AdminPage() {
               {sites.length === 0 && <div style={{ padding: 20, textAlign: 'center', color: '#4a5568', fontSize: 12, background: '#1a2035', borderRadius: 10, border: '1px solid #1e2a45' }}>No hay sitios. Agrega el primero.</div>}
             </div>
           )}
-          {tab === 'users' && isSuperAdmin && (
+          {tab === 'users' && (isSuperAdmin || isCompanyAdmin) && (
             <div style={{ background: '#1a2035', border: '1px solid #1e2a45', borderRadius: 10, overflowX: 'auto' }}>
               <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 600 }}>
                 <thead><tr>{['Usuario','Email','Empresa','Rol','Sucursales',''].map(h => (
@@ -607,8 +614,8 @@ export default function AdminPage() {
                         </td>
                         <td style={{ padding: '9px 16px', fontSize: 11, color: '#8892a8' }}>{au.email}</td>
                         <td style={{ padding: '9px 16px', fontSize: 11, color: '#8892a8' }}>{au.role === 'superadmin' ? <span style={{ color: '#4a5568' }}>—</span> : (auCompany?.name || <span style={{ color: '#ef4444' }}>Sin empresa</span>)}</td>
-                        <td style={{ padding: '9px 16px' }}><span style={{ padding: '2px 8px', borderRadius: 4, fontSize: 10, fontWeight: 600, color: au.role === 'superadmin' ? '#3b82f6' : '#10b981', background: au.role === 'superadmin' ? 'rgba(59,130,246,.12)' : 'rgba(16,185,129,.12)' }}>{au.role === 'superadmin' ? 'Super Admin' : 'Gerente'}</span></td>
-                        <td style={{ padding: '9px 16px', fontSize: 11, color: '#8892a8' }}>{au.role === 'superadmin' ? <span style={{ color: '#4a5568' }}>Todas</span> : auSites.length > 0 ? auSites.join(', ') : <span style={{ color: '#ef4444' }}>Sin asignar</span>}</td>
+                        <td style={{ padding: '9px 16px' }}><span style={{ padding: '2px 8px', borderRadius: 4, fontSize: 10, fontWeight: 600, color: au.role === 'superadmin' ? '#3b82f6' : au.role === 'company_admin' ? '#a855f7' : '#10b981', background: au.role === 'superadmin' ? 'rgba(59,130,246,.12)' : au.role === 'company_admin' ? 'rgba(168,85,247,.12)' : 'rgba(16,185,129,.12)' }}>{au.role === 'superadmin' ? 'Super Admin' : au.role === 'company_admin' ? 'Admin Empresa' : 'Gerente'}</span></td>
+                        <td style={{ padding: '9px 16px', fontSize: 11, color: '#8892a8' }}>{au.role === 'superadmin' ? <span style={{ color: '#4a5568' }}>Todas</span> : au.role === 'company_admin' ? <span style={{ color: '#4a5568' }}>Empresa</span> : auSites.length > 0 ? auSites.join(', ') : <span style={{ color: '#ef4444' }}>Sin asignar</span>}</td>
                         <td style={{ padding: '9px 16px' }}>
                           <div style={{ display: 'flex', gap: 6 }}>
                             <button onClick={() => setModal({ type: 'adminUser', data: au })} style={{ background: 'none', border: 'none', color: '#8892a8', cursor: 'pointer', fontSize: 11, fontFamily: 'inherit' }}>Editar</button>
@@ -662,7 +669,7 @@ export default function AdminPage() {
       {modal?.type === 'site'      && <SiteModal      data={modal.data} onSave={saveSite} onClose={() => setModal(null)} />}
       {modal?.type === 'qr'        && <QrModal        site={modal.data} url={getSiteUrl(modal.data.code)} onClose={() => setModal(null)} />}
       {modal?.type === 'schedule'  && <ScheduleModal  emp={modal.data} sites={sites} schedules={schedules.filter(s => s.employee_id === modal.data.id)} onSave={async () => { await load(); setToast('Horarios guardados'); setModal(null) }} onClose={() => setModal(null)} />}
-      {modal?.type === 'adminUser' && <AdminUserModal data={modal.data} sites={sites} companies={companies} isSuperAdmin={isSuperAdmin} onSave={async () => { await load(); setToast('Usuario guardado'); setModal(null) }} onClose={() => setModal(null)} />}
+      {modal?.type === 'adminUser' && <AdminUserModal data={modal.data} sites={sites} companies={companies} isSuperAdmin={isSuperAdmin} isCompanyAdmin={isCompanyAdmin} adminUser={adminUser} onSave={async () => { await load(); setToast('Usuario guardado'); setModal(null) }} onClose={() => setModal(null)} />}
       {modal?.type === 'company'   && <CompanyModal   data={modal.data} onSave={saveCompany} onClose={() => setModal(null)} />}
       {toast && <div style={{ position: 'fixed', bottom: 20, right: 20, background: '#1a2035', border: '1px solid rgba(16,185,129,.25)', borderRadius: 8, padding: '10px 16px', fontSize: 12, fontWeight: 500, zIndex: 200, color: '#10b981' }}>{toast}</div>}
     </div>
@@ -1149,11 +1156,11 @@ function ScheduleModal({ emp, sites, schedules, onSave, onClose }) {
   )
 }
 // ─── Admin User Modal ─────────────────────────────────────────────────────────
-function AdminUserModal({ data, sites, companies, isSuperAdmin, onSave, onClose }) {
+function AdminUserModal({ data, sites, companies, isSuperAdmin, isCompanyAdmin, adminUser, onSave, onClose }) {
   const [name, setName]         = useState(data?.name || '')
   const [email, setEmail]       = useState(data?.email || '')
   const [role, setRole]         = useState(data?.role || 'manager')
-  const [companyId, setCompanyId] = useState(data?.company_id || companies[0]?.id || '')
+  const [companyId, setCompanyId] = useState(data?.company_id || (isCompanyAdmin ? adminUser?.company_id : companies[0]?.id) || '')
   const [selSites, setSelSites] = useState((data?.admin_site_permissions || []).map(p => p.site_id))
   const [saving, setSaving]     = useState(false)
   const [err, setErr]           = useState('')
@@ -1233,10 +1240,12 @@ function AdminUserModal({ data, sites, companies, isSuperAdmin, onSave, onClose 
             <div style={{ marginBottom: 10 }}>
               <label style={{ fontSize:10,fontWeight:600,color:'#8892a8',display:'block',marginBottom:4 }}>Rol</label>
               <select value={role} onChange={e => setRole(e.target.value)} style={iS}>
-                <option value='manager'>Gerente</option><option value='superadmin'>Super Admin</option>
+                <option value='manager'>Gerente</option>
+                {isSuperAdmin && <option value='company_admin'>Admin Empresa</option>}
+                {isSuperAdmin && <option value='superadmin'>Super Admin</option>}
               </select>
             </div>
-            {role !== 'superadmin' && companies.length > 0 && (
+            {role !== 'superadmin' && isSuperAdmin && companies.length > 0 && (
               <div style={{ marginBottom: 10 }}>
                 <label style={{ fontSize:10,fontWeight:600,color:'#8892a8',display:'block',marginBottom:4 }}>Empresa</label>
                 <select value={companyId} onChange={e => { setCompanyId(e.target.value); setSelSites([]) }} style={iS}>
@@ -1244,7 +1253,7 @@ function AdminUserModal({ data, sites, companies, isSuperAdmin, onSave, onClose 
                 </select>
               </div>
             )}
-            {role !== 'superadmin' && (
+            {role === 'manager' && (
               <div style={{ marginBottom: 16 }}>
                 <div style={{ fontSize:10,fontWeight:600,color:'#8892a8',textTransform:'uppercase',letterSpacing:'.5px',marginBottom:8 }}>Sucursales que puede ver</div>
                 {companySites.length === 0 ? (
