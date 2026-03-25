@@ -587,8 +587,8 @@ export default function AdminPage() {
             </div>
           )}
           {tab === 'users' && isSuperAdmin && (
-            <div style={{ background: '#1a2035', border: '1px solid #1e2a45', borderRadius: 10, overflow: 'hidden' }}>
-              <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+            <div style={{ background: '#1a2035', border: '1px solid #1e2a45', borderRadius: 10, overflowX: 'auto' }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 600 }}>
                 <thead><tr>{['Usuario','Email','Empresa','Rol','Sucursales',''].map(h => (
                   <th key={h} style={{ textAlign: 'left', fontSize: 9, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '.6px', color: '#4a5568', padding: '9px 16px', borderBottom: '1px solid #1e2a45' }}>{h}</th>
                 ))}</tr></thead>
@@ -596,9 +596,15 @@ export default function AdminPage() {
                   {adminUsers.map(au => {
                     const auSites = (au.admin_site_permissions || []).map(p => sites.find(s => s.id === p.site_id)?.name).filter(Boolean)
                     const auCompany = companies.find(c => c.id === au.company_id)
+                    const isActive = au.active !== false
                     return (
-                      <tr key={au.id} style={{ borderBottom: '1px solid rgba(30,42,69,.3)' }}>
-                        <td style={{ padding: '9px 16px' }}><div style={{ fontSize: 12, fontWeight: 600 }}>{au.name}</div></td>
+                      <tr key={au.id} style={{ borderBottom: '1px solid rgba(30,42,69,.3)', opacity: isActive ? 1 : 0.5 }}>
+                        <td style={{ padding: '9px 16px' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                            <span style={{ width: 7, height: 7, borderRadius: '50%', background: isActive ? '#10b981' : '#4a5568', flexShrink: 0 }} />
+                            <div style={{ fontSize: 12, fontWeight: 600 }}>{au.name}</div>
+                          </div>
+                        </td>
                         <td style={{ padding: '9px 16px', fontSize: 11, color: '#8892a8' }}>{au.email}</td>
                         <td style={{ padding: '9px 16px', fontSize: 11, color: '#8892a8' }}>{au.role === 'superadmin' ? <span style={{ color: '#4a5568' }}>—</span> : (auCompany?.name || <span style={{ color: '#ef4444' }}>Sin empresa</span>)}</td>
                         <td style={{ padding: '9px 16px' }}><span style={{ padding: '2px 8px', borderRadius: 4, fontSize: 10, fontWeight: 600, color: au.role === 'superadmin' ? '#3b82f6' : '#10b981', background: au.role === 'superadmin' ? 'rgba(59,130,246,.12)' : 'rgba(16,185,129,.12)' }}>{au.role === 'superadmin' ? 'Super Admin' : 'Gerente'}</span></td>
@@ -606,7 +612,11 @@ export default function AdminPage() {
                         <td style={{ padding: '9px 16px' }}>
                           <div style={{ display: 'flex', gap: 6 }}>
                             <button onClick={() => setModal({ type: 'adminUser', data: au })} style={{ background: 'none', border: 'none', color: '#8892a8', cursor: 'pointer', fontSize: 11, fontFamily: 'inherit' }}>Editar</button>
-                            {au.id !== authUser?.id && <button onClick={async () => { if (confirm('Desactivar ' + au.name + '?')) { await supabase.from('admin_users').update({ active: false }).eq('id', au.id); load(); setToast('Usuario desactivado') } }} style={{ background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer', fontSize: 11, fontFamily: 'inherit' }}>Desactivar</button>}
+                            {au.id !== authUser?.id && (
+                              isActive
+                                ? <button onClick={async () => { if (confirm('Desactivar a ' + au.name + '?')) { await supabase.from('admin_users').update({ active: false }).eq('id', au.id); await load(); setToast('Usuario desactivado') } }} style={{ background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer', fontSize: 11, fontFamily: 'inherit' }}>Desactivar</button>
+                                : <button onClick={async () => { await supabase.from('admin_users').update({ active: true }).eq('id', au.id); await load(); setToast('Usuario reactivado') }} style={{ background: 'none', border: 'none', color: '#10b981', cursor: 'pointer', fontSize: 11, fontFamily: 'inherit' }}>Reactivar</button>
+                            )}
                           </div>
                         </td>
                       </tr>

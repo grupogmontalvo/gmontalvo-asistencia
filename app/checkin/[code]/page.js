@@ -656,6 +656,7 @@ export default function CheckinPage({ params }) {
   )
 
   return (
+    <>
     <div style={S.page}>
       {showCamera === 'in'  && <CameraModal title='📸 Foto de entrada' onCapture={doCheckinWithPhoto} onClose={() => setShowCamera(null)} />}
       {showCamera === 'out' && <CameraModal title='📸 Foto de salida'  onCapture={handleCheckoutPhoto} onClose={() => setShowCamera(null)} />}
@@ -816,5 +817,6 @@ export default function CheckinPage({ params }) {
         </div>
       </div>
     )}
+    </>
   )
 }
