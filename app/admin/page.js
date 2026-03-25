@@ -1407,13 +1407,34 @@ function StoresDashboard({ sites, att, schedules, allEmps, siteHours, today, onE
   )
 }
 // ─── Schedule Board ───────────────────────────────────────────────────────────
+const SB_HOUR_H = 64   // px per hour
+const SB_START  = 6    // 6am
+const SB_END    = 23   // 11pm
+const SB_TOTAL  = (SB_END - SB_START) * SB_HOUR_H
+function sbTimeToY(time) {
+  if (!time) return 0
+  const [h, m] = time.slice(0, 5).split(':').map(Number)
+  return (h - SB_START + m / 60) * SB_HOUR_H
+}
+function sbYToTime(y) {
+  const tot = SB_START + Math.max(0, y) / SB_HOUR_H
+  const h = Math.floor(tot)
+  const m = Math.round(((tot - h) * 60) / 30) * 30
+  const fh = m >= 60 ? h + 1 : h; const fm = m >= 60 ? 0 : m
+  return `${String(Math.max(SB_START, Math.min(SB_END - 1, fh))).padStart(2, '0')}:${String(fm).padStart(2, '0')}`
+}
 function ScheduleBoard({ sites, allEmps, schedules, employeeSiteAssignments, siteHours, isSuperAdmin, adminUser, onRefresh, setToast }) {
   const [selSiteId, setSelSiteId] = useState(sites[0]?.id || '')
   const [weekStart, setWeekStart] = useState(() => getWeekStart(new Date()))
-  const [editCell, setEditCell]   = useState(null) // { empId, date, start, end }
+  const [localSchedules, setLocalSchedules] = useState(schedules)
+  const [resizing, setResizing]   = useState(null)   // { schedId, startTime, origEnd, date }
+  const [resizePrev, setResizePrev] = useState(null) // { schedId, time }
+  const [dragOverDate, setDragOverDate] = useState(null)
+  const [dragTime, setDragTime]   = useState(null)
   const [showSiteHours, setShowSiteHours] = useState(false)
-  const [saving, setSaving]       = useState(false)
-  const [dragOver, setDragOver]   = useState(null) // date being dragged over
+  const colRefs  = useRef({})
+  const gridRef  = useRef(null)
+  const savingRef = useRef(false)
 
   const today = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Cancun' })
   const weekDates = Array.from({ length: 7 }, (_, i) => {
@@ -1422,74 +1443,81 @@ function ScheduleBoard({ sites, allEmps, schedules, employeeSiteAssignments, sit
   })
   const weekLabel = `${weekDates[0].label} ${weekDates[0].date.slice(8)} – ${weekDates[6].label} ${weekDates[6].date.slice(8)} ${weekDates[0].date.slice(0,7).replace('-','/')}`
 
-  // Employees assigned to the selected site
+  // Sync local schedules when parent refreshes (without resetting selSiteId)
+  useEffect(() => { setLocalSchedules(schedules) }, [schedules])
+  // Scroll to 8am on mount
+  useEffect(() => { if (gridRef.current) gridRef.current.scrollTop = sbTimeToY('07:30') }, [])
+
   const siteEmpIds = employeeSiteAssignments.filter(a => a.site_id === selSiteId).map(a => a.employee_id)
   const filteredEmps = allEmps.filter(e => siteEmpIds.includes(e.id))
+  const weekSchedForSite = localSchedules.filter(s => s.site_id === selSiteId && weekDates.some(d => d.date === s.date))
 
-  // Schedules for this site & week
-  const weekSchedForSite = schedules.filter(s =>
-    s.site_id === selSiteId &&
-    weekDates.some(d => d.date === s.date)
-  )
-
-  function getEmpSchedule(empId, date) {
-    return weekSchedForSite.find(s => s.employee_id === empId && s.date === date) || null
-  }
-
-  // day_of_week: 0=Lun...6=Dom
   function getDayHours(date) {
     const jsDow = new Date(date + 'T12:00:00').getDay()
     const dow = jsDow === 0 ? 6 : jsDow - 1
     return (siteHours || []).find(h => h.site_id === selSiteId && h.day_of_week === dow) || null
   }
 
-  async function dropEmp(empId, date) {
-    if (!selSiteId) return
-    const existing = getEmpSchedule(empId, date)
-    if (existing) return // already scheduled, no-op
-    setSaving(true)
+  async function dropEmp(empId, date, y) {
+    if (!selSiteId || savingRef.current) return
+    if (localSchedules.find(s => s.employee_id === empId && s.date === date && s.site_id === selSiteId)) return
+    savingRef.current = true
     const dh = getDayHours(date)
-    const defaultStart = dh?.open_time?.slice(0,5) || '10:00'
-    const defaultEnd   = dh?.close_time?.slice(0,5) || '19:00'
+    const startTime = y != null ? sbYToTime(y) : (dh?.open_time?.slice(0, 5) || '09:00')
+    const [sh, sm] = startTime.split(':').map(Number)
+    const endH = Math.min(SB_END, sh + 8)
+    const endTime = dh?.close_time?.slice(0, 5) || `${String(endH).padStart(2, '0')}:${String(sm).padStart(2, '0')}`
     const companyId = isSuperAdmin ? null : adminUser?.company_id
-    await supabase.from('schedules').insert({
+    const { data: ns } = await supabase.from('schedules').insert({
       employee_id: empId, site_id: selSiteId, date,
-      start_time: defaultStart, end_time: defaultEnd,
-      lunch_mins: 60,
+      start_time: startTime, end_time: endTime, lunch_mins: 60,
       ...(companyId ? { company_id: companyId } : {})
-    })
-    setSaving(false); onRefresh()
+    }).select().single()
+    if (ns) setLocalSchedules(prev => [...prev, ns])
+    savingRef.current = false
+    onRefresh()
   }
 
   async function removeSchedule(schedId) {
-    setSaving(true)
+    setLocalSchedules(prev => prev.filter(s => s.id !== schedId))
     await supabase.from('schedules').delete().eq('id', schedId)
-    setSaving(false); onRefresh()
+    onRefresh()
   }
 
-  async function saveEditCell() {
-    if (!editCell) return
-    setSaving(true)
-    const s = getEmpSchedule(editCell.empId, editCell.date)
-    if (s) {
-      await supabase.from('schedules').update({ start_time: editCell.start, end_time: editCell.end }).eq('id', s.id)
+  // Resize drag: track mouse globally while resizing
+  useEffect(() => {
+    if (!resizing) return
+    let previewEnd = resizing.origEnd
+    function onMove(e) {
+      const col = colRefs.current[resizing.date]
+      if (!col) return
+      const rect = col.getBoundingClientRect()
+      const minY = sbTimeToY(resizing.startTime) + SB_HOUR_H / 2
+      previewEnd = sbYToTime(Math.max(minY, e.clientY - rect.top))
+      setResizePrev({ schedId: resizing.schedId, time: previewEnd })
     }
-    setEditCell(null); setSaving(false); onRefresh()
-  }
-
-  const timeOpts = Array.from({ length: 48 }, (_, i) => {
-    const h = String(Math.floor(i / 2)).padStart(2, '0')
-    const m = i % 2 === 0 ? '00' : '30'
-    return `${h}:${m}`
-  })
+    async function onUp() {
+      if (previewEnd !== resizing.origEnd) {
+        setLocalSchedules(prev => prev.map(s => s.id === resizing.schedId ? { ...s, end_time: previewEnd } : s))
+        supabase.from('schedules').update({ end_time: previewEnd }).eq('id', resizing.schedId)
+        onRefresh()
+      }
+      setResizing(null); setResizePrev(null)
+    }
+    window.addEventListener('mousemove', onMove)
+    window.addEventListener('mouseup', onUp)
+    return () => { window.removeEventListener('mousemove', onMove); window.removeEventListener('mouseup', onUp) }
+  }, [resizing])
 
   if (sites.length === 0) return (
     <div style={{ padding: 40, textAlign: 'center', color: '#4a5568', fontSize: 13 }}>No hay sucursales configuradas.</div>
   )
 
+  const hours = Array.from({ length: SB_END - SB_START }, (_, i) => SB_START + i)
+
   return (
-    <div style={{ fontFamily: "'DM Sans', sans-serif" }}>
-      {/* Header bar */}
+    <div style={{ fontFamily: "'DM Sans', sans-serif", userSelect: resizing ? 'none' : 'auto' }}>
+      {/* Header */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14, flexWrap: 'wrap' }}>
         <select value={selSiteId} onChange={e => setSelSiteId(e.target.value)}
           style={{ background: '#1a2035', border: '1px solid #1e2a45', color: '#f1f5f9', fontSize: 13, fontWeight: 600, padding: '7px 12px', borderRadius: 8, fontFamily: 'inherit', cursor: 'pointer' }}>
@@ -1501,110 +1529,131 @@ function ScheduleBoard({ sites, allEmps, schedules, employeeSiteAssignments, sit
           <button onClick={() => setWeekStart(w => addDays(w, 7))} style={{ background: '#1a2035', border: '1px solid #1e2a45', color: '#8892a8', borderRadius: 7, padding: '6px 10px', cursor: 'pointer', fontSize: 14, fontFamily: 'inherit' }}>›</button>
         </div>
         <button onClick={() => setShowSiteHours(true)}
-          style={{ background: 'rgba(59,130,246,.1)', border: '1px solid rgba(59,130,246,.25)', color: '#3b82f6', borderRadius: 7, padding: '6px 12px', cursor: 'pointer', fontSize: 12, fontWeight: 600, fontFamily: 'inherit', marginLeft: 'auto' }}>
-          ⏰ Horario tienda
+          style={{ marginLeft: 'auto', background: '#1a2035', border: '1px solid rgba(16,185,129,.4)', color: '#10b981', borderRadius: 7, padding: '7px 14px', cursor: 'pointer', fontSize: 12, fontWeight: 600, fontFamily: 'inherit', display: 'flex', alignItems: 'center', gap: 6 }}>
+          ⏰ Horario de la tienda
         </button>
       </div>
 
-      <div style={{ display: 'flex', gap: 12, alignItems: 'flex-start' }}>
-        {/* Left: employee chips (mobile: horizontal scroll row) */}
-        <div style={{ flexShrink: 0, width: 140 }}>
-          <div style={{ fontSize: 9, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '.6px', color: '#4a5568', marginBottom: 8 }}>Empleados</div>
-          {filteredEmps.length === 0 && (
-            <div style={{ fontSize: 11, color: '#4a5568', padding: '8px 0' }}>Sin empleados asignados a esta tienda.</div>
-          )}
+      {/* Calendar grid */}
+      <div style={{ background: '#111827', border: '1px solid #1e2a45', borderRadius: 10, overflow: 'hidden' }}>
+        {/* Day headers — sticky */}
+        <div style={{ display: 'flex', borderBottom: '2px solid #1e2a45', position: 'sticky', top: 0, zIndex: 5, background: '#111827' }}>
+          <div style={{ width: 40, flexShrink: 0 }} />
+          {weekDates.map(({ date, label, isToday, isPast }) => {
+            const dh = getDayHours(date)
+            return (
+              <div key={date} style={{ flex: 1, minWidth: 80, padding: '7px 6px', borderLeft: '1px solid #1e2a45' }}>
+                <div style={{ fontSize: 11, fontWeight: 700, color: isToday ? '#3b82f6' : isPast ? '#4a5568' : '#f1f5f9' }}>
+                  {label} <span style={{ fontFamily: "'JetBrains Mono'", fontSize: 10 }}>{date.slice(8)}</span>
+                </div>
+                {dh
+                  ? <div style={{ fontSize: 9, color: dh.is_open ? '#10b981' : '#ef4444', marginTop: 1 }}>{dh.is_open ? `${dh.open_time?.slice(0,5)}–${dh.close_time?.slice(0,5)}` : '⛔ Cerrado'}</div>
+                  : <div style={{ fontSize: 9, color: '#2d3d5a', marginTop: 1 }}>
+                      <button onClick={() => setShowSiteHours(true)} style={{ background: 'none', border: 'none', color: '#3b82f6', cursor: 'pointer', fontSize: 9, padding: 0, fontFamily: 'inherit', textDecoration: 'underline' }}>+ Agregar horario</button>
+                    </div>}
+              </div>
+            )
+          })}
+        </div>
+
+        {/* Scrollable time body */}
+        <div ref={gridRef} style={{ maxHeight: 520, overflowY: 'auto', overflowX: 'auto' }}>
+          <div style={{ display: 'flex', minWidth: 620 }}>
+            {/* Time axis */}
+            <div style={{ width: 40, flexShrink: 0, background: '#111827' }}>
+              {hours.map(h => (
+                <div key={h} style={{ height: SB_HOUR_H, display: 'flex', alignItems: 'flex-start', justifyContent: 'flex-end', paddingRight: 6, paddingTop: 4, boxSizing: 'border-box', borderTop: '1px solid #1e2a45' }}>
+                  <span style={{ fontSize: 9, color: '#4a5568', fontFamily: "'JetBrains Mono'" }}>{String(h).padStart(2,'0')}</span>
+                </div>
+              ))}
+            </div>
+            {/* Day columns */}
+            <div style={{ flex: 1, display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)' }}>
+              {weekDates.map(({ date, isToday }) => {
+                const dh = getDayHours(date)
+                const dayScheds = weekSchedForSite.filter(s => s.date === date)
+                const isOver = dragOverDate === date
+                return (
+                  <div key={date} style={{ borderLeft: '1px solid #1e2a45' }}>
+                    <div
+                      ref={el => colRefs.current[date] = el}
+                      onDragOver={e => {
+                        e.preventDefault()
+                        const y = e.clientY - e.currentTarget.getBoundingClientRect().top
+                        setDragOverDate(date); setDragTime(sbYToTime(Math.max(0, y)))
+                      }}
+                      onDragLeave={() => { setDragOverDate(null); setDragTime(null) }}
+                      onDrop={e => {
+                        e.preventDefault()
+                        const y = e.clientY - e.currentTarget.getBoundingClientRect().top
+                        setDragOverDate(null); setDragTime(null)
+                        dropEmp(e.dataTransfer.getData('empId'), date, y)
+                      }}
+                      style={{ position: 'relative', height: SB_TOTAL, background: isOver ? 'rgba(59,130,246,.04)' : isToday ? 'rgba(59,130,246,.015)' : 'transparent', transition: 'background .1s' }}>
+                      {/* Hour lines */}
+                      {hours.map(h => (
+                        <div key={h} style={{ position: 'absolute', top: (h - SB_START) * SB_HOUR_H, left: 0, right: 0, borderTop: '1px solid rgba(30,42,69,.7)', pointerEvents: 'none' }} />
+                      ))}
+                      {/* Half-hour lines */}
+                      {hours.map(h => (
+                        <div key={h + '.5'} style={{ position: 'absolute', top: (h - SB_START) * SB_HOUR_H + SB_HOUR_H / 2, left: 0, right: 0, borderTop: '1px dashed rgba(30,42,69,.4)', pointerEvents: 'none' }} />
+                      ))}
+                      {/* Store open-hours highlight */}
+                      {dh?.is_open && dh.open_time && dh.close_time && (
+                        <div style={{ position: 'absolute', top: sbTimeToY(dh.open_time), height: sbTimeToY(dh.close_time) - sbTimeToY(dh.open_time), left: 0, right: 0, background: 'rgba(16,185,129,.04)', pointerEvents: 'none' }} />
+                      )}
+                      {/* Drop preview line */}
+                      {isOver && dragTime && (
+                        <div style={{ position: 'absolute', top: sbTimeToY(dragTime), left: 0, right: 0, height: 2, background: '#3b82f6', pointerEvents: 'none', zIndex: 6 }}>
+                          <span style={{ position: 'absolute', left: 3, top: -9, fontSize: 9, color: '#3b82f6', fontFamily: "'JetBrains Mono'", background: '#111827', padding: '0 2px', borderRadius: 2 }}>{dragTime}</span>
+                        </div>
+                      )}
+                      {/* Schedule blocks */}
+                      {dayScheds.map(s => {
+                        const emp = allEmps.find(e => e.id === s.employee_id)
+                        const startT = s.start_time?.slice(0, 5) || '09:00'
+                        const rawEnd = s.end_time?.slice(0, 5) || '18:00'
+                        const isRes = resizing?.schedId === s.id
+                        const endT = (isRes && resizePrev?.schedId === s.id) ? resizePrev.time : rawEnd
+                        const top = sbTimeToY(startT)
+                        const height = Math.max(SB_HOUR_H / 2, sbTimeToY(endT) - top)
+                        return (
+                          <div key={s.id} style={{ position: 'absolute', top, left: 2, right: 2, height, background: isRes ? 'rgba(59,130,246,.25)' : 'rgba(59,130,246,.14)', border: `1px solid ${isRes ? '#3b82f6' : 'rgba(59,130,246,.35)'}`, borderRadius: 5, overflow: 'hidden', zIndex: isRes ? 10 : 2, boxSizing: 'border-box' }}>
+                            <div style={{ padding: '3px 18px 3px 5px', overflow: 'hidden' }}>
+                              <div style={{ fontSize: 10, fontWeight: 700, color: '#f1f5f9', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{emp?.name || '?'}</div>
+                              <div style={{ fontSize: 9, color: '#8892a8', fontFamily: "'JetBrains Mono'" }}>{startT}–{endT}</div>
+                            </div>
+                            <button onClick={() => removeSchedule(s.id)} style={{ position: 'absolute', top: 2, right: 2, background: 'none', border: 'none', color: '#4a5568', cursor: 'pointer', fontSize: 11, lineHeight: 1, padding: '1px 3px' }} title='Eliminar'>✕</button>
+                            {/* Resize handle */}
+                            <div onMouseDown={e => { e.preventDefault(); e.stopPropagation(); setResizing({ schedId: s.id, startTime: startT, origEnd: rawEnd, date }) }}
+                              style={{ position: 'absolute', bottom: 0, left: 0, right: 0, height: 8, cursor: 'ns-resize', background: 'rgba(59,130,246,.18)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                              <div style={{ width: 16, height: 2, background: 'rgba(59,130,246,.55)', borderRadius: 1 }} />
+                            </div>
+                          </div>
+                        )
+                      })}
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Employee chips */}
+      <div style={{ marginTop: 12 }}>
+        <div style={{ fontSize: 9, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '.6px', color: '#4a5568', marginBottom: 8 }}>Empleados — arrastra al calendario para asignar</div>
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+          {filteredEmps.length === 0 && <div style={{ fontSize: 11, color: '#4a5568' }}>Sin empleados asignados a esta tienda.</div>}
           {filteredEmps.map(emp => (
             <div key={emp.id} draggable
               onDragStart={e => { e.dataTransfer.setData('empId', emp.id); e.dataTransfer.effectAllowed = 'copy' }}
-              style={{ background: '#1a2035', border: '1px solid #1e2a45', borderRadius: 8, padding: '8px 10px', marginBottom: 6, cursor: 'grab', userSelect: 'none', fontSize: 12, display: 'flex', alignItems: 'center', gap: 6 }}>
+              style={{ background: '#1a2035', border: '1px solid #1e2a45', borderRadius: 8, padding: '6px 12px', cursor: 'grab', userSelect: 'none', fontSize: 12, display: 'flex', alignItems: 'center', gap: 6 }}>
               <span style={{ fontSize: 14, color: '#4a5568' }}>⠿</span>
-              <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{emp.name}</span>
+              <span style={{ whiteSpace: 'nowrap' }}>{emp.name}</span>
             </div>
           ))}
-        </div>
-
-        {/* Right: 7-day columns */}
-        <div style={{ flex: 1, overflowX: 'auto' }}>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, minmax(100px, 1fr))', gap: 6, minWidth: 700 }}>
-            {weekDates.map(({ date, label, isToday, isPast }) => {
-              const dh = getDayHours(date)
-              const dayEmps = weekSchedForSite.filter(s => s.date === date)
-              const isOver = dragOver === date
-              return (
-                <div key={date}
-                  onDragOver={e => { e.preventDefault(); setDragOver(date) }}
-                  onDragLeave={() => setDragOver(null)}
-                  onDrop={e => { e.preventDefault(); setDragOver(null); dropEmp(e.dataTransfer.getData('empId'), date) }}
-                  style={{ background: isOver ? 'rgba(59,130,246,.08)' : '#1a2035', border: `1px solid ${isOver ? '#3b82f6' : isToday ? 'rgba(59,130,246,.3)' : '#1e2a45'}`, borderRadius: 10, minHeight: 120, display: 'flex', flexDirection: 'column', transition: 'border-color .15s, background .15s' }}>
-                  {/* Day header */}
-                  <div style={{ padding: '8px 10px', borderBottom: '1px solid #1e2a45' }}>
-                    <div style={{ fontSize: 11, fontWeight: 700, color: isToday ? '#3b82f6' : isPast ? '#4a5568' : '#f1f5f9' }}>{label} {date.slice(8)}</div>
-                    {dh ? (
-                      <div style={{ fontSize: 9, color: dh.is_open ? '#10b981' : '#4a5568', marginTop: 2 }}>
-                        {dh.is_open ? `${dh.open_time?.slice(0,5)}–${dh.close_time?.slice(0,5)}` : '⛔ Cerrado'}
-                      </div>
-                    ) : (
-                      <div style={{ fontSize: 9, color: '#2d3d5a', marginTop: 2 }}>Sin horario</div>
-                    )}
-                  </div>
-                  {/* Assigned employees */}
-                  <div style={{ padding: '6px 8px', flex: 1, display: 'flex', flexDirection: 'column', gap: 4 }}>
-                    {dayEmps.map(s => {
-                      const emp = allEmps.find(e => e.id === s.employee_id)
-                      const isEditing = editCell?.empId === s.employee_id && editCell?.date === date
-                      const dh2 = getDayHours(date)
-                      const isSetup = dh2?.is_open && s.start_time && dh2.open_time && s.start_time < dh2.open_time
-                      return (
-                        <div key={s.id} style={{ background: isEditing ? '#0d1220' : 'rgba(59,130,246,.1)', border: `1px solid ${isEditing ? '#3b82f6' : 'rgba(59,130,246,.2)'}`, borderRadius: 6, padding: '5px 8px', fontSize: 11 }}>
-                          {isEditing ? (
-                            <div>
-                              <div style={{ fontSize: 11, fontWeight: 600, color: '#f1f5f9', marginBottom: 5 }}>{emp?.name}</div>
-                              <div style={{ display: 'flex', gap: 4, marginBottom: 5 }}>
-                                <select value={editCell.start} onChange={e => setEditCell(p => ({...p, start: e.target.value}))}
-                                  style={{ flex: 1, background: '#1a2035', border: '1px solid #1e2a45', color: '#f1f5f9', fontSize: 10, padding: '3px 4px', borderRadius: 4, fontFamily: 'inherit' }}>
-                                  {timeOpts.map(t => <option key={t} value={t}>{t}</option>)}
-                                </select>
-                                <span style={{ color: '#4a5568', alignSelf: 'center', fontSize: 10 }}>–</span>
-                                <select value={editCell.end} onChange={e => setEditCell(p => ({...p, end: e.target.value}))}
-                                  style={{ flex: 1, background: '#1a2035', border: '1px solid #1e2a45', color: '#f1f5f9', fontSize: 10, padding: '3px 4px', borderRadius: 4, fontFamily: 'inherit' }}>
-                                  {timeOpts.map(t => <option key={t} value={t}>{t}</option>)}
-                                </select>
-                              </div>
-                              <div style={{ display: 'flex', gap: 4 }}>
-                                <button onClick={saveEditCell} disabled={saving} style={{ flex: 1, background: '#3b82f6', border: 'none', color: '#fff', borderRadius: 4, padding: '3px 0', fontSize: 10, cursor: 'pointer', fontFamily: 'inherit' }}>✓ Guardar</button>
-                                <button onClick={() => setEditCell(null)} style={{ background: 'none', border: '1px solid #1e2a45', color: '#8892a8', borderRadius: 4, padding: '3px 6px', fontSize: 10, cursor: 'pointer', fontFamily: 'inherit' }}>✕</button>
-                              </div>
-                            </div>
-                          ) : (
-                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 4 }}>
-                              <div style={{ flex: 1, overflow: 'hidden' }}>
-                                <div style={{ fontWeight: 600, color: '#f1f5f9', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{emp?.name || '?'}</div>
-                                <div style={{ fontSize: 9, color: '#8892a8', fontFamily: "'JetBrains Mono'" }}>
-                                  {s.start_time?.slice(0,5)}–{s.end_time?.slice(0,5)}
-                                  {isSetup && <span style={{ marginLeft: 4, color: '#f59e0b' }}>📦</span>}
-                                </div>
-                              </div>
-                              <div style={{ display: 'flex', gap: 3, flexShrink: 0 }}>
-                                <button onClick={() => setEditCell({ empId: s.employee_id, date, start: s.start_time?.slice(0,5)||'10:00', end: s.end_time?.slice(0,5)||'19:00' })}
-                                  style={{ background: 'none', border: 'none', color: '#8892a8', cursor: 'pointer', fontSize: 12, padding: '1px 3px', lineHeight: 1 }} title='Editar horas'>✎</button>
-                                <button onClick={() => removeSchedule(s.id)}
-                                  style={{ background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer', fontSize: 12, padding: '1px 3px', lineHeight: 1 }} title='Eliminar'>✕</button>
-                              </div>
-                            </div>
-                          )}
-                        </div>
-                      )
-                    })}
-                    {dayEmps.length === 0 && (
-                      <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10, color: '#2d3d5a', padding: '8px 0', textAlign: 'center', borderRadius: 6, border: '1px dashed #1e2a45', minHeight: 40 }}>
-                        Arrastra un empleado aquí
-                      </div>
-                    )}
-                  </div>
-                </div>
-              )
-            })}
-          </div>
         </div>
       </div>
 
