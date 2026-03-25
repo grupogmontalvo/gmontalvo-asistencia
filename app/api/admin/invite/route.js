@@ -1,12 +1,12 @@
 import { createClient } from '@supabase/supabase-js'
 import { NextResponse } from 'next/server'
 
-// Genera una contraseña temporal legible: Xxxx + 4 dígitos
+// Genera una contraseña temporal fácil de teclear: Palabra + 3 dígitos
 function tempPassword() {
-  const words = ['Casa','Mist','Luna','Nova','Star','Flux','Vega','Bolt','Apex','Zeta']
+  const words = ['Gm','Sol','Mar','Rio','Luz','Paz','Red','Top','Fix','Uno']
   const w = words[Math.floor(Math.random() * words.length)]
-  const n = String(Math.floor(1000 + Math.random() * 9000))
-  return w + n
+  const n = String(Math.floor(100 + Math.random() * 900))
+  return w + n   // e.g. Gm847, Sol312 — corto y sin ambigüedad
 }
 
 export async function POST(request) {
@@ -20,6 +20,10 @@ export async function POST(request) {
 
     const pwd = customPwd || tempPassword()
 
+    if (!process.env.SUPABASE_SERVICE_ROLE_KEY) {
+      return NextResponse.json({ error: 'Falta configurar SUPABASE_SERVICE_ROLE_KEY en Vercel. Ve a Vercel → Settings → Environment Variables.' }, { status: 500 })
+    }
+
     // Crear usuario con contraseña — sin link de confirmación
     const { data: userData, error: userErr } = await supabaseAdmin.auth.admin.createUser({
       email,
@@ -27,7 +31,18 @@ export async function POST(request) {
       email_confirm: true,   // confirmar email automáticamente
     })
 
-    if (userErr) return NextResponse.json({ error: userErr.message }, { status: 400 })
+    if (userErr) {
+      // Si el usuario ya existe, actualizar su contraseña en vez de fallar
+      if (userErr.message?.includes('already been registered') || userErr.message?.includes('already exists')) {
+        const { data: existing } = await supabaseAdmin.auth.admin.listUsers()
+        const existingUser = existing?.users?.find(u => u.email === email)
+        if (existingUser) {
+          await supabaseAdmin.auth.admin.updateUserById(existingUser.id, { password: pwd, email_confirm: true })
+          return NextResponse.json({ ok: true, password: pwd, updated: true })
+        }
+      }
+      return NextResponse.json({ error: userErr.message }, { status: 400 })
+    }
 
     const userId = userData.user.id
 
