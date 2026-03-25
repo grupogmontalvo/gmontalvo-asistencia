@@ -1150,15 +1150,15 @@ function ScheduleModal({ emp, sites, schedules, onSave, onClose }) {
 }
 // ─── Admin User Modal ─────────────────────────────────────────────────────────
 function AdminUserModal({ data, sites, companies, isSuperAdmin, onSave, onClose }) {
-  const [name, setName]       = useState(data?.name || '')
-  const [email, setEmail]     = useState(data?.email || '')
-  const [role, setRole]       = useState(data?.role || 'manager')
+  const [name, setName]         = useState(data?.name || '')
+  const [email, setEmail]       = useState(data?.email || '')
+  const [role, setRole]         = useState(data?.role || 'manager')
   const [companyId, setCompanyId] = useState(data?.company_id || companies[0]?.id || '')
   const [selSites, setSelSites] = useState((data?.admin_site_permissions || []).map(p => p.site_id))
-  const [saving, setSaving]   = useState(false)
-  const [err, setErr]         = useState('')
-  const [inviteLink, setInviteLink] = useState('')
-  const [copied, setCopied]   = useState(false)
+  const [saving, setSaving]     = useState(false)
+  const [err, setErr]           = useState('')
+  const [createdPwd, setCreatedPwd] = useState('')
+  const [copied, setCopied]     = useState(false)
   const valid = name.trim() && email.trim()
   const companySites = companyId ? sites.filter(s => s.company_id === companyId) : sites
 
@@ -1179,37 +1179,37 @@ function AdminUserModal({ data, sites, companies, isSuperAdmin, onSave, onClose 
           body: JSON.stringify({ email: email.trim().toLowerCase(), name, role, site_ids: selSites, company_id: role === 'superadmin' ? null : companyId })
         })
         const json = await res.json()
-        if (!res.ok) { setErr(json.error || 'Error al generar invitación'); setSaving(false); return }
-        setInviteLink(json.link)
+        if (!res.ok) { setErr(json.error || 'Error al crear usuario'); setSaving(false); return }
+        setCreatedPwd(json.password)
         setSaving(false)
       }
     } catch (e) { setErr('Error inesperado. Intenta de nuevo.'); setSaving(false) }
   }
 
-  function copyLink() {
-    navigator.clipboard.writeText(inviteLink)
+  function copyCredentials() {
+    const siteUrl = 'https://gmontalvo-asistencia.vercel.app/admin/login'
+    navigator.clipboard.writeText(`Acceso al panel GM Asistencia:\nURL: ${siteUrl}\nEmail: ${email.trim().toLowerCase()}\nContraseña: ${createdPwd}`)
     setCopied(true)
-    setTimeout(() => setCopied(false), 2000)
+    setTimeout(() => setCopied(false), 2500)
   }
 
   const iS = { width:'100%',background:'#0d1220',border:'1px solid #1e2a45',color:'#f1f5f9',fontSize:12,padding:'8px 10px',borderRadius:6,outline:'none',fontFamily:'inherit' }
   return (
-    <div onClick={inviteLink ? undefined : onClose} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.7)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 200 }}>
+    <div onClick={createdPwd ? undefined : onClose} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.7)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 200 }}>
       <div onClick={e => e.stopPropagation()} style={{ background: '#1a2035', border: '1px solid #1e2a45', borderRadius: 12, padding: 22, width: '100%', maxWidth: 460, maxHeight: '85vh', overflow: 'auto' }}>
-        <h3 style={{ fontSize: 15, fontWeight: 700, marginBottom: 14 }}>{data ? 'Editar Usuario' : 'Invitar Usuario Admin'}</h3>
-        {inviteLink ? (
+        <h3 style={{ fontSize: 15, fontWeight: 700, marginBottom: 14 }}>{data ? 'Editar Usuario' : 'Nuevo Usuario Admin'}</h3>
+        {createdPwd ? (
           <div>
             <div style={{ background: 'rgba(16,185,129,.08)', border: '1px solid rgba(16,185,129,.2)', borderRadius: 10, padding: '16px 18px', marginBottom: 16 }}>
-              <div style={{ fontSize: 13, fontWeight: 700, color: '#10b981', marginBottom: 6 }}>✅ Usuario creado — link listo</div>
-              <div style={{ fontSize: 11, color: '#8892a8', marginBottom: 12 }}>Copia este link y mándalo por WhatsApp a <strong style={{ color: '#f1f5f9' }}>{name}</strong>. Debe abrirlo en Chrome, no desde la app de Gmail.</div>
-              <div style={{ background: '#0d1220', border: '1px solid #1e2a45', borderRadius: 7, padding: '10px 12px', fontSize: 10, color: '#8892a8', wordBreak: 'break-all', fontFamily: "'JetBrains Mono'", marginBottom: 12, lineHeight: 1.5 }}>
-                {inviteLink}
+              <div style={{ fontSize: 13, fontWeight: 700, color: '#10b981', marginBottom: 8 }}>✅ Usuario creado</div>
+              <div style={{ fontSize: 11, color: '#8892a8', marginBottom: 14 }}>Manda estos datos a <strong style={{ color: '#f1f5f9' }}>{name}</strong> por WhatsApp. Puede cambiar su contraseña después.</div>
+              <div style={{ background: '#0d1220', border: '1px solid #1e2a45', borderRadius: 8, padding: '14px 16px', marginBottom: 14 }}>
+                <div style={{ fontSize: 10, color: '#4a5568', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '.5px', marginBottom: 8 }}>Credenciales de acceso</div>
+                <div style={{ fontSize: 12, color: '#8892a8', marginBottom: 4 }}>Email: <span style={{ color: '#f1f5f9', fontFamily: "'JetBrains Mono'" }}>{email.trim().toLowerCase()}</span></div>
+                <div style={{ fontSize: 12, color: '#8892a8' }}>Contraseña: <span style={{ color: '#3b82f6', fontFamily: "'JetBrains Mono'", fontWeight: 700, fontSize: 15 }}>{createdPwd}</span></div>
               </div>
-              <button
-                onClick={copyLink}
-                style={{ width: '100%', padding: '11px 16px', borderRadius: 7, border: 'none', background: copied ? '#10b981' : '#3b82f6', color: '#fff', fontSize: 13, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', transition: 'background .2s' }}
-              >
-                {copied ? '¡Copiado! ✓' : '📋 Copiar link para WhatsApp'}
+              <button onClick={copyCredentials} style={{ width: '100%', padding: '11px 16px', borderRadius: 7, border: 'none', background: copied ? '#10b981' : '#3b82f6', color: '#fff', fontSize: 13, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', transition: 'background .2s' }}>
+                {copied ? '¡Copiado! ✓' : '📋 Copiar para WhatsApp'}
               </button>
             </div>
             <button onClick={onSave} style={{ width: '100%', padding: '10px 16px', borderRadius: 7, border: '1px solid #1e2a45', background: 'transparent', color: '#8892a8', fontSize: 12, cursor: 'pointer', fontFamily: 'inherit' }}>
@@ -1227,7 +1227,7 @@ function AdminUserModal({ data, sites, companies, isSuperAdmin, onSave, onClose 
               <div style={{ marginBottom: 10 }}>
                 <label style={{ fontSize:10,fontWeight:600,color:'#8892a8',display:'block',marginBottom:4 }}>Email</label>
                 <input type='email' value={email} onChange={e => setEmail(e.target.value)} style={iS} />
-                <div style={{ fontSize:10,color:'#4a5568',marginTop:4 }}>Se generará un link que le mandarás por WhatsApp</div>
+                <div style={{ fontSize:10,color:'#4a5568',marginTop:4 }}>Se generará una contraseña temporal para mandar por WhatsApp</div>
               </div>
             )}
             <div style={{ marginBottom: 10 }}>
@@ -1263,7 +1263,7 @@ function AdminUserModal({ data, sites, companies, isSuperAdmin, onSave, onClose 
             )}
             <div style={{ display: 'flex', gap: 8 }}>
               <button disabled={!valid||saving} onClick={handleSave} style={{ flex:1,padding:'10px 16px',borderRadius:7,border:'none',background:valid&&!saving?'#3b82f6':'#1e2a45',color:'#fff',fontSize:12,fontWeight:600,cursor:valid&&!saving?'pointer':'not-allowed',fontFamily:'inherit' }}>
-                {saving ? 'Generando...' : data ? 'Guardar' : 'Generar link de acceso'}
+                {saving ? 'Creando...' : data ? 'Guardar' : 'Crear usuario'}
               </button>
               <button onClick={onClose} style={{ padding:'10px 16px',borderRadius:7,border:'1px solid #1e2a45',background:'transparent',color:'#8892a8',fontSize:12,cursor:'pointer',fontFamily:'inherit' }}>Cancelar</button>
             </div>
