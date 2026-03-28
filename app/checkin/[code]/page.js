@@ -1,14 +1,15 @@
 'use client'
 import { useState, useEffect, useRef } from 'react'
 import { supabase } from '../../../lib/supabase'
+import { InstallButton } from '../../components/PWAInstall'
 
 const S = {
-  page: { minHeight: '100vh', background: '#050810', display: 'flex', flexDirection: 'column', alignItems: 'center' },
+  page: { minHeight: '100vh', background: '#0c1022', display: 'flex', flexDirection: 'column', alignItems: 'center' },
   bar: { width: '100%', padding: '14px 18px', display: 'flex', alignItems: 'center', justifyContent: 'center', borderBottom: '1px solid #1e2a45', background: '#111827', gap: 10 },
   logo: { width: 28, height: 28, borderRadius: 6 },
   container: { width: '100%', maxWidth: 400, padding: '20px 16px', display: 'flex', flexDirection: 'column', gap: 16 },
-  card: { background: '#1a2035', border: '1px solid #1e2a45', borderRadius: 14, padding: 22, textAlign: 'center' },
-  clock: { fontFamily: "'JetBrains Mono', monospace", fontSize: 40, fontWeight: 700, letterSpacing: -2, margin: '14px 0 4px', background: 'linear-gradient(135deg, #3b82f6, #06b6d4)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' },
+  card: { background: '#1c2641', border: '1px solid #243154', borderRadius: 14, padding: 22, textAlign: 'center' },
+  clock: { fontFamily: "'JetBrains Mono', monospace", fontSize: 42, fontWeight: 700, letterSpacing: -2, margin: '14px 0 4px', background: 'linear-gradient(135deg, #3b82f6, #06b6d4)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' },
   input: { width: '100%', background: '#0d1220', border: '1px solid #1e2a45', color: '#f1f5f9', fontFamily: "'DM Sans', sans-serif", fontSize: 16, padding: '14px 16px', borderRadius: 10, outline: 'none', textAlign: 'center' },
   btnP: { width: '100%', padding: '14px 20px', borderRadius: 10, border: 'none', background: '#3b82f6', color: '#fff', fontFamily: "'DM Sans', sans-serif", fontSize: 14, fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 },
   btnGrid: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 },
@@ -19,8 +20,8 @@ const S = {
   timeline: { background: '#1a2035', border: '1px solid #1e2a45', borderRadius: 12, padding: 16 },
   tItem: { display: 'flex', alignItems: 'center', gap: 10, padding: '6px 0', fontSize: 12 },
   dot: (c) => ({ width: 7, height: 7, borderRadius: '50%', background: c, flexShrink: 0 }),
-  sub: { fontSize: 12, color: '#8892a8' },
-  muted: { fontSize: 11, color: '#4a5568' },
+  sub: { fontSize: 13, color: '#8892a8' },
+  muted: { fontSize: 12, color: '#4a5568' },
 }
 
 function haversine(lat1, lng1, lat2, lng2) {
@@ -48,6 +49,116 @@ function getWeekBounds(dateStr) {
   sun.setDate(mon.getDate() + 6)
   const toStr = x => x.toLocaleDateString('en-CA')
   return { start: toStr(mon), end: toStr(sun) }
+}
+
+function KpiCarousel({ empId, siteId, thisWeekSales, lastWeekSales, weeklyGoal }) {
+  const [cards, setCards] = useState([])
+  const [idx, setIdx] = useState(0)
+  const [paused, setPaused] = useState(false)
+  const [loaded, setLoaded] = useState(false)
+
+  useEffect(() => {
+    if (!empId || !siteId) return
+    loadCards()
+  }, [empId, siteId, thisWeekSales])
+
+  async function loadCards() {
+    const tz = 'America/Cancun'
+    const today = new Date().toLocaleDateString('en-CA', { timeZone: tz })
+    const { start: weekStart, end: weekEnd } = getWeekBounds(today)
+    const monthStr = today.slice(0, 7)
+    const built = []
+
+    // Card: week sales + goal
+    if (thisWeekSales > 0 || weeklyGoal > 0) {
+      const pct = weeklyGoal > 0 ? Math.round(thisWeekSales / weeklyGoal * 100) : null
+      built.push({
+        icon: '💰', title: 'Ventas esta semana',
+        value: '$' + Number(thisWeekSales).toLocaleString('es-MX'),
+        sub: pct !== null ? `${pct}% de tu meta semanal` : 'Sin meta configurada',
+        color: '#10b981', progress: pct ? Math.min(100, pct) : null
+      })
+    }
+
+    // Cards: active competitions
+    const { data: compSites } = await supabase.from('competition_sites').select('competition_id, competitions(*)').eq('site_id', siteId)
+    const activeComps = (compSites || []).map(cs => cs.competitions).filter(c => c && c.active)
+    for (const comp of activeComps.slice(0, 3)) {
+      let dateStart, dateEnd
+      if (comp.type === 'auto_week')  { dateStart = weekStart; dateEnd = weekEnd }
+      else if (comp.type === 'auto_month') { dateStart = monthStr + '-01'; dateEnd = today }
+      else { dateStart = comp.start_date; dateEnd = comp.end_date || today }
+      if (dateStart > today) continue
+      const { data: cSites } = await supabase.from('competition_sites').select('site_id').eq('competition_id', comp.id)
+      const siteIds = (cSites || []).map(cs => cs.site_id)
+      const { data: cAtt } = await supabase.from('attendance').select('employee_id, sales_amount, status').in('site_id', siteIds).gte('date', dateStart).lte('date', dateEnd)
+      if (!cAtt) continue
+      const scores = {}
+      cAtt.forEach(r => {
+        if (!scores[r.employee_id]) scores[r.employee_id] = 0
+        if (comp.metric === 'sales')       scores[r.employee_id] += parseFloat(r.sales_amount) || 0
+        else if (comp.metric === 'attendance') scores[r.employee_id] += 1
+        else if (comp.metric === 'punctuality') scores[r.employee_id] += r.status === 'on_time' ? 1 : 0
+        else scores[r.employee_id] += parseFloat(r.sales_amount) || 0
+      })
+      const sorted = Object.entries(scores).sort((a, b) => b[1] - a[1])
+      const rank = sorted.findIndex(([id]) => id === empId) + 1
+      if (rank < 1) continue
+      const myScore = scores[empId] || 0
+      const ahead = rank > 1 ? sorted[rank - 2] : null
+      const diff = ahead ? ahead[1] - myScore : 0
+      let organizerName = null
+      if (comp.created_by) {
+        const { data: creator } = await supabase.from('admin_users').select('name').eq('id', comp.created_by).maybeSingle()
+        organizerName = creator?.name || null
+      }
+      built.push({
+        icon: rank === 1 ? '🏆' : '🎯', title: comp.name,
+        value: `#${rank} de ${sorted.length}`,
+        sub: rank === 1 ? '¡Vas ganando la competencia!' : comp.metric === 'sales' ? `Faltan $${Number(diff).toLocaleString('es-MX')} para el #${rank - 1}` : `${diff} pts para el #${rank - 1}`,
+        color: rank === 1 ? '#f59e0b' : '#8b5cf6',
+        isComp: true, prize: comp.prize_text, organizer: organizerName
+      })
+    }
+
+    setCards(built)
+    setLoaded(true)
+  }
+
+  useEffect(() => {
+    if (paused || cards.length <= 1) return
+    const t = setInterval(() => setIdx(i => (i + 1) % cards.length), 4000)
+    return () => clearInterval(t)
+  }, [paused, cards.length])
+
+  if (!loaded || cards.length === 0) return null
+  const card = cards[idx]
+
+  return (
+    <div style={{ background: '#1a2035', border: `1px solid ${card.isComp ? 'rgba(245,158,11,.4)' : '#1e2a45'}`, borderRadius: 14, padding: '18px 20px', textAlign: 'center', cursor: 'pointer', userSelect: 'none', transition: 'border-color .3s' }}
+      onClick={() => setPaused(p => !p)}>
+      <div style={{ fontSize: 26, marginBottom: 6 }}>{card.icon}</div>
+      <div style={{ fontSize: 9, color: '#4a5568', textTransform: 'uppercase', letterSpacing: '.7px', marginBottom: 4 }}>{card.title}</div>
+      <div style={{ fontSize: 22, fontWeight: 700, fontFamily: "'JetBrains Mono', monospace", color: card.color, lineHeight: 1.2 }}>{card.value}</div>
+      {card.sub && <div style={{ fontSize: 11, color: '#8892a8', marginTop: 4 }}>{card.sub}</div>}
+      {card.progress != null && (
+        <div style={{ marginTop: 10, height: 4, background: 'rgba(30,42,69,.8)', borderRadius: 2, overflow: 'hidden' }}>
+          <div style={{ height: '100%', width: card.progress + '%', background: card.color, borderRadius: 2, transition: 'width .6s ease' }} />
+        </div>
+      )}
+      {card.prize && <div style={{ marginTop: 6, fontSize: 10, color: '#f59e0b' }}>🎁 {card.prize}</div>}
+      {card.organizer && <div style={{ marginTop: 4, fontSize: 10, color: '#4a5568' }}>Organizado por {card.organizer}</div>}
+      {cards.length > 1 && (
+        <div style={{ display: 'flex', justifyContent: 'center', gap: 5, marginTop: 12 }}>
+          {cards.map((_, i) => (
+            <div key={i} onClick={e => { e.stopPropagation(); setIdx(i); setPaused(true) }}
+              style={{ width: i === idx ? 16 : 6, height: 6, borderRadius: 3, background: i === idx ? card.color : '#1e2a45', transition: 'all .3s', cursor: 'pointer' }} />
+          ))}
+        </div>
+      )}
+      {paused && <div style={{ fontSize: 9, color: '#4a5568', marginTop: 6 }}>Toca para continuar ▶</div>}
+    </div>
+  )
 }
 
 function SalesModal({ onConfirm, onSkip }) {
@@ -86,6 +197,16 @@ function SalesModal({ onConfirm, onSkip }) {
   )
 }
 
+async function detectFaceCount(blob) {
+  if (typeof window === 'undefined' || !('FaceDetector' in window)) return null
+  try {
+    const fd = new window.FaceDetector({ fastMode: true, maxDetectedFaces: 5 })
+    const img = await createImageBitmap(blob)
+    const faces = await fd.detect(img)
+    return faces.length
+  } catch { return null }
+}
+
 function CameraModal({ onCapture, onClose, title = '📸 Foto de entrada' }) {
   const videoRef  = useRef(null)
   const canvasRef = useRef(null)
@@ -93,7 +214,9 @@ function CameraModal({ onCapture, onClose, title = '📸 Foto de entrada' }) {
   const [preview, setPreview] = useState(null)
   const [blob, setBlob]       = useState(null)
   const [err, setErr]         = useState('')
+  const [faceErr, setFaceErr] = useState('')
   const [camReady, setCamReady] = useState(false)
+  const [validating, setValidating] = useState(false)
 
   useEffect(() => {
     async function startCam() {
@@ -112,11 +235,26 @@ function CameraModal({ onCapture, onClose, title = '📸 Foto de entrada' }) {
     if (!video || !canvas) return
     canvas.width = video.videoWidth; canvas.height = video.videoHeight
     canvas.getContext('2d').drawImage(video, 0, 0)
-    canvas.toBlob(b => { if (!b) return; setBlob(b); setPreview(URL.createObjectURL(b)); streamRef.current?.getTracks().forEach(t => t.stop()) }, 'image/jpeg', 0.85)
+    setValidating(true); setFaceErr('')
+    canvas.toBlob(async b => {
+      if (!b) { setValidating(false); return }
+      streamRef.current?.getTracks().forEach(t => t.stop())
+      const previewUrl = URL.createObjectURL(b)
+      // Face validation — warning only, never blocks
+      const faceCount = await detectFaceCount(b)
+      setValidating(false)
+      if (faceCount !== null && faceCount === 0) {
+        setFaceErr('No se detectó ningún rostro. Verifica que tu cara esté bien iluminada.')
+      } else if (faceCount !== null && faceCount > 1) {
+        setFaceErr('Se detectaron varios rostros. Solo debe aparecer una persona.')
+      }
+      // Always set blob — user can proceed even with face warning
+      setBlob(b); setPreview(previewUrl)
+    }, 'image/jpeg', 0.85)
   }
 
   function retake() {
-    setPreview(null); setBlob(null)
+    setPreview(null); setBlob(null); setFaceErr('')
     navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user' }, audio: false }).then(stream => {
       streamRef.current = stream
       if (videoRef.current) { videoRef.current.srcObject = stream; setCamReady(true) }
@@ -140,7 +278,12 @@ function CameraModal({ onCapture, onClose, title = '📸 Foto de entrada' }) {
             </div>
           ) : preview ? (
             <>
-              <img src={preview} alt='preview' style={{ width: '100%', borderRadius: 12, display: 'block', marginBottom: 14 }} />
+              <img src={preview} alt='preview' style={{ width: '100%', borderRadius: 12, display: 'block', marginBottom: faceErr ? 8 : 14 }} />
+              {faceErr && (
+                <div style={{ background: 'rgba(245,158,11,.1)', border: '1px solid rgba(245,158,11,.3)', borderRadius: 8, padding: '10px 12px', fontSize: 12, color: '#f59e0b', marginBottom: 12, textAlign: 'center' }}>
+                  ⚠ {faceErr}
+                </div>
+              )}
               <div style={{ display: 'flex', gap: 8 }}>
                 <button onClick={retake} style={{ flex: 1, padding: '12px', borderRadius: 10, border: '1px solid #1e2a45', background: 'transparent', color: '#8892a8', fontFamily: "'DM Sans', sans-serif", fontSize: 13, cursor: 'pointer' }}>Repetir</button>
                 <button onClick={() => onCapture(blob)} style={{ flex: 2, padding: '12px', borderRadius: 10, border: 'none', background: '#10b981', color: '#fff', fontFamily: "'DM Sans', sans-serif", fontSize: 13, fontWeight: 700, cursor: 'pointer' }}>✓ Usar esta foto</button>
@@ -150,11 +293,12 @@ function CameraModal({ onCapture, onClose, title = '📸 Foto de entrada' }) {
             <>
               <div style={{ position: 'relative', borderRadius: 12, overflow: 'hidden', background: '#0d1220', aspectRatio: '4/3', marginBottom: 14, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                 <video ref={videoRef} autoPlay playsInline muted style={{ width: '100%', display: 'block', transform: 'scaleX(-1)' }} />
-                {!camReady && <div style={{ position: 'absolute', color: '#4a5568', fontSize: 13 }}>Iniciando cámara...</div>}
+                {!camReady && !validating && <div style={{ position: 'absolute', color: '#4a5568', fontSize: 13 }}>Iniciando cámara...</div>}
+                {validating && <div style={{ position: 'absolute', color: '#3b82f6', fontSize: 13 }}>Validando foto...</div>}
               </div>
               <canvas ref={canvasRef} style={{ display: 'none' }} />
-              <button onClick={capture} disabled={!camReady} style={{ width: '100%', padding: '14px', borderRadius: 10, border: 'none', background: camReady ? '#10b981' : '#1e2a45', color: '#fff', fontFamily: "'DM Sans', sans-serif", fontSize: 14, fontWeight: 700, cursor: camReady ? 'pointer' : 'not-allowed' }}>
-                📷 Tomar foto
+              <button onClick={capture} disabled={!camReady || validating} style={{ width: '100%', padding: '14px', borderRadius: 10, border: 'none', background: (camReady && !validating) ? '#10b981' : '#1e2a45', color: '#fff', fontFamily: "'DM Sans', sans-serif", fontSize: 14, fontWeight: 700, cursor: (camReady && !validating) ? 'pointer' : 'not-allowed' }}>
+                {validating ? 'Verificando...' : '📷 Tomar foto'}
               </button>
             </>
           )}
@@ -234,6 +378,7 @@ export default function CheckinPage({ params }) {
   const [showSalesModal, setShowSalesModal] = useState(false)
   const [loading, setLoading]         = useState(false)
   const [checkoutErr, setCheckoutErr] = useState('')
+  const [checkinErr, setCheckinErr]   = useState('')
   const [showCamera, setShowCamera]   = useState(null)
   const [confirmAction, setConfirmAction] = useState(null)
   const [checkoutGpsWarn, setCheckoutGpsWarn] = useState(null)
@@ -241,6 +386,14 @@ export default function CheckinPage({ params }) {
   const [thisWeekSales, setThisWeekSales] = useState(0)
   const [lastWeekSales, setLastWeekSales] = useState(0)
   const [weeklyGoal,    setWeeklyGoal]    = useState(0)
+  const [thisMonthSales, setThisMonthSales] = useState(0)
+  const [salesView,     setSalesView]     = useState('week')
+  const [feedbackOpen,  setFeedbackOpen]  = useState(false)
+  const [fbType, setFbType] = useState('idea')
+  const [fbMsg, setFbMsg] = useState('')
+  const [fbStatus, setFbStatus] = useState('idle')
+  const [fbScreenshot, setFbScreenshot] = useState(null)
+  const fbFileRef = useRef(null)
 
   useEffect(() => { const t = setInterval(() => setNow(new Date()), 1000); return () => clearInterval(t) }, [])
 
@@ -257,15 +410,18 @@ export default function CheckinPage({ params }) {
     lastMonDate.setDate(lastMonDate.getDate() - 7)
     const lastWeek = getWeekBounds(lastMonDate.toLocaleDateString('en-CA'))
 
-    const [thisRes, lastRes, goalRes] = await Promise.all([
+    const monthStart = today.slice(0, 7) + '-01'
+    const [thisRes, lastRes, goalRes, monthRes] = await Promise.all([
       supabase.from('attendance').select('sales_amount').eq('employee_id', empId).gte('date', thisWeek.start).lte('date', thisWeek.end),
       supabase.from('attendance').select('sales_amount').eq('employee_id', empId).gte('date', lastWeek.start).lte('date', lastWeek.end),
       supabase.from('employee_goals').select('weekly_goal').eq('employee_id', empId).maybeSingle(),
+      supabase.from('attendance').select('sales_amount').eq('employee_id', empId).gte('date', monthStart).lte('date', today),
     ])
 
     setThisWeekSales((thisRes.data || []).reduce((s, r) => s + (parseFloat(r.sales_amount) || 0), 0))
     setLastWeekSales((lastRes.data || []).reduce((s, r) => s + (parseFloat(r.sales_amount) || 0), 0))
     setWeeklyGoal(parseFloat(goalRes.data?.weekly_goal) || 0)
+    setThisMonthSales((monthRes.data || []).reduce((s, r) => s + (parseFloat(r.sales_amount) || 0), 0))
   }
 
   useEffect(() => {
@@ -395,7 +551,7 @@ export default function CheckinPage({ params }) {
     const [schedH, schedM] = sched.start_time.split(':').map(Number)
     const schedDate = new Date(checkInTime)
     schedDate.setHours(schedH, schedM, 0, 0)
-    const diffMins = (checkInTime - schedDate) / 60000
+    const diffMins = Math.floor((checkInTime - schedDate) / 60000)
     if (diffMins <= 0)     return 'on_time'
     if (diffMins <= grace) return 'tolerancia'
     return 'late'
@@ -422,18 +578,23 @@ export default function CheckinPage({ params }) {
   }
 
   async function doCheckinWithPhoto(blob) {
-    setShowCamera(null); setLoading(true)
+    setShowCamera(null); setLoading(true); setCheckinErr('')
     const checkIn = new Date()
     const tz      = site?.timezone || 'America/Cancun'
     const today   = checkIn.toLocaleDateString('en-CA', { timeZone: tz })
     const status  = await calcStatus(checkIn)
     const photoUrl = await uploadPhoto(blob, 'in')
-    const record = { employee_id: emp.id, site_id: site.id, date: today, status, check_in: checkIn.toISOString(), gps_lat: gps.lat || null, gps_lng: gps.lng || null, gps_distance_m: gps.dist || null, ...(photoUrl ? { photo_url: photoUrl } : {}) }
+    const record = { employee_id: emp.id, site_id: site.id, company_id: site.company_id || emp.company_id || null, date: today, status, check_in: checkIn.toISOString(), gps_lat: gps.lat || null, gps_lng: gps.lng || null, gps_distance_m: gps.dist || null, ...(photoUrl ? { photo_url: photoUrl } : {}) }
     const { data, error } = await supabase.from('attendance').insert(record).select().single()
     if (!error && data) {
       setTodayRecord(data); setIsIn(true)
       setCiTime(fmtTime(checkIn, tz))
       setEvents(prev => [...prev, { type: 'ci', time: fmtTime(checkIn, tz) }])
+      // Fire alert (non-blocking)
+      fetch('/api/alerts/checkin', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ attendance_id: data.id }) }).catch(() => {})
+    } else if (error) {
+      setCheckinErr('No se pudo registrar la entrada. Intenta de nuevo.')
+      console.error('Check-in error:', error.message)
     }
     setLoading(false)
   }
@@ -512,6 +673,7 @@ export default function CheckinPage({ params }) {
     if (salesAmount !== null && salesAmount > 0) newEvs.push({ type: 'sale', time: fmtTime(checkOut, tz), amount: salesAmount })
     setEvents(prev => [...prev, ...newEvs])
     setLoading(false)
+    fetch('/api/alerts/checkout', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ attendance_id: updatedRecord.id }) }).catch(() => {})
   }
 
   function requestLunch(start) {
@@ -543,6 +705,7 @@ export default function CheckinPage({ params }) {
       setOnLunch(false); setEvents(prev => [...prev, { type: 'le', time: fmtTime(t, tz) }])
     }
     setTodayRecord(prev => ({ ...prev, [start ? 'lunch_start' : 'lunch_end']: t.toISOString() }))
+    fetch('/api/alerts/movement', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ attendance_id: todayRecord.id, type: start ? 'lunch_start' : 'lunch_end' }) }).catch(() => {})
   }
 
   async function doBreak(start) {
@@ -556,7 +719,32 @@ export default function CheckinPage({ params }) {
       setOnBreak(false); setEvents(prev => [...prev, { type: 'be', time: fmtTime(t, tz) }])
     }
     setTodayRecord(prev => ({ ...prev, [start ? 'break_start' : 'break_end']: t.toISOString() }))
+    fetch('/api/alerts/movement', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ attendance_id: todayRecord.id, type: start ? 'break_start' : 'break_end' }) }).catch(() => {})
   }
+
+  function handleFbFile(e) {
+    const file = e.target.files?.[0]
+    if (!file) return
+    const reader = new FileReader()
+    reader.onload = ev => setFbScreenshot({ name: file.name, base64: ev.target.result.split(',')[1], preview: ev.target.result })
+    reader.readAsDataURL(file)
+  }
+
+  async function sendFeedback() {
+    if (!fbMsg.trim()) return
+    setFbStatus('loading')
+    try {
+      const res = await fetch('/api/feedback', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ type: fbType, message: fbMsg, userName: emp?.name, page: '/checkin', screenshot: fbScreenshot?.base64 || null, screenshotName: fbScreenshot?.name || null }),
+      })
+      if (res.ok) { setFbStatus('done'); setFbMsg(''); setFbScreenshot(null) }
+      else setFbStatus('error')
+    } catch { setFbStatus('error') }
+  }
+
+  function closeFeedback() { setFeedbackOpen(false); setFbStatus('idle'); setFbMsg(''); setFbScreenshot(null) }
 
   async function logout() {
     const token = localStorage.getItem('gm-device-token')
@@ -577,6 +765,73 @@ export default function CheckinPage({ params }) {
 
   const tz    = site?.timezone || 'America/Cancun'
   const gpsOk = gps.status === 'ok'
+
+  const FeedbackBtn = () => (
+    <>
+      <InstallButton style={{ position: 'fixed', bottom: 76, right: 12, zIndex: 100, width: 'auto' }} />
+      <button onClick={() => { setFeedbackOpen(true); setFbStatus('idle') }}
+        style={{ position: 'fixed', bottom: 22, right: 18, width: 46, height: 46, borderRadius: '50%', background: '#1c2641', border: '1px solid rgba(139,92,246,.35)', color: '#a78bfa', fontSize: 22, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100, boxShadow: '0 2px 14px rgba(0,0,0,.5)' }}>
+        💡
+      </button>
+      {feedbackOpen && (
+        <div onClick={closeFeedback} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.65)', display: 'flex', alignItems: 'flex-end', justifyContent: 'center', zIndex: 500, padding: '0 0 24px' }}>
+          <div onClick={e => e.stopPropagation()} style={{ background: '#1a2035', border: '1px solid #1e2a45', borderRadius: 16, padding: '24px 20px', width: '100%', maxWidth: 440 }}>
+            {fbStatus === 'done' ? (
+              <div style={{ textAlign: 'center', padding: '20px 0' }}>
+                <div style={{ fontSize: 40, marginBottom: 10 }}>🙌</div>
+                <div style={{ fontSize: 16, fontWeight: 700, color: '#10b981', marginBottom: 6 }}>¡Gracias!</div>
+                <div style={{ fontSize: 13, color: '#8892a8', marginBottom: 20 }}>Tu mensaje nos ayuda a mejorar Worktic.</div>
+                <button onClick={closeFeedback} style={{ padding: '10px 28px', borderRadius: 9, border: 'none', background: '#10b981', color: '#fff', fontSize: 13, fontWeight: 700, cursor: 'pointer', fontFamily: "'DM Sans', sans-serif" }}>Cerrar</button>
+              </div>
+            ) : (
+              <>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
+                  <div>
+                    <div style={{ fontSize: 15, fontWeight: 700, color: '#f1f5f9' }}>💬 Cuéntanos</div>
+                    <div style={{ fontSize: 11, color: '#8892a8', marginTop: 2 }}>Tu opinión hace que Worktic mejore</div>
+                  </div>
+                  <button onClick={closeFeedback} style={{ background: 'none', border: '1px solid #1e2a45', borderRadius: 6, color: '#8892a8', fontSize: 18, cursor: 'pointer', padding: '2px 10px', lineHeight: 1 }}>×</button>
+                </div>
+                <div style={{ display: 'flex', gap: 8, marginBottom: 14 }}>
+                  {[['error','🐛','Reportar error'],['idea','💡','Tengo una idea'],['other','💬','Comentario']].map(([id,emoji,label]) => (
+                    <button key={id} onClick={() => setFbType(id)}
+                      style={{ flex: 1, padding: '9px 6px', borderRadius: 9, border: `1.5px solid ${fbType === id ? '#10b981' : '#1e2a45'}`, background: fbType === id ? 'rgba(16,185,129,.1)' : '#0d1220', color: fbType === id ? '#10b981' : '#8892a8', fontSize: 11, fontWeight: 600, cursor: 'pointer', fontFamily: "'DM Sans', sans-serif", textAlign: 'center', lineHeight: 1.4 }}>
+                      <div style={{ fontSize: 18 }}>{emoji}</div>
+                      <div>{label}</div>
+                    </button>
+                  ))}
+                </div>
+                <textarea value={fbMsg} onChange={e => setFbMsg(e.target.value)}
+                  placeholder={fbType === 'error' ? '¿Qué pasó? ¿Qué esperabas que pasara?' : fbType === 'idea' ? '¿Qué te gustaría que tuviera Worktic?' : '¿Algo que quieras decirnos?'}
+                  rows={4}
+                  style={{ width: '100%', background: '#0d1220', border: '1px solid #1e2a45', borderRadius: 9, color: '#f1f5f9', fontSize: 13, padding: '11px 13px', resize: 'none', fontFamily: "'DM Sans', sans-serif", outline: 'none', boxSizing: 'border-box', marginBottom: 10 }}
+                />
+                <input ref={fbFileRef} type='file' accept='image/*' style={{ display: 'none' }} onChange={handleFbFile} />
+                {fbScreenshot ? (
+                  <div style={{ marginBottom: 12, position: 'relative' }}>
+                    <img src={fbScreenshot.preview} alt='captura' style={{ width: '100%', maxHeight: 160, objectFit: 'cover', borderRadius: 8, border: '1px solid #1e2a45' }} />
+                    <button onClick={() => { setFbScreenshot(null); if (fbFileRef.current) fbFileRef.current.value = '' }}
+                      style={{ position: 'absolute', top: 6, right: 6, background: 'rgba(0,0,0,.7)', border: 'none', borderRadius: '50%', color: '#fff', width: 24, height: 24, fontSize: 14, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', lineHeight: 1 }}>×</button>
+                    <div style={{ fontSize: 10, color: '#4a5568', marginTop: 4 }}>{fbScreenshot.name}</div>
+                  </div>
+                ) : (
+                  <button onClick={() => fbFileRef.current?.click()}
+                    style={{ width: '100%', marginBottom: 10, padding: '8px', borderRadius: 8, border: '1px dashed #1e2a45', background: 'transparent', color: '#4a5568', fontSize: 12, cursor: 'pointer', fontFamily: "'DM Sans', sans-serif", display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
+                    📎 Adjuntar captura de pantalla
+                  </button>
+                )}
+                {fbStatus === 'error' && <div style={{ fontSize: 11, color: '#ef4444', marginBottom: 8 }}>Error al enviar. Intenta de nuevo.</div>}
+                <button onClick={sendFeedback} disabled={!fbMsg.trim() || fbStatus === 'loading'}
+                  style={{ width: '100%', padding: '12px', borderRadius: 9, border: 'none', background: !fbMsg.trim() || fbStatus === 'loading' ? '#1e2a45' : '#10b981', color: !fbMsg.trim() || fbStatus === 'loading' ? '#4a5568' : '#fff', fontSize: 13, fontWeight: 700, cursor: !fbMsg.trim() || fbStatus === 'loading' ? 'not-allowed' : 'pointer', fontFamily: "'DM Sans', sans-serif", transition: 'background .2s' }}>
+                  {fbStatus === 'loading' ? 'Enviando...' : 'Enviar →'}
+                </button>
+              </>
+            )}
+          </div>
+        </div>
+      )}
+    </>
+  )
 
   if (step === 'loading') return (
     <div style={S.page}>
@@ -612,6 +867,7 @@ export default function CheckinPage({ params }) {
 
   if (isDone) return (
     <div style={S.page}>
+      <FeedbackBtn />
       <div style={S.bar}><img src='/logo.jpeg' style={S.logo} alt='GM' /><span style={{ fontSize: 13, fontWeight: 600 }}>{site?.name}</span></div>
       <div style={S.container}>
         <div style={{ ...S.card, paddingTop: 28, paddingBottom: 28 }}>
@@ -632,9 +888,15 @@ export default function CheckinPage({ params }) {
               {fmtMoney(todayRecord.sales_amount)} hoy
             </div>
           )}
-          <div style={{ marginTop: 14, paddingTop: 14, borderTop: '1px solid #1e2a45', fontSize: 11, color: '#4a5568' }}>¡Hasta mañana!</div>
+          <div style={{ marginTop: 14, paddingTop: 14, borderTop: '1px solid #1e2a45', fontSize: 11, color: '#4a5568' }}>¿Saliste y regresaste? Puedes registrar un nuevo turno.</div>
+          <button
+            onClick={() => { setIsDone(false); setTodayRecord(null); setIsIn(false); setCiTime(null); setCoTime(null); setEvents([]); setOnLunch(false); setOnBreak(false) }}
+            style={{ marginTop: 12, width: '100%', padding: '11px 16px', borderRadius: 10, border: '1px solid rgba(59,130,246,.3)', background: 'rgba(59,130,246,.08)', color: '#3b82f6', fontFamily: "'DM Sans', sans-serif", fontSize: 13, fontWeight: 600, cursor: 'pointer' }}
+          >
+            + Nuevo Check-In
+          </button>
         </div>
-        <WeekSalesBlock thisWeekSales={thisWeekSales} lastWeekSales={lastWeekSales} goal={weeklyGoal} isDone={true} />
+        <KpiCarousel empId={emp?.id} siteId={site?.id} thisWeekSales={thisWeekSales} lastWeekSales={lastWeekSales} weeklyGoal={weeklyGoal} />
         {events.length > 0 && (
           <div style={S.timeline}>
             <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 10 }}>Registro del Día</div>
@@ -656,7 +918,6 @@ export default function CheckinPage({ params }) {
   )
 
   return (
-    <>
     <div style={S.page}>
       {showCamera === 'in'  && <CameraModal title='📸 Foto de entrada' onCapture={doCheckinWithPhoto} onClose={() => setShowCamera(null)} />}
       {showCamera === 'out' && <CameraModal title='📸 Foto de salida'  onCapture={handleCheckoutPhoto} onClose={() => setShowCamera(null)} />}
@@ -690,21 +951,45 @@ export default function CheckinPage({ params }) {
       <div style={S.bar}><img src='/logo.jpeg' style={S.logo} alt='GM' /><span style={{ fontSize: 13, fontWeight: 600 }}>{site?.name}</span></div>
       <div style={S.container}>
         <div style={S.card}>
-          <div style={{ fontSize: 16, fontWeight: 700 }}>{emp?.name}</div>
-          <div style={S.sub}>{emp?.role}</div>
-          <div style={{ ...S.muted, marginTop: 2 }}>{site?.name}</div>
-          <div style={S.clock}>{fmtTime(now, tz)}</div>
-          <div style={S.muted}>{now.toLocaleDateString('es-MX', { weekday: 'long', day: 'numeric', month: 'long', timeZone: tz })}</div>
-
-          {isIn && !isDone && (
-            <div style={{ marginTop: 14, padding: '12px 16px', borderRadius: 10, background: 'rgba(16,185,129,.1)', border: '1px solid rgba(16,185,129,.25)', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10 }}>
-              <span style={{ fontSize: 20 }}>✅</span>
-              <div style={{ textAlign: 'left' }}>
-                <div style={{ fontSize: 13, fontWeight: 700, color: '#10b981' }}>Ya registraste tu entrada</div>
-                <div style={{ fontSize: 11, color: '#8892a8', fontFamily: "'JetBrains Mono'" }}>a las {ciTime}</div>
-              </div>
+          {/* Nombre con badge y ventas en los extremos */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <div style={{ width: 56, flexShrink: 0, textAlign: 'center' }}>
+              {todayRecord?.status && (
+                <span style={{ padding: '3px 6px', borderRadius: 5, fontSize: 10, fontWeight: 700, color: todayRecord.status === 'on_time' ? '#10b981' : todayRecord.status === 'tolerancia' ? '#06b6d4' : '#f59e0b', background: todayRecord.status === 'on_time' ? 'rgba(16,185,129,.12)' : todayRecord.status === 'tolerancia' ? 'rgba(6,182,212,.12)' : 'rgba(245,158,11,.12)', display: 'inline-block' }}>
+                  {todayRecord.status === 'on_time' ? 'Puntual' : todayRecord.status === 'tolerancia' ? 'Tolerancia' : 'Retardo'}
+                </span>
+              )}
             </div>
-          )}
+            <div style={{ flex: 1, textAlign: 'center' }}>
+              <div style={{ fontSize: 16, fontWeight: 700 }}>{emp?.name}</div>
+              <div style={S.sub}>{emp?.role}</div>
+              <div style={{ ...S.muted, marginTop: 1 }}>{site?.name}</div>
+            </div>
+            <div style={{ width: 56, flexShrink: 0, textAlign: 'center' }}>
+              {(thisWeekSales > 0 || thisMonthSales > 0) && (
+                <button onClick={() => setSalesView(v => v === 'week' ? 'month' : 'week')}
+                  style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, textAlign: 'center' }}>
+                  <div style={{ fontSize: 9, color: '#818cf8', textTransform: 'uppercase', letterSpacing: '.5px', animation: 'pulse-label 2s ease-in-out infinite' }}>{salesView === 'week' ? 'Semana' : 'Mes'}</div>
+                  <style>{`@keyframes pulse-label { 0%,100%{opacity:1} 50%{opacity:.35} }`}</style>
+                  <div style={{ fontSize: 13, fontFamily: "'JetBrains Mono'", color: '#10b981', fontWeight: 700, marginTop: 1 }}>{fmtMoney(salesView === 'week' ? thisWeekSales : thisMonthSales)}</div>
+                </button>
+              )}
+            </div>
+          </div>
+
+          {/* Reloj + confirmación en horizontal */}
+          <div style={{ display: 'flex', alignItems: 'stretch', gap: 10, marginTop: 12 }}>
+            <div style={{ flex: 1, textAlign: 'center', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
+              <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 32, fontWeight: 700, letterSpacing: -1, background: 'linear-gradient(135deg, #3b82f6, #06b6d4)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>{fmtTime(now, tz)}</div>
+              <div style={S.muted}>{now.toLocaleDateString('es-MX', { weekday: 'short', day: 'numeric', month: 'short', timeZone: tz })}</div>
+            </div>
+            {isIn && !isDone && (
+              <div style={{ flex: 1, padding: '10px 12px', borderRadius: 10, background: 'rgba(16,185,129,.1)', border: '1px solid rgba(16,185,129,.25)', textAlign: 'center', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
+                <div style={{ fontSize: 11, fontWeight: 700, color: '#10b981' }}>✅ Entrada registrada</div>
+                <div style={{ fontSize: 16, fontWeight: 700, color: '#f1f5f9', fontFamily: "'JetBrains Mono'", marginTop: 2 }}>{ciTime}</div>
+              </div>
+            )}
+          </div>
 
           <div style={{ marginTop: 14, paddingTop: 14, borderTop: '1px solid #1e2a45', display: 'flex', justifyContent: 'center', gap: 20, flexWrap: 'wrap' }}>
             {schedule && (
@@ -725,25 +1010,12 @@ export default function CheckinPage({ params }) {
                 <div style={{ marginTop: 2, fontSize: 13, fontFamily: "'JetBrains Mono', monospace" }}>{ciTime}</div>
               </div>
             )}
-            {todayRecord?.status && (
-              <div style={{ textAlign: 'center' }}>
-                <div style={{ fontSize: 9, color: '#4a5568', textTransform: 'uppercase', letterSpacing: '.6px' }}>Registro</div>
-                <div style={{ marginTop: 2 }}>
-                  <span style={{ padding: '2px 8px', borderRadius: 4, fontSize: 10, fontWeight: 600, color: todayRecord.status === 'on_time' ? '#10b981' : todayRecord.status === 'tolerancia' ? '#06b6d4' : '#f59e0b', background: todayRecord.status === 'on_time' ? 'rgba(16,185,129,.12)' : todayRecord.status === 'tolerancia' ? 'rgba(6,182,212,.12)' : 'rgba(245,158,11,.12)' }}>
-                    {todayRecord.status === 'on_time' ? 'Puntual' : todayRecord.status === 'tolerancia' ? 'Tolerancia' : 'Retardo'}
-                  </span>
-                </div>
-              </div>
-            )}
-            {thisWeekSales > 0 && (
-              <div style={{ textAlign: 'center' }}>
-                <div style={{ fontSize: 9, color: '#4a5568', textTransform: 'uppercase', letterSpacing: '.6px' }}>Esta semana</div>
-                <div style={{ marginTop: 2, fontSize: 12, fontFamily: "'JetBrains Mono', monospace", color: '#10b981', fontWeight: 600 }}>{fmtMoney(thisWeekSales)}</div>
-              </div>
-            )}
           </div>
         </div>
 
+        <KpiCarousel empId={emp?.id} siteId={site?.id} thisWeekSales={thisWeekSales} lastWeekSales={lastWeekSales} weeklyGoal={weeklyGoal} />
+
+        {checkinErr  && <div style={S.err}>{checkinErr}</div>}
         {checkoutErr && <div style={S.err}>{checkoutErr}</div>}
 
         <div style={S.gps(gpsOk)}>
@@ -800,11 +1072,10 @@ export default function CheckinPage({ params }) {
           Cerrar sesión (cambiar dispositivo)
         </button>
       </div>
-    </div>
 
     {checkoutGpsWarn && (
       <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.75)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 200, padding: '0 16px', backdropFilter: 'blur(4px)' }}>
-        <div style={{ background: '#1a2035', border: '1px solid rgba(239,68,68,.35)', borderRadius: 16, padding: 26, maxWidth: 320, width: '100%', textAlign: 'center' }}>
+        <div style={{ background: '#1c2641', border: '1px solid rgba(239,68,68,.35)', borderRadius: 16, padding: 26, maxWidth: 320, width: '100%', textAlign: 'center' }}>
           <div style={{ fontSize: 34, marginBottom: 10 }}>📍</div>
           <div style={{ fontSize: 15, fontWeight: 700, color: '#ef4444', marginBottom: 8 }}>Fuera de rango</div>
           <div style={{ fontSize: 13, color: '#8892a8', marginBottom: 20 }}>
@@ -817,6 +1088,8 @@ export default function CheckinPage({ params }) {
         </div>
       </div>
     )}
-    </>
+
+    <FeedbackBtn />
+    </div>
   )
 }

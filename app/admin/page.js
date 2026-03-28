@@ -2,6 +2,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { supabase } from '../../lib/supabase'
 import { useRouter } from 'next/navigation'
+import { InstallButton, usePushNotifications } from '../components/PWAInstall'
 const stLbl = { on_time: 'Puntual', tolerancia: 'Tolerancia', late: 'Retardo', absent: 'Falta' }
 const stClr = { on_time: '#10b981', tolerancia: '#f59e0b', late: '#ef4444', absent: '#ef4444' }
 const stBg  = { on_time: 'rgba(16,185,129,.12)', tolerancia: 'rgba(245,158,11,.12)', late: 'rgba(239,68,68,.12)', absent: 'rgba(239,68,68,.12)' }
@@ -67,6 +68,8 @@ export default function AdminPage() {
   const [adminUsers, setAdminUsers] = useState([])
   const [goals, setGoals]       = useState([])
   const [companies, setCompanies] = useState([])
+  const [competitions, setCompetitions] = useState([])
+  const [compSites, setCompSites] = useState([])    // competition_sites rows
   const [selectedCompanyId, setSelectedCompanyId] = useState('')
   const [employeeSiteAssignments, setEmployeeSiteAssignments] = useState([])
   const [siteHours, setSiteHours] = useState([])
@@ -81,6 +84,9 @@ export default function AdminPage() {
   const [filterTo,     setFilterTo]     = useState('')
   const [filterStatus, setFilterStatus] = useState('')
   const [sidebarOpen, setSidebarOpen] = useState(true)
+  const [feedbackLabel] = useState(() => Math.random() > 0.5 ? ['💡', 'Alguna idea?'] : ['💬', 'Te escuchamos'])
+  const [feedbackOpen, setFeedbackOpen] = useState(false)
+  const [salesImportOpen, setSalesImportOpen] = useState(false)
   const today = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Cancun' })
   useEffect(() => {
     if (typeof window !== 'undefined' && window.innerWidth < 768) setSidebarOpen(false)
@@ -155,20 +161,33 @@ export default function AdminPage() {
     } else if (companyId) {
       scQuery = scQuery.eq('company_id', companyId)
     }
-    const [s, e, ae, a, sc, g, esa, sh] = await Promise.all([
+    const [s, e, ae, a, sc, g, esa, sh, comp, cs] = await Promise.all([
       sitesQuery, empsQuery, allEmpsQuery, attQuery, scQuery,
       supabase.from('employee_goals').select('*'),
       supabase.from('employee_site_assignments').select('*'),
       supabase.from('site_hours').select('*'),
+      supabase.from('competitions').select('*').order('created_at', { ascending: false }),
+      supabase.from('competition_sites').select('*'),
     ])
-    setSites(s.data || [])
+    const loadedSites = s.data || []
+    const siteIdSet = new Set(loadedSites.map(x => x.id))
+    // Filter att/schedules by loaded site IDs to handle records with null company_id
+    const attData = (companyId && siteIdSet.size > 0) ? (a.data || []).filter(r => siteIdSet.has(r.site_id)) : (a.data || [])
+    const scData  = (companyId && siteIdSet.size > 0) ? (sc.data || []).filter(r => siteIdSet.has(r.site_id)) : (sc.data || [])
+    setSites(loadedSites)
     setEmps(e.data || [])
     setAllEmps(ae.data || [])
-    setAtt(a.data || [])
-    setSchedules(sc.data || [])
+    setAtt(attData)
+    setSchedules(scData)
     setGoals(g.data || [])
     setEmployeeSiteAssignments(esa.data || [])
     setSiteHours(sh.data || [])
+    // Filter competitions to those that include at least one of the loaded sites
+    const allComps = comp.data || []
+    const allCs = cs.data || []
+    const myCompIds = new Set(allCs.filter(c => siteIdSet.has(c.site_id)).map(c => c.competition_id))
+    setCompetitions(allComps.filter(c => myCompIds.has(c.id) || c.created_by === adminUser?.id))
+    setCompSites(allCs)
     if (isSuperAdmin) {
       const { data: au } = await supabase.from('admin_users').select('*, admin_site_permissions(site_id)').order('created_at')
       setAdminUsers(au || [])
@@ -187,7 +206,8 @@ export default function AdminPage() {
     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100vh', background: '#0a0e1a', color: '#8892a8', fontFamily: "'DM Sans'" }}>Cargando...</div>
   )
   const todaySchedules = schedules.filter(s => s.date === today)
-  const todayAtt       = att.filter(r => r.date === today)
+  // Sort so latest record per employee comes first (supports multiple check-ins per day)
+  const todayAtt       = att.filter(r => r.date === today).sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
 
   // FIX BUG 1: dashRows incluye empleados con schedule Y sin schedule que hicieron check-in hoy
   const dashRows = todaySchedules.map(sc => {
@@ -202,13 +222,20 @@ export default function AdminPage() {
     if (record?.check_out) {
       color = '#3b82f6'; bg = 'rgba(59,130,246,.12)'; statusLabel = 'Completó turno'
     } else if (record?.check_in) {
-      color = stClr[record.status] || '#10b981'; bg = stBg[record.status] || 'rgba(16,185,129,.12)'; statusLabel = stLbl[record.status] || 'Activo'
+      if (record.lunch_start && !record.lunch_end) {
+        color = '#f59e0b'; bg = 'rgba(245,158,11,.12)'; statusLabel = 'En comida'
+      } else if (record.break_start && !record.break_end) {
+        color = '#3b82f6'; bg = 'rgba(59,130,246,.12)'; statusLabel = 'En descanso'
+      } else {
+        color = stClr[record.status] || '#10b981'; bg = stBg[record.status] || 'rgba(16,185,129,.12)'; statusLabel = stLbl[record.status] || 'Activo'
+      }
     } else {
       const grace = site?.grace_mins || 5; const absent = site?.absent_mins || 15; const start = sc.start_time?.slice(0, 5)
       if (start) {
         const [sh, sm] = start.split(':').map(Number); const [nh, nm] = nowTime.split(':').map(Number)
         const diffMins = (nh * 60 + nm) - (sh * 60 + sm)
         if (diffMins < 0) { color = '#8892a8'; bg = 'rgba(136,146,168,.1)'; statusLabel = 'Esperado' }
+        else if (diffMins === 0) { color = '#10b981'; bg = 'rgba(16,185,129,.12)'; statusLabel = 'En hora' }
         else if (diffMins <= grace) { color = '#f59e0b'; bg = 'rgba(245,158,11,.12)'; statusLabel = 'En tolerancia' }
         else if (diffMins <= absent) { color = '#f59e0b'; bg = 'rgba(245,158,11,.12)'; statusLabel = 'Tolerancia vencida' }
         else { color = '#ef4444'; bg = 'rgba(239,68,68,.12)'; statusLabel = 'No se presentó' }
@@ -233,6 +260,31 @@ export default function AdminPage() {
     if (filterStatus && r.status !== filterStatus)      return false
     return true
   })
+  function exportAttCSV() {
+    const headers = ['Fecha','Empleado','Sucursal','Entrada','Salida','Horas','Ventas','Estado']
+    const rows = filteredAtt.map(r => {
+      const emp = allEmps.find(e => e.id === r.employee_id)
+      const site = sites.find(s => s.id === r.site_id)
+      const tz = site?.timezone || 'America/Cancun'
+      return [
+        r.date,
+        emp?.name || '?',
+        site?.name || '?',
+        r.check_in ? new Date(r.check_in).toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: tz }) : '',
+        r.check_out ? new Date(r.check_out).toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: tz }) : '',
+        r.hours_worked || '',
+        r.sales_amount || '',
+        stLbl[r.status] || r.status || '',
+      ]
+    })
+    const csv = [headers, ...rows].map(r => r.map(v => `"${String(v).replace(/"/g,'""')}"`).join(',')).join('\n')
+    const blob = new Blob(['\ufeff' + csv], { type: 'text/csv;charset=utf-8;' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a'); a.href = url; a.download = `asistencia-${today}.csv`
+    document.body.appendChild(a); a.click(); document.body.removeChild(a)
+    URL.revokeObjectURL(url)
+  }
+
   async function saveSite(data) {
     const companyId = isSuperAdmin ? (selectedCompanyId || companies[0]?.id) : adminUser.company_id
     if (!data.id) {
@@ -276,6 +328,17 @@ export default function AdminPage() {
   }
   async function delEmp(id) { await supabase.from('employees').update({ active: false }).eq('id', id); setToast('Empleado eliminado'); setModal(null); load() }
   async function delSite(id) { await supabase.from('sites').update({ active: false }).eq('id', id); setToast('Sitio eliminado'); setModal(null); load() }
+  async function resetAdminPwd(au) {
+    const res = await fetch('/api/admin/invite', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ user_id: au.id }) })
+    const json = await res.json()
+    if (!res.ok) { setToast('Error al resetear contraseña'); return }
+    setModal({ type: 'showPwd', data: { name: au.name, email: au.email, pwd: json.password } })
+  }
+  async function deleteAdminUser(au) {
+    if (!confirm(`¿Eliminar a ${au.name}? Se borrará su acceso permanentemente.`)) return
+    await fetch(`/api/admin/invite?id=${au.id}`, { method: 'DELETE' })
+    setToast('Usuario eliminado'); load()
+  }
   function getSiteUrl(code) {
     if (typeof window === 'undefined') return ''
     return `${window.location.origin}/checkin/${code}`
@@ -327,21 +390,30 @@ export default function AdminPage() {
           )}
           <nav style={{ flex: 1, padding: 8, display: 'flex', flexDirection: 'column', gap: 2 }}>
             <div style={{ fontSize: 9, fontWeight: 600, textTransform: 'uppercase', letterSpacing: 1, color: '#4a5568', padding: '8px 8px 4px' }}>Principal</div>
-            {[{ id: 'dashboard', lb: 'Dashboard' }, { id: 'stores', lb: '🏪 Tiendas' }, { id: 'schedules', lb: '📅 Horarios' }, { id: 'attendance', lb: 'Asistencia' }].map(n => (
-              <button key={n.id} onClick={() => { setTab(n.id); if (window.innerWidth < 768) setSidebarOpen(false) }} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 10px', borderRadius: 6, cursor: 'pointer', fontSize: 12, fontWeight: 500, color: tab === n.id ? '#3b82f6' : '#8892a8', background: tab === n.id ? 'rgba(59,130,246,.12)' : 'transparent', border: 'none', width: '100%', textAlign: 'left', fontFamily: 'inherit' }}>{n.lb}</button>
+            {[{ id: 'dashboard', lb: '🏠 Dashboard' }, { id: 'schedules', lb: '📅 Horarios' }, { id: 'alerts', lb: '🔔 Mis alertas' }, { id: 'attendance', lb: '✅ Asistencia' }, { id: 'competitions', lb: '🏆 Competencias' }].map(n => (
+              <button key={n.id} onClick={() => { setTab(n.id); if (window.innerWidth < 768) setSidebarOpen(false) }} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 10px', borderRadius: 6, cursor: 'pointer', fontSize: 12, fontWeight: 500, color: tab === n.id ? (n.id === 'alerts' ? '#f59e0b' : '#3b82f6') : '#8892a8', background: tab === n.id ? (n.id === 'alerts' ? 'rgba(245,158,11,.1)' : 'rgba(59,130,246,.12)') : 'transparent', border: 'none', width: '100%', textAlign: 'left', fontFamily: 'inherit' }}>{n.lb}</button>
             ))}
             <div style={{ fontSize: 9, fontWeight: 600, textTransform: 'uppercase', letterSpacing: 1, color: '#4a5568', padding: '12px 8px 4px' }}>Gestión</div>
-            {[{ id: 'employees', lb: 'Empleados' }, { id: 'sites', lb: 'Sitios' }].map(n => (
+            {[{ id: 'employees', lb: '👥 Empleados' }, { id: 'sites', lb: '📍 Sitios' }].map(n => (
               <button key={n.id} onClick={() => { setTab(n.id); if (window.innerWidth < 768) setSidebarOpen(false) }} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 10px', borderRadius: 6, cursor: 'pointer', fontSize: 12, fontWeight: 500, color: tab === n.id ? '#3b82f6' : '#8892a8', background: tab === n.id ? 'rgba(59,130,246,.12)' : 'transparent', border: 'none', width: '100%', textAlign: 'left', fontFamily: 'inherit' }}>{n.lb}</button>
             ))}
             {(isSuperAdmin || isCompanyAdmin) && <>
               <div style={{ fontSize: 9, fontWeight: 600, textTransform: 'uppercase', letterSpacing: 1, color: '#4a5568', padding: '12px 8px 4px' }}>Admin</div>
-              {[{ id: 'users', lb: 'Usuarios' }, ...(isSuperAdmin ? [{ id: 'companies', lb: 'Empresas' }] : [])].map(n => (
+              {[{ id: 'users', lb: '🔑 Usuarios' }, ...(isSuperAdmin ? [{ id: 'companies', lb: '🏢 Empresas' }] : [])].map(n => (
                 <button key={n.id} onClick={() => { setTab(n.id); if (window.innerWidth < 768) setSidebarOpen(false) }} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 10px', borderRadius: 6, cursor: 'pointer', fontSize: 12, fontWeight: 500, color: tab === n.id ? '#3b82f6' : '#8892a8', background: tab === n.id ? 'rgba(59,130,246,.12)' : 'transparent', border: 'none', width: '100%', textAlign: 'left', fontFamily: 'inherit' }}>{n.lb}</button>
               ))}
             </>}
+            {/* Instalar PWA */}
+            <InstallButton style={{ marginTop: 8 }} />
+            {/* Te escuchamos */}
+            <div style={{ marginTop: 8, borderTop: '1px solid #1e2a45', paddingTop: 8 }}>
+              <button onClick={() => setFeedbackOpen(true)}
+                style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 10px', borderRadius: 6, cursor: 'pointer', fontSize: 12, fontWeight: 600, color: feedbackLabel[0] === '💡' ? '#a78bfa' : '#10b981', background: feedbackLabel[0] === '💡' ? 'rgba(139,92,246,.08)' : 'rgba(16,185,129,.07)', border: `1px solid ${feedbackLabel[0] === '💡' ? 'rgba(139,92,246,.2)' : 'rgba(16,185,129,.15)'}`, width: '100%', textAlign: 'left', fontFamily: 'inherit' }}>
+                {feedbackLabel[0]} {feedbackLabel[1]}
+              </button>
+            </div>
           </nav>
-          <div style={{ padding: '12px 8px', borderTop: '1px solid #1e2a45' }}>
+          <div style={{ padding: '12px 8px', borderTop: '1px solid #1e2a45', marginTop: 4 }}>
             <div style={{ fontSize: 10, color: '#4a5568', padding: '0 8px 6px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{adminUser?.name || authUser?.email}</div>
             <button onClick={handleLogout} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 10px', borderRadius: 6, cursor: 'pointer', fontSize: 12, color: '#ef4444', background: 'transparent', border: 'none', width: '100%', textAlign: 'left', fontFamily: 'inherit' }}>Cerrar sesión</button>
           </div>
@@ -353,7 +425,7 @@ export default function AdminPage() {
             <button onClick={() => setSidebarOpen(o => !o)} style={{ background: 'none', border: '1px solid #1e2a45', borderRadius: 6, color: '#8892a8', cursor: 'pointer', padding: '5px 9px', fontSize: 16, lineHeight: 1, fontFamily: 'inherit' }}>☰</button>
             <div>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                <h1 style={{ fontSize: 17, fontWeight: 700 }}>{{ dashboard: 'Dashboard', stores: 'Tiendas', schedules: 'Horarios', attendance: 'Asistencia', employees: 'Empleados', sites: 'Sitios', users: 'Usuarios', companies: 'Empresas' }[tab]}</h1>
+                <h1 style={{ fontSize: 17, fontWeight: 700 }}>{{ dashboard: 'Dashboard', schedules: 'Horarios', attendance: 'Asistencia', employees: 'Empleados', sites: 'Sitios', users: 'Usuarios', companies: 'Empresas', competitions: 'Competencias' }[tab]}</h1>
                 {activeCompany && <span style={{ fontSize: 10, color: '#3b82f6', background: 'rgba(59,130,246,.1)', border: '1px solid rgba(59,130,246,.2)', borderRadius: 4, padding: '2px 8px', fontWeight: 600 }}>{activeCompany.name}</span>}
               </div>
               <p style={{ fontSize: 11, color: '#8892a8', marginTop: 1 }}>{new Date().toLocaleDateString('es-MX', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric', timeZone: 'America/Cancun' })}</p>
@@ -363,87 +435,17 @@ export default function AdminPage() {
           {tab === 'sites'      && <button onClick={() => setModal({ type: 'site', data: null })} style={{ padding: '7px 14px', borderRadius: 7, border: 'none', background: '#3b82f6', color: '#fff', fontSize: 12, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}>+ Nuevo Sitio</button>}
           {tab === 'users'      && (isSuperAdmin || isCompanyAdmin) && <button onClick={() => setModal({ type: 'adminUser', data: null })} style={{ padding: '7px 14px', borderRadius: 7, border: 'none', background: '#3b82f6', color: '#fff', fontSize: 12, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}>+ Nuevo Usuario</button>}
           {tab === 'companies'  && isSuperAdmin && <button onClick={() => setModal({ type: 'company', data: null })} style={{ padding: '7px 14px', borderRadius: 7, border: 'none', background: '#3b82f6', color: '#fff', fontSize: 12, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}>+ Nueva Empresa</button>}
+          {tab === 'competitions' && <button onClick={() => setModal({ type: 'competition', data: null })} style={{ padding: '7px 14px', borderRadius: 7, border: 'none', background: '#f59e0b', color: '#fff', fontSize: 12, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}>+ Nueva Competencia</button>}
         </div>
         <div style={{ flex: 1, padding: '14px 12px', overflow: 'auto' }}>
-          {tab === 'dashboard' && <>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 12, marginBottom: 18 }}>
-              <div style={{ background: '#1a2035', border: '1px solid #1e2a45', borderRadius: 10, padding: '18px 20px', display: 'flex', alignItems: 'center', gap: 14 }}>
-                <div style={{ fontSize: 28 }}>🏪</div>
-                <div>
-                  <div style={{ fontSize: 11, color: '#8892a8', marginBottom: 4 }}>Tiendas abiertas</div>
-                  <div style={{ fontSize: 36, fontWeight: 700, fontFamily: "'JetBrains Mono'", color: '#10b981', lineHeight: 1 }}>{sitesWorking}</div>
-                </div>
-              </div>
-              <div style={{ background: '#1a2035', border: '1px solid #1e2a45', borderRadius: 10, padding: '18px 20px', display: 'flex', alignItems: 'center', gap: 14 }}>
-                <div style={{ fontSize: 28 }}>👥</div>
-                <div>
-                  <div style={{ fontSize: 11, color: '#8892a8', marginBottom: 4 }}>Personas trabajando</div>
-                  <div style={{ fontSize: 36, fontWeight: 700, fontFamily: "'JetBrains Mono'", color: '#3b82f6', lineHeight: 1 }}>{peopleWorking}</div>
-                </div>
-              </div>
-            </div>
-            {sites.map(site => {
-              const siteRows = dashRows.filter(r => r.sc.site_id === site.id)
-              const siteUnscheduled = unscheduledAtt.filter(r => r.site_id === site.id)
-              if (siteRows.length === 0 && siteUnscheduled.length === 0) return null
-              const totalCount = siteRows.length + siteUnscheduled.length
-              return (
-                <div key={site.id} style={{ background: '#1a2035', border: '1px solid #1e2a45', borderRadius: 10, overflow: 'hidden', marginBottom: 14 }}>
-                  <div style={{ padding: '10px 16px', borderBottom: '1px solid #1e2a45', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                    <div style={{ fontWeight: 600, fontSize: 13 }}>{site.name}</div>
-                    <div style={{ fontSize: 10, color: '#4a5568' }}>{totalCount} empleado{totalCount !== 1 ? 's' : ''} hoy</div>
-                  </div>
-                  <div style={{ overflowX: 'auto' }}>
-                  <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 520 }}>
-                    <thead><tr>{['Empleado','Horario','Entrada','Salida','Ventas','Estado'].map(h => (
-                      <th key={h} style={{ textAlign: 'left', fontSize: 9, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '.6px', color: '#4a5568', padding: '8px 16px', borderBottom: '1px solid #1e2a45' }}>{h}</th>
-                    ))}</tr></thead>
-                    <tbody>
-                      {siteRows.map(({ sc, emp, record, color, bg, statusLabel }) => (
-                        <tr key={sc.id} style={{ borderBottom: '1px solid rgba(30,42,69,.3)' }}>
-                          <td style={{ padding: '10px 16px' }}>
-                            <button onClick={() => setEmpPage(emp)} style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', textAlign: 'left', fontFamily: 'inherit' }}>
-                              <div style={{ fontSize: 12, fontWeight: 600, color: '#3b82f6', textDecoration: 'underline', textDecorationColor: 'rgba(59,130,246,.3)' }}>{emp?.name || '?'}</div>
-                              <div style={{ fontSize: 10, color: '#4a5568' }}>{emp?.role}</div>
-                            </button>
-                          </td>
-                          <td style={{ padding: '10px 16px', fontSize: 11, fontFamily: "'JetBrains Mono'", color: '#8892a8' }}>{sc.start_time?.slice(0,5)} – {sc.end_time?.slice(0,5)}</td>
-                          <td style={{ padding: '10px 16px', fontSize: 11, fontFamily: "'JetBrains Mono'" }}>{record?.check_in ? fmtTime(record.check_in, site.timezone) : '–'}</td>
-                          <td style={{ padding: '10px 16px', fontSize: 11, fontFamily: "'JetBrains Mono'" }}>{record?.check_out ? fmtTime(record.check_out, site.timezone) : '–'}</td>
-                          <td style={{ padding: '10px 16px', fontSize: 11, fontFamily: "'JetBrains Mono'", color: record?.sales_amount > 0 ? '#10b981' : '#4a5568' }}>{record?.sales_amount > 0 ? '$'+Number(record.sales_amount).toLocaleString('es-MX') : '–'}</td>
-                          <td style={{ padding: '10px 16px' }}><span style={{ padding: '3px 10px', borderRadius: 5, fontSize: 10, fontWeight: 600, color, background: bg }}>{statusLabel}</span></td>
-                        </tr>
-                      ))}
-                      {siteUnscheduled.map(r => {
-                        // FIX BUG 1: buscar en allEmps para encontrar cualquier empleado aunque no esté asignado
-                        const emp = allEmps.find(e => e.id === r.employee_id)
-                        const color = r.check_out ? '#3b82f6' : '#10b981'; const bg = r.check_out ? 'rgba(59,130,246,.12)' : 'rgba(16,185,129,.12)'; const label = r.check_out ? 'Completó turno' : 'Activo'
-                        return (
-                          <tr key={r.id} style={{ borderBottom: '1px solid rgba(30,42,69,.3)', background: 'rgba(16,185,129,.03)' }}>
-                            <td style={{ padding: '10px 16px' }}>
-                              <button onClick={() => setEmpPage(emp)} style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', textAlign: 'left', fontFamily: 'inherit' }}>
-                                <div style={{ fontSize: 12, fontWeight: 600, color: '#3b82f6', textDecoration: 'underline', textDecorationColor: 'rgba(59,130,246,.3)' }}>{emp?.name || '?'}</div>
-                                <div style={{ fontSize: 10, color: '#4a5568' }}>{emp?.role}</div>
-                              </button>
-                            </td>
-                            <td style={{ padding: '10px 16px', fontSize: 10, color: '#4a5568', fontStyle: 'italic' }}>Sin horario</td>
-                            <td style={{ padding: '10px 16px', fontSize: 11, fontFamily: "'JetBrains Mono'" }}>{fmtTime(r.check_in, site.timezone)}</td>
-                            <td style={{ padding: '10px 16px', fontSize: 11, fontFamily: "'JetBrains Mono'" }}>{r.check_out ? fmtTime(r.check_out, site.timezone) : '–'}</td>
-                            <td style={{ padding: '10px 16px', fontSize: 11, fontFamily: "'JetBrains Mono'", color: r.sales_amount > 0 ? '#10b981' : '#4a5568' }}>{r.sales_amount > 0 ? '$'+Number(r.sales_amount).toLocaleString('es-MX') : '–'}</td>
-                            <td style={{ padding: '10px 16px' }}><span style={{ padding: '3px 10px', borderRadius: 5, fontSize: 10, fontWeight: 600, color, background: bg }}>{label}</span></td>
-                          </tr>
-                        )
-                      })}
-                    </tbody>
-                  </table>
-                  </div>
-                </div>
-              )
-            })}
-            {dashRows.length === 0 && unscheduledAtt.length === 0 && (
-              <div style={{ padding: 32, textAlign: 'center', color: '#4a5568', fontSize: 13, background: '#1a2035', borderRadius: 10, border: '1px solid #1e2a45' }}>No hay horarios cargados para hoy.</div>
-            )}
-          </>}
+          {tab === 'dashboard' && <UnifiedDashboard
+            sites={sites} allEmps={allEmps} att={att}
+            todayAtt={todayAtt} schedules={schedules} todaySchedules={todaySchedules}
+            siteHours={siteHours} today={today}
+            dashRows={dashRows} unscheduledAtt={unscheduledAtt}
+            sitesWorking={sitesWorking} peopleWorking={peopleWorking}
+            setEmpPage={setEmpPage}
+          />}
           {tab === 'attendance' && <>
             <div style={{ background: '#1a2035', border: '1px solid #1e2a45', borderRadius: 10, padding: '14px 16px', marginBottom: 14, display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: 10 }}>
               {/* FIX BUG 2: usar allEmps para el filtro de empleados */}
@@ -472,7 +474,13 @@ export default function AdminPage() {
             </div>
             <div style={{ marginBottom: 10, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
               <span style={{ fontSize: 11, color: '#8892a8' }}>{filteredAtt.length} registro{filteredAtt.length !== 1 ? 's' : ''} encontrado{filteredAtt.length !== 1 ? 's' : ''}</span>
+              <div style={{ display: 'flex', gap: 8 }}>
+              <button onClick={exportAttCSV} disabled={filteredAtt.length === 0}
+                style={{ background: filteredAtt.length > 0 ? 'rgba(16,185,129,.1)' : 'transparent', border: '1px solid ' + (filteredAtt.length > 0 ? 'rgba(16,185,129,.3)' : '#1e2a45'), borderRadius: 5, color: filteredAtt.length > 0 ? '#10b981' : '#4a5568', fontSize: 10, padding: '4px 12px', cursor: filteredAtt.length > 0 ? 'pointer' : 'default', fontFamily: 'inherit', fontWeight: 600 }}>⬇ CSV</button>
+              <button onClick={() => setSalesImportOpen(true)}
+                style={{ background: 'rgba(139,92,246,.1)', border: '1px solid rgba(139,92,246,.3)', borderRadius: 5, color: '#a78bfa', fontSize: 10, padding: '4px 12px', cursor: 'pointer', fontFamily: 'inherit', fontWeight: 600 }}>⬆ Ventas</button>
               <button onClick={() => { setFilterEmp(''); setFilterSite(''); setFilterFrom(''); setFilterTo(''); setFilterStatus('') }} style={{ background: (filterEmp||filterSite||filterFrom||filterTo||filterStatus) ? 'rgba(59,130,246,.12)' : 'transparent', border: '1px solid '+((filterEmp||filterSite||filterFrom||filterTo||filterStatus)?'#3b82f6':'#1e2a45'), borderRadius: 5, color: (filterEmp||filterSite||filterFrom||filterTo||filterStatus)?'#3b82f6':'#4a5568', fontSize: 10, padding: '4px 12px', cursor: 'pointer', fontFamily: 'inherit', fontWeight: 600 }}>Limpiar filtros</button>
+              </div>
             </div>
             <div style={{ background: '#1a2035', border: '1px solid #1e2a45', borderRadius: 10, overflow: 'hidden' }}>
               <div style={{ overflowX: 'auto' }}>
@@ -503,7 +511,14 @@ export default function AdminPage() {
               </div>
             </div>
           </>}
-          {tab === 'stores' && <StoresDashboard sites={sites} att={todayAtt} schedules={todaySchedules} allEmps={allEmps} siteHours={siteHours} today={today} onEditSite={s => setModal({ type: 'site', data: s })} />}
+
+          {tab === 'competitions' && <CompetitionsPanel
+            competitions={competitions} compSites={compSites}
+            sites={sites} allEmps={allEmps} att={att}
+            adminUser={adminUser} isSuperAdmin={isSuperAdmin}
+            onEdit={c => setModal({ type: 'competition', data: c })}
+            onRefresh={load}
+          />}
           {tab === 'schedules' && <ScheduleBoard sites={sites} allEmps={allEmps} schedules={schedules} employeeSiteAssignments={employeeSiteAssignments} siteHours={siteHours} isSuperAdmin={isSuperAdmin} adminUser={adminUser} onRefresh={load} setToast={setToast} />}
           {tab === 'employees' && (
             <div style={{ background: '#1a2035', border: '1px solid #1e2a45', borderRadius: 10, overflow: 'hidden' }}>
@@ -617,13 +632,15 @@ export default function AdminPage() {
                         <td style={{ padding: '9px 16px' }}><span style={{ padding: '2px 8px', borderRadius: 4, fontSize: 10, fontWeight: 600, color: au.role === 'superadmin' ? '#3b82f6' : au.role === 'company_admin' ? '#a855f7' : '#10b981', background: au.role === 'superadmin' ? 'rgba(59,130,246,.12)' : au.role === 'company_admin' ? 'rgba(168,85,247,.12)' : 'rgba(16,185,129,.12)' }}>{au.role === 'superadmin' ? 'Super Admin' : au.role === 'company_admin' ? 'Admin Empresa' : 'Gerente'}</span></td>
                         <td style={{ padding: '9px 16px', fontSize: 11, color: '#8892a8' }}>{au.role === 'superadmin' ? <span style={{ color: '#4a5568' }}>Todas</span> : au.role === 'company_admin' ? <span style={{ color: '#4a5568' }}>Empresa</span> : auSites.length > 0 ? auSites.join(', ') : <span style={{ color: '#ef4444' }}>Sin asignar</span>}</td>
                         <td style={{ padding: '9px 16px' }}>
-                          <div style={{ display: 'flex', gap: 6 }}>
+                          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
                             <button onClick={() => setModal({ type: 'adminUser', data: au })} style={{ background: 'none', border: 'none', color: '#8892a8', cursor: 'pointer', fontSize: 11, fontFamily: 'inherit' }}>Editar</button>
-                            {au.id !== authUser?.id && (
-                              isActive
+                            {au.id !== authUser?.id && (<>
+                              <button onClick={() => resetAdminPwd(au)} style={{ background: 'none', border: 'none', color: '#f59e0b', cursor: 'pointer', fontSize: 11, fontFamily: 'inherit' }}>Reset pwd</button>
+                              {isActive
                                 ? <button onClick={async () => { if (confirm('Desactivar a ' + au.name + '?')) { await supabase.from('admin_users').update({ active: false }).eq('id', au.id); await load(); setToast('Usuario desactivado') } }} style={{ background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer', fontSize: 11, fontFamily: 'inherit' }}>Desactivar</button>
-                                : <button onClick={async () => { await supabase.from('admin_users').update({ active: true }).eq('id', au.id); await load(); setToast('Usuario reactivado') }} style={{ background: 'none', border: 'none', color: '#10b981', cursor: 'pointer', fontSize: 11, fontFamily: 'inherit' }}>Reactivar</button>
-                            )}
+                                : <button onClick={async () => { await supabase.from('admin_users').update({ active: true }).eq('id', au.id); await load(); setToast('Usuario reactivado') }} style={{ background: 'none', border: 'none', color: '#10b981', cursor: 'pointer', fontSize: 11, fontFamily: 'inherit' }}>Reactivar</button>}
+                              <button onClick={() => deleteAdminUser(au)} style={{ background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer', fontSize: 11, fontFamily: 'inherit' }}>Eliminar</button>
+                            </>)}
                           </div>
                         </td>
                       </tr>
@@ -656,6 +673,7 @@ export default function AdminPage() {
               {companies.length === 0 && <div style={{ padding: 20, textAlign: 'center', color: '#4a5568', fontSize: 12, background: '#1a2035', borderRadius: 10, border: '1px solid #1e2a45' }}>No hay empresas.</div>}
             </div>
           )}
+          {tab === 'alerts' && <AlertsPanel adminUserId={adminUser?.id} adminEmail={adminUser?.email} />}
         </div>
       </div>
       {modal?.type === 'emp' && <EmpModal
@@ -669,8 +687,58 @@ export default function AdminPage() {
       {modal?.type === 'site'      && <SiteModal      data={modal.data} onSave={saveSite} onClose={() => setModal(null)} />}
       {modal?.type === 'qr'        && <QrModal        site={modal.data} url={getSiteUrl(modal.data.code)} onClose={() => setModal(null)} />}
       {modal?.type === 'schedule'  && <ScheduleModal  emp={modal.data} sites={sites} schedules={schedules.filter(s => s.employee_id === modal.data.id)} onSave={async () => { await load(); setToast('Horarios guardados'); setModal(null) }} onClose={() => setModal(null)} />}
-      {modal?.type === 'adminUser' && <AdminUserModal data={modal.data} sites={sites} companies={companies} isSuperAdmin={isSuperAdmin} isCompanyAdmin={isCompanyAdmin} adminUser={adminUser} onSave={async () => { await load(); setToast('Usuario guardado'); setModal(null) }} onClose={() => setModal(null)} />}
+      {modal?.type === 'adminUser' && <AdminUserModal data={modal.data} sites={sites} companies={companies} isSuperAdmin={isSuperAdmin} isCompanyAdmin={isCompanyAdmin} adminUser={adminUser} onSave={async () => { await load(); setToast('Usuario guardado'); setModal(null) }} onClose={() => setModal(null)} onResetPwd={resetAdminPwd} />}
+      {modal?.type === 'competition' && (
+        <CompetitionModal
+          data={modal.data}
+          sites={sites}
+          allEmps={allEmps}
+          adminUser={adminUser}
+          permittedSiteIds={sites.map(s => s.id)}
+          onSave={async (formData, siteIds) => {
+            const isNew = !formData.id
+            let compId = formData.id
+            if (isNew) {
+              delete formData.id
+              formData.created_by = adminUser?.id
+              formData.company_id = adminUser?.company_id || null
+              const { data: nc } = await supabase.from('competitions').insert(formData).select().single()
+              compId = nc?.id
+            } else {
+              await supabase.from('competitions').update(formData).eq('id', formData.id)
+            }
+            if (compId) {
+              await supabase.from('competition_sites').delete().eq('competition_id', compId)
+              if (siteIds.length > 0) {
+                await supabase.from('competition_sites').insert(siteIds.map(sid => ({ competition_id: compId, site_id: sid })))
+              }
+            }
+            setToast('Competencia guardada'); setModal(null); load()
+          }}
+          onDelete={async (id) => {
+            await supabase.from('competitions').delete().eq('id', id)
+            setToast('Competencia eliminada'); setModal(null); load()
+          }}
+          onClose={() => setModal(null)}
+        />
+      )}
       {modal?.type === 'company'   && <CompanyModal   data={modal.data} onSave={saveCompany} onClose={() => setModal(null)} />}
+      {modal?.type === 'showPwd' && (
+        <div onClick={() => setModal(null)} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.7)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 200 }}>
+          <div onClick={e => e.stopPropagation()} style={{ background: '#1a2035', border: '1px solid #1e2a45', borderRadius: 12, padding: 24, width: '100%', maxWidth: 380, textAlign: 'center' }}>
+            <div style={{ fontSize: 13, fontWeight: 700, color: '#10b981', marginBottom: 10 }}>✅ Nueva contraseña generada</div>
+            <div style={{ fontSize: 12, color: '#8892a8', marginBottom: 16 }}>Envía estos datos a <strong style={{ color: '#f1f5f9' }}>{modal.data.name}</strong></div>
+            <div style={{ background: '#0d1220', border: '1px solid #1e2a45', borderRadius: 8, padding: '14px 16px', marginBottom: 16, textAlign: 'left' }}>
+              <div style={{ fontSize: 12, color: '#8892a8', marginBottom: 4 }}>Email: <span style={{ color: '#f1f5f9', fontFamily: "'JetBrains Mono'" }}>{modal.data.email}</span></div>
+              <div style={{ fontSize: 12, color: '#8892a8' }}>Contraseña: <span style={{ color: '#3b82f6', fontFamily: "'JetBrains Mono'", fontWeight: 700, fontSize: 15 }}>{modal.data.pwd}</span></div>
+            </div>
+            <button onClick={() => { navigator.clipboard.writeText(`Email: ${modal.data.email}\nContraseña: ${modal.data.pwd}`); setToast('¡Copiado!') }} style={{ width: '100%', padding: '11px', borderRadius: 7, border: 'none', background: '#3b82f6', color: '#fff', fontSize: 13, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', marginBottom: 8 }}>📋 Copiar credenciales</button>
+            <button onClick={() => setModal(null)} style={{ width: '100%', padding: '9px', borderRadius: 7, border: '1px solid #1e2a45', background: 'transparent', color: '#8892a8', fontSize: 12, cursor: 'pointer', fontFamily: 'inherit' }}>Cerrar</button>
+          </div>
+        </div>
+      )}
+      {salesImportOpen && <SalesImportModal sites={sites} allEmps={allEmps} onClose={() => setSalesImportOpen(false)} onDone={() => { setSalesImportOpen(false); load() }} setToast={setToast} />}
+      <FeedbackButton open={feedbackOpen} onClose={() => setFeedbackOpen(false)} adminUser={adminUser} />
       {toast && <div style={{ position: 'fixed', bottom: 20, right: 20, background: '#1a2035', border: '1px solid rgba(16,185,129,.25)', borderRadius: 8, padding: '10px 16px', fontSize: 12, fontWeight: 500, zIndex: 200, color: '#10b981' }}>{toast}</div>}
     </div>
   )
@@ -921,7 +989,7 @@ function EmpModal({ data, currentGoal, sites, currentSiteIds, onSave, onClose })
 // ─── Site Modal con Leaflet ───────────────────────────────────────────────────
 function SiteModal({ data, onSave, onClose }) {
   const isNew = !data?.id
-  const [f, setF] = useState(data || { name: '', address: '', grace_mins: 5, absent_mins: 15, lat: '', lng: '', radius_m: 150 })
+  const [f, setF] = useState(data || { name: '', address: '', grace_mins: 5, absent_mins: 15, lat: '', lng: '', radius_m: 150, timezone: 'America/Cancun' })
   const [searchQuery, setSearchQuery] = useState(data?.address || '')
   const [searching, setSearching] = useState(false)
   const [searchErr, setSearchErr] = useState('')
@@ -986,9 +1054,23 @@ function SiteModal({ data, onSave, onClose }) {
         <div style={{ marginBottom: 10, borderRadius: 8, overflow: 'hidden', border: '1px solid #1e2a45' }}><div ref={mapRef} style={{ height: 220, width: '100%', background: '#0d1220' }} /></div>
         <div style={{ fontSize: 10, color: '#4a5568', marginBottom: 12 }}>{hasGps ? `📍 ${f.lat}, ${f.lng} — arrastra el marcador para ajustar` : '⚠️ Sin coordenadas — busca la ubicación o arrastra el marcador'}</div>
         <div style={{ marginBottom: 10 }}><label style={{ fontSize: 10, fontWeight: 600, color: '#8892a8', display: 'block', marginBottom: 4 }}>Dirección (texto)</label><input value={f.address||''} onChange={e => upd('address', e.target.value)} style={{ width:'100%',background:'#0d1220',border:'1px solid #1e2a45',color:'#f1f5f9',fontSize:12,padding:'8px 10px',borderRadius:6,outline:'none',fontFamily:'inherit' }} /></div>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 14 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 10 }}>
           <div><label style={{ fontSize: 10, fontWeight: 600, color: '#8892a8', display: 'block', marginBottom: 4 }}>Radio GPS (metros)</label><input type='number' value={f.radius_m??150} onChange={e => upd('radius_m', parseInt(e.target.value)||150)} style={{ width:'100%',background:'#0d1220',border:'1px solid #1e2a45',color:'#f1f5f9',fontSize:12,padding:'8px 10px',borderRadius:6,outline:'none',fontFamily:'inherit' }} /></div>
           <div><label style={{ fontSize: 10, fontWeight: 600, color: '#8892a8', display: 'block', marginBottom: 4 }}>Tolerancia (minutos)</label><input type='number' value={f.grace_mins||0} onChange={e => upd('grace_mins', parseInt(e.target.value)||0)} style={{ width:'100%',background:'#0d1220',border:'1px solid #1e2a45',color:'#f1f5f9',fontSize:12,padding:'8px 10px',borderRadius:6,outline:'none',fontFamily:'inherit' }} /></div>
+        </div>
+        <div style={{ marginBottom: 14 }}>
+          <label style={{ fontSize: 10, fontWeight: 600, color: '#8892a8', display: 'block', marginBottom: 4 }}>Zona horaria</label>
+          <select value={f.timezone || 'America/Cancun'} onChange={e => upd('timezone', e.target.value)}
+            style={{ width:'100%',background:'#0d1220',border:'1px solid #1e2a45',color:'#f1f5f9',fontSize:12,padding:'8px 10px',borderRadius:6,outline:'none',fontFamily:'inherit' }}>
+            <option value='America/Cancun'>Cancún / Q. Roo (UTC-5, sin horario de verano)</option>
+            <option value='America/Mexico_City'>CDMX / Monterrey / Guadalajara (UTC-6/-5 con verano)</option>
+            <option value='America/Merida'>Mérida / Yucatán (UTC-6/-5 con verano)</option>
+            <option value='America/Monterrey'>Monterrey / Nuevo León (UTC-6/-5 con verano)</option>
+            <option value='America/Mazatlan'>Sinaloa / Nayarit (UTC-7/-6 con verano)</option>
+            <option value='America/Hermosillo'>Sonora (UTC-7, sin horario de verano)</option>
+            <option value='America/Chihuahua'>Chihuahua (UTC-7/-6 con verano)</option>
+            <option value='America/Tijuana'>Tijuana / Baja California (UTC-8/-7 con verano)</option>
+          </select>
         </div>
         {isNew && <div style={{ background: 'rgba(59,130,246,.06)', border: '1px solid rgba(59,130,246,.15)', borderRadius: 8, padding: '10px 14px', marginBottom: 14 }}><div style={{ fontSize: 10, color: '#3b82f6', fontWeight: 600, marginBottom: 2 }}>Código QR</div><div style={{ fontSize: 11, color: '#4a5568' }}>Se generará automáticamente al guardar.</div></div>}
         {!isNew && <div style={{ marginBottom: 14 }}><label style={{ fontSize: 10, fontWeight: 600, color: '#8892a8', display: 'block', marginBottom: 4 }}>Código QR</label><input value={f.code||''} onChange={e => upd('code', e.target.value.toUpperCase())} style={{ width:'100%',background:'#0d1220',border:'1px solid #1e2a45',color:'#f1f5f9',fontSize:12,padding:'8px 10px',borderRadius:6,outline:'none',fontFamily:"'JetBrains Mono'" }} /></div>}
@@ -1052,13 +1134,24 @@ function ScheduleModal({ emp, sites, schedules, onSave, onClose }) {
     setWeek(p => { const nw = {...p}; weekDates.forEach(({date}) => { if (nw[date]?.on && !nw[date]?.blocked && date !== srcDate) nw[date] = {...nw[date], site_id: src.site_id, start_time: src.start_time, end_time: src.end_time, lunch_mins: src.lunch_mins} }); return nw })
   }
   const save = async () => {
+    // Validate: start_time < end_time for all active days
+    for (const { date, label } of weekDates) {
+      const day = week[date]
+      if (!day?.on || day.blocked) continue
+      const [sh, sm] = (day.start_time || '10:00').split(':').map(Number)
+      const [eh, em] = (day.end_time || '19:00').split(':').map(Number)
+      if ((sh * 60 + sm) >= (eh * 60 + em)) {
+        alert(`Horario inválido el ${label}: la entrada (${day.start_time}) debe ser antes de la salida (${day.end_time}).`)
+        return
+      }
+    }
     setSaving(true)
     // Guardar flag de semana fija en el empleado
     await supabase.from('employees').update({ fixed_week: fixedWeek }).eq('id', emp.id)
     const editableDates = weekDates.filter(({date}) => !week[date]?.blocked).map(d => d.date)
     if (editableDates.length > 0) await supabase.from('schedules').delete().eq('employee_id', emp.id).in('date', editableDates)
     const inserts = []
-    weekDates.forEach(({ date }) => { const day = week[date]; if (day?.on && !day.blocked && day.site_id) inserts.push({ employee_id: emp.id, date, site_id: day.site_id, start_time: day.start_time||'10:00', end_time: day.end_time||'19:00', lunch_mins: day.lunch_mins??60 }) })
+    weekDates.forEach(({ date }) => { const day = week[date]; if (day?.on && !day.blocked && day.site_id) { const siteCompanyId = sites.find(s => s.id === day.site_id)?.company_id || null; inserts.push({ employee_id: emp.id, date, site_id: day.site_id, start_time: day.start_time||'10:00', end_time: day.end_time||'19:00', lunch_mins: day.lunch_mins??60, ...(siteCompanyId ? { company_id: siteCompanyId } : {}) }) } })
     if (inserts.length > 0) await supabase.from('schedules').insert(inserts)
     setSaving(false); onSave()
   }
@@ -1156,7 +1249,7 @@ function ScheduleModal({ emp, sites, schedules, onSave, onClose }) {
   )
 }
 // ─── Admin User Modal ─────────────────────────────────────────────────────────
-function AdminUserModal({ data, sites, companies, isSuperAdmin, isCompanyAdmin, adminUser, onSave, onClose }) {
+function AdminUserModal({ data, sites, companies, isSuperAdmin, isCompanyAdmin, adminUser, onSave, onClose, onResetPwd }) {
   const [name, setName]         = useState(data?.name || '')
   const [email, setEmail]       = useState(data?.email || '')
   const [role, setRole]         = useState(data?.role || 'manager')
@@ -1270,10 +1363,13 @@ function AdminUserModal({ data, sites, companies, isSuperAdmin, isCompanyAdmin, 
                 )}
               </div>
             )}
-            <div style={{ display: 'flex', gap: 8 }}>
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
               <button disabled={!valid||saving} onClick={handleSave} style={{ flex:1,padding:'10px 16px',borderRadius:7,border:'none',background:valid&&!saving?'#3b82f6':'#1e2a45',color:'#fff',fontSize:12,fontWeight:600,cursor:valid&&!saving?'pointer':'not-allowed',fontFamily:'inherit' }}>
-                {saving ? 'Creando...' : data ? 'Guardar' : 'Crear usuario'}
+                {saving ? 'Guardando...' : data ? 'Guardar' : 'Crear usuario'}
               </button>
+              {data && onResetPwd && (
+                <button onClick={() => { onClose(); onResetPwd(data) }} style={{ padding:'10px 14px',borderRadius:7,border:'1px solid rgba(245,158,11,.4)',background:'rgba(245,158,11,.1)',color:'#f59e0b',fontSize:12,fontWeight:600,cursor:'pointer',fontFamily:'inherit',whiteSpace:'nowrap' }}>🔑 Reset pwd</button>
+              )}
               <button onClick={onClose} style={{ padding:'10px 16px',borderRadius:7,border:'1px solid #1e2a45',background:'transparent',color:'#8892a8',fontSize:12,cursor:'pointer',fontFamily:'inherit' }}>Cancelar</button>
             </div>
           </>
@@ -1282,92 +1378,155 @@ function AdminUserModal({ data, sites, companies, isSuperAdmin, isCompanyAdmin, 
     </div>
   )
 }
-// ─── Stores Dashboard ─────────────────────────────────────────────────────────
-function StoresDashboard({ sites, att, schedules, allEmps, siteHours, today, onEditSite }) {
-  const now = new Date()
-  const nowTimeStr = now.toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: 'America/Cancun' })
-  // day_of_week: 0=Lun...6=Dom; JS getDay: 0=Sun..6=Sat → convert
-  const todayDate = today || new Date().toLocaleDateString('en-CA', { timeZone: 'America/Cancun' })
-  const jsDow = new Date(todayDate + 'T12:00:00').getDay() // 0=Sun
-  const todayDow = jsDow === 0 ? 6 : jsDow - 1 // 0=Lun..6=Dom
+function UnifiedDashboard({ sites, allEmps, att, todayAtt, schedules, todaySchedules, siteHours, today, dashRows, unscheduledAtt, sitesWorking, peopleWorking, setEmpPage }) {
+  const [viewMode, setViewMode] = useState('list')     // 'list' | 'grid'
+  const [salesPeriod, setSalesPeriod] = useState('today') // 'today' | 'week' | 'month'
 
-  function isStoreOpen(site) {
-    return att.some(r => r.site_id === site.id && r.check_in && !r.check_out)
+  const now = new Date()
+  const weekStartStr = (() => { const d = new Date(now); const day = d.getDay(); d.setDate(d.getDate() - (day === 0 ? 6 : day - 1)); return d.toLocaleDateString('en-CA', { timeZone: 'America/Cancun' }) })()
+  const prevWeekStartStr = (() => { const d = new Date(now); const day = d.getDay(); d.setDate(d.getDate() - (day === 0 ? 6 : day - 1) - 7); return d.toLocaleDateString('en-CA', { timeZone: 'America/Cancun' }) })()
+  const prevWeekEndStr   = (() => { const d = new Date(now); const day = d.getDay(); d.setDate(d.getDate() - (day === 0 ? 6 : day - 1) - 1); return d.toLocaleDateString('en-CA', { timeZone: 'America/Cancun' }) })()
+  const monthStr = today.slice(0, 7)
+
+  function getSiteSales(siteId) {
+    return att.filter(r => {
+      if (r.site_id !== siteId) return false
+      if (salesPeriod === 'today') return r.date === today
+      if (salesPeriod === 'week') return r.date >= weekStartStr
+      if (salesPeriod === 'month') return r.date.startsWith(monthStr)
+      return false
+    }).reduce((sum, r) => sum + (parseFloat(r.sales_amount) || 0), 0)
+  }
+  function getPrevWeekSales(siteId) {
+    return att.filter(r => r.site_id === siteId && r.date >= prevWeekStartStr && r.date <= prevWeekEndStr)
+      .reduce((sum, r) => sum + (parseFloat(r.sales_amount) || 0), 0)
   }
 
+  const totalSales = sites.reduce((sum, s) => sum + getSiteSales(s.id), 0)
+  const totalPrevWeek = salesPeriod === 'week' ? sites.reduce((sum, s) => sum + getPrevWeekSales(s.id), 0) : 0
+  const weekPct = (salesPeriod === 'week' && totalPrevWeek > 0) ? ((totalSales - totalPrevWeek) / totalPrevWeek * 100).toFixed(0) : null
+  const jsDow = new Date(today + 'T12:00:00').getDay()
+  const todayDow = jsDow === 0 ? 6 : jsDow - 1
+  function isStoreOpen(site) { return todayAtt.some(r => r.site_id === site.id && r.check_in && !r.check_out) }
   function shouldBeOpen(site) {
     const h = (siteHours || []).find(h => h.site_id === site.id && h.day_of_week === todayDow)
     return h?.is_open === true
   }
-
   function storeStats(site) {
-    const siteAtt = att.filter(r => r.site_id === site.id)
-    const siteScheds = schedules.filter(s => s.site_id === site.id)
-    const activeNow = siteAtt.filter(r => r.check_in && !r.check_out).length
+    const siteAtt = todayAtt.filter(r => r.site_id === site.id)
+    const siteScheds = todaySchedules.filter(s => s.site_id === site.id)
+    const activeRecords = siteAtt.filter(r => r.check_in && !r.check_out)
+    const activeNow = activeRecords.length
     const completedToday = siteAtt.filter(r => r.check_out).length
     const totalExpected = siteScheds.length
-    const totalSalesToday = siteAtt.reduce((s, r) => s + (parseFloat(r.sales_amount) || 0), 0)
     const firstIn = siteAtt.filter(r => r.check_in).sort((a, b) => new Date(a.check_in) - new Date(b.check_in))[0]
-    return { activeNow, completedToday, totalExpected, totalSalesToday, firstIn }
+    return { activeNow, completedToday, totalExpected, firstIn, activeRecords }
   }
 
-  const openSites = sites.filter(s => isStoreOpen(s))
-  const closedSites = sites.filter(s => !isStoreOpen(s))
+  const periodLabel = { today: 'Hoy', week: 'Semana', month: 'Mes' }
 
   return (
     <div>
-      {/* Resumen global */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12, marginBottom: 20 }}>
-        {[
-          ['Tiendas abiertas', openSites.length, '#10b981', 'rgba(16,185,129,.12)'],
-          ['Tiendas sin actividad', closedSites.length, '#f59e0b', 'rgba(245,158,11,.12)'],
-          ['Total sucursales', sites.length, '#3b82f6', 'rgba(59,130,246,.12)'],
-        ].map(([l, v, c, bg]) => (
-          <div key={l} style={{ background: bg, border: `1px solid ${c}33`, borderRadius: 10, padding: '16px 18px' }}>
-            <div style={{ fontSize: 10, color: c, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '.6px', marginBottom: 6 }}>{l}</div>
-            <div style={{ fontSize: 30, fontWeight: 700, fontFamily: "'JetBrains Mono'", color: c }}>{v}</div>
+      {/* Top stats + controls */}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 10, marginBottom: 16 }}>
+        <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+          {[['🏪', sitesWorking, 'Tiendas activas', '#10b981', 'rgba(16,185,129,.12)'], ['👥', peopleWorking, 'Trabajando ahora', '#3b82f6', 'rgba(59,130,246,.12)']].map(([icon, val, label, c, bg]) => (
+            <div key={label} style={{ background: bg, border: `1px solid ${c}33`, borderRadius: 10, padding: '12px 16px', display: 'flex', alignItems: 'center', gap: 10, minWidth: 140 }}>
+              <span style={{ fontSize: 22 }}>{icon}</span>
+              <div>
+                <div style={{ fontSize: 9, color: c, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '.5px' }}>{label}</div>
+                <div style={{ fontSize: 22, fontWeight: 700, fontFamily: "'JetBrains Mono'", color: c, lineHeight: 1.2 }}>{val}</div>
+              </div>
+            </div>
+          ))}
+          {/* Sales card with week comparison */}
+          <div style={{ background: 'rgba(139,92,246,.12)', border: '1px solid rgba(139,92,246,.2)', borderRadius: 10, padding: '12px 16px', display: 'flex', alignItems: 'center', gap: 10, minWidth: 160 }}>
+            <span style={{ fontSize: 22 }}>💰</span>
+            <div>
+              <div style={{ fontSize: 9, color: '#8b5cf6', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '.5px' }}>Ventas ({periodLabel[salesPeriod]})</div>
+              <div style={{ fontSize: 22, fontWeight: 700, fontFamily: "'JetBrains Mono'", color: '#8b5cf6', lineHeight: 1.2 }}>{totalSales > 0 ? '$' + Number(totalSales).toLocaleString('es-MX') : '–'}</div>
+              {weekPct !== null && (
+                <div style={{ fontSize: 10, fontWeight: 600, color: Number(weekPct) >= 0 ? '#10b981' : '#ef4444', marginTop: 2 }}>
+                  {Number(weekPct) >= 0 ? '↑' : '↓'} {Math.abs(Number(weekPct))}% vs sem. ant.
+                </div>
+              )}
+            </div>
           </div>
-        ))}
+        </div>
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+          {/* Sales period selector */}
+          <div style={{ display: 'flex', background: '#0d1220', border: '1px solid #1e2a45', borderRadius: 8, overflow: 'hidden' }}>
+            {['today', 'week', 'month'].map(p => (
+              <button key={p} onClick={() => setSalesPeriod(p)}
+                style={{ padding: '6px 12px', border: 'none', cursor: 'pointer', fontSize: 11, fontWeight: 600, fontFamily: 'inherit', background: salesPeriod === p ? '#3b82f6' : 'transparent', color: salesPeriod === p ? '#fff' : '#8892a8', transition: 'all .15s' }}>
+                {periodLabel[p]}
+              </button>
+            ))}
+          </div>
+          {/* View mode toggle */}
+          <div style={{ display: 'flex', background: '#0d1220', border: '1px solid #1e2a45', borderRadius: 8, overflow: 'hidden' }}>
+            {[['list', '☰ Lista'], ['grid', '⊞ Cuadrícula']].map(([m, lb]) => (
+              <button key={m} onClick={() => setViewMode(m)}
+                style={{ padding: '6px 12px', border: 'none', cursor: 'pointer', fontSize: 11, fontWeight: 600, fontFamily: 'inherit', background: viewMode === m ? '#1e2a45' : 'transparent', color: viewMode === m ? '#f1f5f9' : '#8892a8', transition: 'all .15s' }}>
+                {lb}
+              </button>
+            ))}
+          </div>
+        </div>
       </div>
 
-      {/* Tiendas ABIERTAS */}
-      {openSites.length > 0 && (
-        <div style={{ marginBottom: 20 }}>
-          <div style={{ fontSize: 11, fontWeight: 700, color: '#10b981', textTransform: 'uppercase', letterSpacing: '.8px', marginBottom: 10, display: 'flex', alignItems: 'center', gap: 6 }}>
-            <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#10b981', display: 'inline-block', animation: 'pulse 2s infinite' }} />
-            Abiertas ahora
-          </div>
+      {/* GRID VIEW */}
+      {viewMode === 'grid' && (
+        <div>
           <style>{`@keyframes pulse { 0%,100% { opacity:1 } 50% { opacity:.4 } }`}</style>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: 12 }}>
-            {openSites.map(site => {
-              const { activeNow, completedToday, totalExpected, totalSalesToday, firstIn } = storeStats(site)
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 12 }}>
+            {sites.map(site => {
+              const open = isStoreOpen(site)
+              const late = !open && shouldBeOpen(site)
+              const { activeNow, completedToday, totalExpected, firstIn, activeRecords } = storeStats(site)
+              const siteSales = getSiteSales(site.id)
+              const sitePrevWeek = getPrevWeekSales(site.id)
+              const sitePct = (salesPeriod === 'week' && sitePrevWeek > 0) ? ((siteSales - sitePrevWeek) / sitePrevWeek * 100).toFixed(0) : null
               const tz = site.timezone || 'America/Cancun'
               return (
-                <div key={site.id} style={{ background: '#1a2035', border: '2px solid rgba(16,185,129,.35)', borderRadius: 12, overflow: 'hidden' }}>
-                  <div style={{ padding: '12px 16px', borderBottom: '1px solid rgba(16,185,129,.15)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <div key={site.id} style={{ background: '#1a2035', border: `2px solid ${open ? 'rgba(16,185,129,.4)' : late ? 'rgba(245,158,11,.35)' : '#1e2a45'}`, borderRadius: 12, overflow: 'hidden' }}>
+                  <div style={{ padding: '12px 16px', borderBottom: '1px solid rgba(30,42,69,.6)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                     <div>
                       <div style={{ fontSize: 13, fontWeight: 700 }}>{site.name}</div>
-                      <div style={{ fontSize: 10, color: '#8892a8', marginTop: 1 }}>{site.address}</div>
+                      {site.address && <div style={{ fontSize: 10, color: '#4a5568', marginTop: 1 }}>{site.address}</div>}
                     </div>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                      <span style={{ fontSize: 10, fontWeight: 700, color: '#10b981', background: 'rgba(16,185,129,.12)', border: '1px solid rgba(16,185,129,.3)', borderRadius: 5, padding: '2px 8px' }}>ABIERTA</span>
-                      <button onClick={() => onEditSite(site)} style={{ background: 'none', border: '1px solid #1e2a45', borderRadius: 5, color: '#4a5568', fontSize: 10, padding: '2px 8px', cursor: 'pointer', fontFamily: 'inherit' }}>Editar</button>
-                    </div>
+                    {open && <span style={{ fontSize: 10, fontWeight: 700, color: '#10b981', background: 'rgba(16,185,129,.12)', border: '1px solid rgba(16,185,129,.3)', borderRadius: 5, padding: '2px 8px', display: 'flex', alignItems: 'center', gap: 4 }}>
+                      <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#10b981', display: 'inline-block', animation: 'pulse 2s infinite' }} />ABIERTA
+                    </span>}
+                    {!open && late && <span style={{ fontSize: 10, fontWeight: 700, color: '#f59e0b', background: 'rgba(245,158,11,.12)', border: '1px solid rgba(245,158,11,.35)', borderRadius: 5, padding: '2px 8px' }}>⚠ Sin check-in</span>}
+                    {!open && !late && <span style={{ fontSize: 10, fontWeight: 700, color: '#4a5568', background: 'rgba(74,85,104,.1)', border: '1px solid #1e2a45', borderRadius: 5, padding: '2px 8px' }}>Inactiva</span>}
                   </div>
                   <div style={{ padding: '10px 16px', display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8 }}>
-                    {[['Activos', activeNow, '#10b981'], ['Completaron', completedToday, '#3b82f6'], ['Esperados', totalExpected, '#8892a8']].map(([l, v, c]) => (
+                    <div style={{ textAlign: 'center' }}>
+                      <div style={{ fontSize: 9, color: '#4a5568', textTransform: 'uppercase', letterSpacing: '.5px' }}>Activos</div>
+                      <div style={{ fontSize: 20, fontWeight: 700, fontFamily: "'JetBrains Mono'", color: '#10b981' }}>{activeNow}</div>
+                      {activeRecords.slice(0, 3).map(r => {
+                        const emp = allEmps.find(e => e.id === r.employee_id)
+                        return emp ? <div key={r.id} style={{ fontSize: 9, color: '#10b981', lineHeight: 1.4, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{emp.name.split(' ')[0]}</div> : null
+                      })}
+                      {activeRecords.length > 3 && <div style={{ fontSize: 9, color: '#4a5568' }}>+{activeRecords.length - 3}</div>}
+                    </div>
+                    {[['Completaron', completedToday, '#3b82f6'], ['Esperados', totalExpected, '#8892a8']].map(([l, v, c]) => (
                       <div key={l} style={{ textAlign: 'center' }}>
                         <div style={{ fontSize: 9, color: '#4a5568', textTransform: 'uppercase', letterSpacing: '.5px' }}>{l}</div>
                         <div style={{ fontSize: 20, fontWeight: 700, fontFamily: "'JetBrains Mono'", color: c }}>{v}</div>
                       </div>
                     ))}
                   </div>
-                  {(totalSalesToday > 0 || firstIn) && (
-                    <div style={{ padding: '8px 16px', borderTop: '1px solid #1e2a45', display: 'flex', gap: 16, flexWrap: 'wrap' }}>
-                      {firstIn && <span style={{ fontSize: 10, color: '#8892a8' }}>1ra entrada: <span style={{ fontFamily: "'JetBrains Mono'", color: '#f1f5f9' }}>{new Date(firstIn.check_in).toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: tz })}</span></span>}
-                      {totalSalesToday > 0 && <span style={{ fontSize: 10, color: '#10b981', fontWeight: 600 }}>Ventas: <span style={{ fontFamily: "'JetBrains Mono'" }}>${Number(totalSalesToday).toLocaleString('es-MX')}</span></span>}
+                  <div style={{ padding: '8px 16px', borderTop: '1px solid #1e2a45', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 6 }}>
+                    {firstIn ? <span style={{ fontSize: 10, color: '#8892a8' }}>1ra entrada: <span style={{ fontFamily: "'JetBrains Mono'", color: '#f1f5f9' }}>{new Date(firstIn.check_in).toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: tz })}</span></span> : <span />}
+                    <div style={{ textAlign: 'right' }}>
+                      <div style={{ fontSize: 11, fontWeight: 700, color: siteSales > 0 ? '#8b5cf6' : '#4a5568' }}>
+                        {siteSales > 0 ? `💰 $${Number(siteSales).toLocaleString('es-MX')}` : 'Sin ventas'}
+                      </div>
+                      {sitePct !== null && <div style={{ fontSize: 9, color: Number(sitePct) >= 0 ? '#10b981' : '#ef4444', fontWeight: 600 }}>{Number(sitePct) >= 0 ? '↑' : '↓'} {Math.abs(Number(sitePct))}% vs ant.</div>}
                     </div>
-                  )}
+                  </div>
                 </div>
               )
             })}
@@ -1375,33 +1534,76 @@ function StoresDashboard({ sites, att, schedules, allEmps, siteHours, today, onE
         </div>
       )}
 
-      {/* Tiendas SIN ACTIVIDAD */}
-      {closedSites.length > 0 && (
+      {/* LIST VIEW */}
+      {viewMode === 'list' && (
         <div>
-          <div style={{ fontSize: 11, fontWeight: 700, color: '#4a5568', textTransform: 'uppercase', letterSpacing: '.8px', marginBottom: 10 }}>Sin actividad hoy</div>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 10 }}>
-            {closedSites.map(site => {
-              const noApertura = shouldBeOpen(site)
-              return (
-                <div key={site.id} style={{ background: '#1a2035', border: `1px solid ${noApertura ? 'rgba(245,158,11,.4)' : '#1e2a45'}`, borderRadius: 12, padding: '12px 16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                  <div>
-                    <div style={{ fontSize: 12, fontWeight: 600, color: '#8892a8' }}>{site.name}</div>
-                    <div style={{ fontSize: 10, color: '#4a5568', marginTop: 1 }}>{site.address}</div>
-                  </div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
-                    {noApertura && <span style={{ fontSize: 9, fontWeight: 700, color: '#f59e0b', background: 'rgba(245,158,11,.12)', border: '1px solid rgba(245,158,11,.35)', borderRadius: 5, padding: '2px 8px' }}>⚠ SIN APERTURA</span>}
-                    {!noApertura && <span style={{ fontSize: 9, fontWeight: 700, color: '#4a5568', background: 'rgba(74,85,104,.1)', border: '1px solid #1e2a45', borderRadius: 5, padding: '2px 8px' }}>SIN ACTIVIDAD</span>}
-                    <button onClick={() => onEditSite(site)} style={{ background: 'none', border: '1px solid #1e2a45', borderRadius: 5, color: '#4a5568', fontSize: 10, padding: '2px 8px', cursor: 'pointer', fontFamily: 'inherit' }}>Editar</button>
+          {sites.map(site => {
+            const siteRows = dashRows.filter(r => r.sc.site_id === site.id)
+            const siteUnscheduled = unscheduledAtt.filter(r => r.site_id === site.id)
+            if (siteRows.length === 0 && siteUnscheduled.length === 0) return null
+            const totalCount = siteRows.length + siteUnscheduled.length
+            const siteSales = getSiteSales(site.id)
+            return (
+              <div key={site.id} style={{ background: '#1a2035', border: '1px solid #1e2a45', borderRadius: 10, overflow: 'hidden', marginBottom: 14 }}>
+                <div style={{ padding: '10px 16px', borderBottom: '1px solid #1e2a45', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 6 }}>
+                  <div style={{ fontWeight: 600, fontSize: 13 }}>{site.name}</div>
+                  <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
+                    {siteSales > 0 && <span style={{ fontSize: 11, fontWeight: 700, color: '#8b5cf6' }}>💰 ${Number(siteSales).toLocaleString('es-MX')}</span>}
+                    <span style={{ fontSize: 10, color: '#4a5568' }}>{totalCount} empleado{totalCount !== 1 ? 's' : ''} hoy</span>
                   </div>
                 </div>
-              )
-            })}
-          </div>
+                <div style={{ overflowX: 'auto' }}>
+                <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 520 }}>
+                  <thead><tr>{['Empleado','Horario','Entrada','Salida','Ventas','Estado'].map(h => (
+                    <th key={h} style={{ textAlign: 'left', fontSize: 9, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '.6px', color: '#4a5568', padding: '8px 16px', borderBottom: '1px solid #1e2a45' }}>{h}</th>
+                  ))}</tr></thead>
+                  <tbody>
+                    {siteRows.map(({ sc, emp, record, color, bg, statusLabel }) => (
+                      <tr key={sc.id} style={{ borderBottom: '1px solid rgba(30,42,69,.3)' }}>
+                        <td style={{ padding: '10px 16px' }}>
+                          <button onClick={() => setEmpPage(emp)} style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', textAlign: 'left', fontFamily: 'inherit' }}>
+                            <div style={{ fontSize: 12, fontWeight: 600, color: '#3b82f6', textDecoration: 'underline', textDecorationColor: 'rgba(59,130,246,.3)' }}>{emp?.name || '?'}</div>
+                            <div style={{ fontSize: 10, color: '#4a5568' }}>{emp?.role}</div>
+                          </button>
+                        </td>
+                        <td style={{ padding: '10px 16px', fontSize: 11, fontFamily: "'JetBrains Mono'", color: '#8892a8' }}>{sc.start_time?.slice(0,5)} – {sc.end_time?.slice(0,5)}</td>
+                        <td style={{ padding: '10px 16px', fontSize: 11, fontFamily: "'JetBrains Mono'" }}>{record?.check_in ? fmtTime(record.check_in, site.timezone) : '–'}</td>
+                        <td style={{ padding: '10px 16px', fontSize: 11, fontFamily: "'JetBrains Mono'" }}>{record?.check_out ? fmtTime(record.check_out, site.timezone) : '–'}</td>
+                        <td style={{ padding: '10px 16px', fontSize: 11, fontFamily: "'JetBrains Mono'", color: record?.sales_amount > 0 ? '#10b981' : '#4a5568' }}>{record?.sales_amount > 0 ? '$'+Number(record.sales_amount).toLocaleString('es-MX') : '–'}</td>
+                        <td style={{ padding: '10px 16px' }}><span style={{ padding: '3px 10px', borderRadius: 5, fontSize: 10, fontWeight: 600, color, background: bg }}>{statusLabel}</span></td>
+                      </tr>
+                    ))}
+                    {siteUnscheduled.map(r => {
+                      const emp = allEmps.find(e => e.id === r.employee_id)
+                      const color = r.check_out ? '#3b82f6' : (r.lunch_start && !r.lunch_end) ? '#f59e0b' : (r.break_start && !r.break_end) ? '#3b82f6' : '#10b981'
+                      const bg = r.check_out ? 'rgba(59,130,246,.12)' : (r.lunch_start && !r.lunch_end) ? 'rgba(245,158,11,.12)' : (r.break_start && !r.break_end) ? 'rgba(59,130,246,.12)' : 'rgba(16,185,129,.12)'
+                      const label = r.check_out ? 'Completó turno' : (r.lunch_start && !r.lunch_end) ? 'En comida' : (r.break_start && !r.break_end) ? 'En descanso' : 'Activo'
+                      return (
+                        <tr key={r.id} style={{ borderBottom: '1px solid rgba(30,42,69,.3)', background: 'rgba(16,185,129,.03)' }}>
+                          <td style={{ padding: '10px 16px' }}>
+                            <button onClick={() => setEmpPage(emp)} style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', textAlign: 'left', fontFamily: 'inherit' }}>
+                              <div style={{ fontSize: 12, fontWeight: 600, color: '#3b82f6', textDecoration: 'underline', textDecorationColor: 'rgba(59,130,246,.3)' }}>{emp?.name || '?'}</div>
+                              <div style={{ fontSize: 10, color: '#4a5568' }}>{emp?.role}</div>
+                            </button>
+                          </td>
+                          <td style={{ padding: '10px 16px', fontSize: 10, color: '#4a5568', fontStyle: 'italic' }}>Sin horario</td>
+                          <td style={{ padding: '10px 16px', fontSize: 11, fontFamily: "'JetBrains Mono'" }}>{fmtTime(r.check_in, site.timezone)}</td>
+                          <td style={{ padding: '10px 16px', fontSize: 11, fontFamily: "'JetBrains Mono'" }}>{r.check_out ? fmtTime(r.check_out, site.timezone) : '–'}</td>
+                          <td style={{ padding: '10px 16px', fontSize: 11, fontFamily: "'JetBrains Mono'", color: r.sales_amount > 0 ? '#10b981' : '#4a5568' }}>{r.sales_amount > 0 ? '$'+Number(r.sales_amount).toLocaleString('es-MX') : '–'}</td>
+                          <td style={{ padding: '10px 16px' }}><span style={{ padding: '3px 10px', borderRadius: 5, fontSize: 10, fontWeight: 600, color, background: bg }}>{label}</span></td>
+                        </tr>
+                      )
+                    })}
+                  </tbody>
+                </table>
+                </div>
+              </div>
+            )
+          })}
+          {dashRows.length === 0 && unscheduledAtt.length === 0 && (
+            <div style={{ padding: 32, textAlign: 'center', color: '#4a5568', fontSize: 13, background: '#1a2035', borderRadius: 10, border: '1px solid #1e2a45' }}>No hay actividad registrada para hoy.</div>
+          )}
         </div>
-      )}
-
-      {sites.length === 0 && (
-        <div style={{ padding: 32, textAlign: 'center', color: '#4a5568', fontSize: 13, background: '#1a2035', borderRadius: 10, border: '1px solid #1e2a45' }}>No hay sucursales configuradas.</div>
       )}
     </div>
   )
@@ -1432,6 +1634,11 @@ function ScheduleBoard({ sites, allEmps, schedules, employeeSiteAssignments, sit
   const [dragOverDate, setDragOverDate] = useState(null)
   const [dragTime, setDragTime]   = useState(null)
   const [showSiteHours, setShowSiteHours] = useState(false)
+  const [activeEmpId, setActiveEmpId] = useState(null) // click-to-assign: selected employee
+  const [overlapEmpId, setOverlapEmpId] = useState(null) // flash red on overlap
+  const [editSched, setEditSched] = useState(null)       // { id, empId, date, start_time, end_time } inline edit
+  const [openFormEmpId, setOpenFormEmpId] = useState(null) // open ScheduleModal for emp
+  const [pendingDrop, setPendingDrop] = useState(null)   // { empId, date, startTime }
   const colRefs  = useRef({})
   const gridRef  = useRef(null)
   const savingRef = useRef(false)
@@ -1443,6 +1650,12 @@ function ScheduleBoard({ sites, allEmps, schedules, employeeSiteAssignments, sit
   })
   const weekLabel = `${weekDates[0].label} ${weekDates[0].date.slice(8)} – ${weekDates[6].label} ${weekDates[6].date.slice(8)} ${weekDates[0].date.slice(0,7).replace('-','/')}`
 
+  // Reset selSiteId when sites list changes (e.g. company filter changed)
+  useEffect(() => {
+    if (sites.length > 0 && !sites.find(s => s.id === selSiteId)) {
+      setSelSiteId(sites[0].id)
+    }
+  }, [sites])
   // Sync local schedules when parent refreshes (without resetting selSiteId)
   useEffect(() => { setLocalSchedules(schedules) }, [schedules])
   // Scroll to 8am on mount
@@ -1452,22 +1665,62 @@ function ScheduleBoard({ sites, allEmps, schedules, employeeSiteAssignments, sit
   const filteredEmps = allEmps.filter(e => siteEmpIds.includes(e.id))
   const weekSchedForSite = localSchedules.filter(s => s.site_id === selSiteId && weekDates.some(d => d.date === s.date))
 
+  const EMP_PALETTE = ['#3b82f6','#10b981','#f59e0b','#8b5cf6','#ef4444','#06b6d4','#ec4899','#84cc16','#f97316','#a78bfa']
+  const empColorMap = {}
+  filteredEmps.forEach((e, i) => { empColorMap[e.id] = EMP_PALETTE[i % EMP_PALETTE.length] })
+
+  function tMins(t) { const [h,m] = (t||'00:00').slice(0,5).split(':').map(Number); return h*60+m }
+  function computeLayout(dayScheds) {
+    const sorted = [...dayScheds].sort((a,b) => a.start_time.localeCompare(b.start_time))
+    const cols = []
+    const layout = {}
+    for (const s of sorted) {
+      const endMins = tMins(s.end_time)
+      const colIdx = cols.findIndex(e => e <= tMins(s.start_time))
+      if (colIdx === -1) { layout[s.id] = cols.length; cols.push(endMins) }
+      else { layout[s.id] = colIdx; cols[colIdx] = endMins }
+    }
+    return { layout, totalCols: cols.length || 1 }
+  }
+
   function getDayHours(date) {
     const jsDow = new Date(date + 'T12:00:00').getDay()
     const dow = jsDow === 0 ? 6 : jsDow - 1
     return (siteHours || []).find(h => h.site_id === selSiteId && h.day_of_week === dow) || null
   }
 
+  const [defaultDur, setDefaultDur] = useState(() => {
+    try { const v = localStorage.getItem('schedDur_' + selSiteId); return v ? parseFloat(v) : 8 } catch { return 8 }
+  })
+  // Sync defaultDur when site changes
+  useEffect(() => {
+    try { const v = localStorage.getItem('schedDur_' + selSiteId); setDefaultDur(v ? parseFloat(v) : 8) } catch { setDefaultDur(8) }
+  }, [selSiteId])
+  function adjDefaultDur(delta) {
+    setDefaultDur(d => {
+      const next = Math.round(Math.min(24, Math.max(0.5, d + delta)) * 2) / 2
+      try { localStorage.setItem('schedDur_' + selSiteId, String(next)) } catch {}
+      return next
+    })
+  }
+  function fmtDur(h) { const hrs = Math.floor(h); const mins = Math.round((h - hrs) * 60); return mins === 0 ? `${hrs}h` : `${hrs}h ${mins}m` }
+
   async function dropEmp(empId, date, y) {
     if (!selSiteId || savingRef.current) return
-    if (localSchedules.find(s => s.employee_id === empId && s.date === date && s.site_id === selSiteId)) return
+    if (localSchedules.find(s => s.employee_id === empId && s.date === date)) {
+      setToast('Este empleado ya tiene un horario asignado ese día')
+      setOverlapEmpId(empId); setTimeout(() => setOverlapEmpId(null), 1000)
+      return
+    }
     savingRef.current = true
     const dh = getDayHours(date)
     const startTime = y != null ? sbYToTime(y) : (dh?.open_time?.slice(0, 5) || '09:00')
     const [sh, sm] = startTime.split(':').map(Number)
-    const endH = Math.min(SB_END, sh + 8)
-    const endTime = dh?.close_time?.slice(0, 5) || `${String(endH).padStart(2, '0')}:${String(sm).padStart(2, '0')}`
-    const companyId = isSuperAdmin ? null : adminUser?.company_id
+    const totalMins = sh * 60 + sm + Math.round(defaultDur * 60)
+    const endH = Math.min(23, Math.floor(totalMins / 60))
+    const endM = totalMins % 60
+    const endTime = `${String(endH).padStart(2,'0')}:${String(endM).padStart(2,'0')}`
+    const companyId = sites.find(s => s.id === selSiteId)?.company_id || null
     const { data: ns } = await supabase.from('schedules').insert({
       employee_id: empId, site_id: selSiteId, date,
       start_time: startTime, end_time: endTime, lunch_mins: 60,
@@ -1475,13 +1728,112 @@ function ScheduleBoard({ sites, allEmps, schedules, employeeSiteAssignments, sit
     }).select().single()
     if (ns) setLocalSchedules(prev => [...prev, ns])
     savingRef.current = false
-    onRefresh()
+  }
+
+  async function confirmDrop(empId, date, startTime, durationHrs) {
+    if (savingRef.current) return
+    savingRef.current = true
+    try { localStorage.setItem('schedDur_' + selSiteId, String(durationHrs)) } catch {}
+    const [sh, sm] = startTime.split(':').map(Number)
+    const totalMins = sh * 60 + sm + Math.round(durationHrs * 60)
+    const endH = Math.min(23, Math.floor(totalMins / 60))
+    const endM = totalMins % 60
+    const endTime = `${String(endH).padStart(2,'0')}:${String(endM).padStart(2,'0')}`
+    const companyId = sites.find(s => s.id === selSiteId)?.company_id || null
+    const { data: ns } = await supabase.from('schedules').insert({
+      employee_id: empId, site_id: selSiteId, date,
+      start_time: startTime, end_time: endTime, lunch_mins: 60,
+      ...(companyId ? { company_id: companyId } : {})
+    }).select().single()
+    if (ns) setLocalSchedules(prev => [...prev, ns])
+    setPendingDrop(null)
+    savingRef.current = false
   }
 
   async function removeSchedule(schedId) {
     setLocalSchedules(prev => prev.filter(s => s.id !== schedId))
     await supabase.from('schedules').delete().eq('id', schedId)
-    onRefresh()
+  }
+
+  async function saveEditSched({ id, start_time, end_time }) {
+    setLocalSchedules(prev => prev.map(s => s.id === id ? { ...s, start_time, end_time } : s))
+    setEditSched(null)
+    await supabase.from('schedules').update({ start_time, end_time }).eq('id', id)
+  }
+
+  function exportScheduleImage() {
+    const PAD = 24, EMP_W = 150, COL_W = 88, ROW_H = 44, HEAD_H = 72, DAY_H = 32
+    const siteName = sites.find(s => s.id === selSiteId)?.name || 'Tienda'
+    const canvas = document.createElement('canvas')
+    canvas.width  = PAD * 2 + EMP_W + COL_W * 7
+    canvas.height = PAD * 2 + HEAD_H + DAY_H + ROW_H * (filteredEmps.length || 1) + 20
+    const ctx = canvas.getContext('2d')
+    // Background
+    ctx.fillStyle = '#0a0e1a'; ctx.fillRect(0, 0, canvas.width, canvas.height)
+    // Header
+    ctx.fillStyle = '#f1f5f9'; ctx.font = 'bold 17px sans-serif'
+    ctx.fillText(siteName, PAD, PAD + 20)
+    ctx.fillStyle = '#8892a8'; ctx.font = '11px sans-serif'
+    ctx.fillText(weekLabel, PAD, PAD + 40)
+    // Day headers
+    weekDates.forEach(({ date, label, isToday }, i) => {
+      const x = PAD + EMP_W + i * COL_W
+      ctx.fillStyle = isToday ? 'rgba(59,130,246,.18)' : 'rgba(30,42,69,.5)'
+      ctx.fillRect(x, PAD + HEAD_H, COL_W - 1, DAY_H)
+      ctx.fillStyle = isToday ? '#3b82f6' : '#8892a8'
+      ctx.font = 'bold 11px sans-serif'
+      ctx.fillText(label, x + 8, PAD + HEAD_H + 14)
+      ctx.fillStyle = '#4a5568'; ctx.font = '10px monospace'
+      ctx.fillText(date.slice(8), x + 8, PAD + HEAD_H + 27)
+    })
+    // Employee label header
+    ctx.fillStyle = 'rgba(30,42,69,.5)'
+    ctx.fillRect(PAD, PAD + HEAD_H, EMP_W - 1, DAY_H)
+    ctx.fillStyle = '#4a5568'; ctx.font = 'bold 9px sans-serif'
+    ctx.fillText('EMPLEADO', PAD + 8, PAD + HEAD_H + 20)
+    // Rows
+    filteredEmps.forEach((emp, ei) => {
+      const y = PAD + HEAD_H + DAY_H + ei * ROW_H
+      const color = empColorMap[emp.id] || '#3b82f6'
+      // Row bg
+      ctx.fillStyle = ei % 2 === 0 ? 'rgba(255,255,255,.02)' : 'transparent'
+      ctx.fillRect(PAD, y, canvas.width - PAD * 2, ROW_H)
+      // Dot + name
+      ctx.fillStyle = color; ctx.beginPath()
+      ctx.arc(PAD + 10, y + ROW_H / 2, 4, 0, Math.PI * 2); ctx.fill()
+      ctx.fillStyle = '#f1f5f9'; ctx.font = '12px sans-serif'
+      ctx.fillText(emp.name.length > 16 ? emp.name.slice(0, 15) + '…' : emp.name, PAD + 20, y + ROW_H / 2 + 4)
+      // Day cells
+      weekDates.forEach(({ date }, ci) => {
+        const x = PAD + EMP_W + ci * COL_W
+        const s = weekSchedForSite.find(s => s.date === date && s.employee_id === emp.id)
+        ctx.strokeStyle = 'rgba(30,42,69,.6)'; ctx.lineWidth = 1
+        ctx.strokeRect(x, y, COL_W - 1, ROW_H)
+        if (s) {
+          ctx.fillStyle = color + '28'
+          ctx.fillRect(x + 2, y + 4, COL_W - 5, ROW_H - 8)
+          ctx.fillStyle = color; ctx.font = 'bold 10px monospace'
+          ctx.fillText(s.start_time?.slice(0,5) || '', x + 6, y + ROW_H / 2 - 2)
+          ctx.fillStyle = color + 'aa'; ctx.font = '9px monospace'
+          ctx.fillText(s.end_time?.slice(0,5) || '', x + 6, y + ROW_H / 2 + 11)
+        } else {
+          ctx.fillStyle = '#2d3d5a'; ctx.font = '14px sans-serif'
+          ctx.fillText('–', x + COL_W / 2 - 5, y + ROW_H / 2 + 5)
+        }
+      })
+    })
+    if (filteredEmps.length === 0) {
+      ctx.fillStyle = '#4a5568'; ctx.font = '12px sans-serif'
+      ctx.fillText('Sin empleados asignados', PAD + 10, PAD + HEAD_H + DAY_H + 22)
+    }
+    // Watermark
+    ctx.fillStyle = 'rgba(136,146,168,.25)'; ctx.font = '9px sans-serif'
+    ctx.fillText('worktic.app', canvas.width - PAD - 65, canvas.height - 7)
+    // Download
+    const link = document.createElement('a')
+    link.download = `horario-${siteName.replace(/\s+/g,'-').toLowerCase()}-${weekDates[0].date}.png`
+    link.href = canvas.toDataURL('image/png')
+    link.click()
   }
 
   // Resize drag: track mouse globally while resizing
@@ -1498,9 +1850,12 @@ function ScheduleBoard({ sites, allEmps, schedules, employeeSiteAssignments, sit
     }
     async function onUp() {
       if (previewEnd !== resizing.origEnd) {
+        // Ensure end_time > start_time
+        const [sh, sm] = resizing.startTime.split(':').map(Number)
+        const [eh, em] = previewEnd.split(':').map(Number)
+        if ((eh * 60 + em) <= (sh * 60 + sm)) { setResizing(null); setResizePrev(null); return }
         setLocalSchedules(prev => prev.map(s => s.id === resizing.schedId ? { ...s, end_time: previewEnd } : s))
         supabase.from('schedules').update({ end_time: previewEnd }).eq('id', resizing.schedId)
-        onRefresh()
       }
       setResizing(null); setResizePrev(null)
     }
@@ -1528,16 +1883,63 @@ function ScheduleBoard({ sites, allEmps, schedules, employeeSiteAssignments, sit
           <span style={{ fontSize: 12, color: '#8892a8', minWidth: 170, textAlign: 'center' }}>{weekLabel}</span>
           <button onClick={() => setWeekStart(w => addDays(w, 7))} style={{ background: '#1a2035', border: '1px solid #1e2a45', color: '#8892a8', borderRadius: 7, padding: '6px 10px', cursor: 'pointer', fontSize: 14, fontFamily: 'inherit' }}>›</button>
         </div>
-        <button onClick={() => setShowSiteHours(true)}
-          style={{ marginLeft: 'auto', background: '#1a2035', border: '1px solid rgba(16,185,129,.4)', color: '#10b981', borderRadius: 7, padding: '7px 14px', cursor: 'pointer', fontSize: 12, fontWeight: 600, fontFamily: 'inherit', display: 'flex', alignItems: 'center', gap: 6 }}>
-          ⏰ Horario de la tienda
-        </button>
+        <div style={{ marginLeft: 'auto', display: 'flex', gap: 8 }}>
+          <button onClick={exportScheduleImage}
+            style={{ background: '#1a2035', border: '1px solid rgba(139,92,246,.4)', color: '#a78bfa', borderRadius: 7, padding: '7px 14px', cursor: 'pointer', fontSize: 12, fontWeight: 600, fontFamily: 'inherit', display: 'flex', alignItems: 'center', gap: 6 }}>
+            📷 Imagen
+          </button>
+          <button onClick={() => setShowSiteHours(true)}
+            style={{ background: '#1a2035', border: '1px solid rgba(16,185,129,.4)', color: '#10b981', borderRadius: 7, padding: '7px 14px', cursor: 'pointer', fontSize: 12, fontWeight: 600, fontFamily: 'inherit', display: 'flex', alignItems: 'center', gap: 6 }}>
+            ⏰ Horario de la tienda
+          </button>
+        </div>
+      </div>
+
+      {/* Employee chips */}
+      <div style={{ marginBottom: 12 }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+          <div style={{ fontSize: 9, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '.6px', color: activeEmpId ? '#10b981' : '#4a5568' }}>
+            {activeEmpId
+              ? <>{`✔ ${filteredEmps.find(e => e.id === activeEmpId)?.name || ''} seleccionado — toca un día para asignar · `}<button onClick={() => setActiveEmpId(null)} style={{ background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer', fontSize: 10, padding: 0, fontFamily: 'inherit' }}>cancelar</button></>
+              : 'Toca un nombre y luego un día para asignar · toca un bloque para editar'}
+          </div>
+          {/* Duration default control */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6, background: '#0d1220', border: '1px solid #1e2a45', borderRadius: 8, padding: '4px 8px' }}>
+            <span style={{ fontSize: 9, color: '#4a5568', textTransform: 'uppercase', letterSpacing: '.5px' }}>Turno</span>
+            <button onClick={() => adjDefaultDur(-0.5)} style={{ background: 'none', border: 'none', color: '#8892a8', cursor: 'pointer', fontSize: 14, padding: '0 2px', fontFamily: 'inherit', lineHeight: 1 }}>−</button>
+            <span style={{ fontSize: 12, fontWeight: 700, color: '#f1f5f9', minWidth: 32, textAlign: 'center' }}>{fmtDur(defaultDur)}</span>
+            <button onClick={() => adjDefaultDur(0.5)} style={{ background: 'none', border: 'none', color: '#8892a8', cursor: 'pointer', fontSize: 14, padding: '0 2px', fontFamily: 'inherit', lineHeight: 1 }}>+</button>
+          </div>
+        </div>
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+          {filteredEmps.length === 0 && <div style={{ fontSize: 11, color: '#4a5568' }}>Sin empleados asignados a esta tienda.</div>}
+          {filteredEmps.map(emp => {
+            const isActive = activeEmpId === emp.id
+            const isOverlap = overlapEmpId === emp.id
+            const color = empColorMap[emp.id] || '#3b82f6'
+            return (
+              <div key={emp.id} style={{ display: 'flex', alignItems: 'center', gap: 0, borderRadius: 8, overflow: 'hidden', border: `1px solid ${isOverlap ? '#ef4444' : isActive ? color : color + '55'}`, transition: 'border-color .2s', background: isOverlap ? 'rgba(239,68,68,.12)' : isActive ? color + '22' : color + '11' }}>
+                <div draggable
+                  onDragStart={e => { e.dataTransfer.setData('empId', emp.id); e.dataTransfer.effectAllowed = 'copy'; setActiveEmpId(null) }}
+                  onClick={() => setActiveEmpId(isActive ? null : emp.id)}
+                  style={{ padding: '6px 10px', cursor: 'pointer', userSelect: 'none', fontSize: 12, display: 'flex', alignItems: 'center', gap: 5, color: isOverlap ? '#ef4444' : color }}>
+                  <span style={{ width: 8, height: 8, borderRadius: '50%', background: color, display: 'inline-block', flexShrink: 0 }} />
+                  <span style={{ whiteSpace: 'nowrap' }}>{emp.name}</span>
+                </div>
+                <button title='Asignar horario semanal' onClick={() => setOpenFormEmpId(emp.id)}
+                  style={{ background: color + '22', border: 'none', borderLeft: `1px solid ${color}44`, color, cursor: 'pointer', fontSize: 11, padding: '6px 8px', fontFamily: 'inherit', height: '100%' }}>📅</button>
+              </div>
+            )
+          })}
+        </div>
       </div>
 
       {/* Calendar grid */}
       <div style={{ background: '#111827', border: '1px solid #1e2a45', borderRadius: 10, overflow: 'hidden' }}>
-        {/* Day headers — sticky */}
-        <div style={{ display: 'flex', borderBottom: '2px solid #1e2a45', position: 'sticky', top: 0, zIndex: 5, background: '#111827' }}>
+        {/* Single scrollable container — header + body scroll together horizontally */}
+        <div ref={gridRef} style={{ maxHeight: 560, overflowY: 'auto', overflowX: 'auto' }}>
+        {/* Day headers — sticky to top of THIS scroll container */}
+        <div style={{ display: 'flex', borderBottom: '2px solid #1e2a45', position: 'sticky', top: 0, zIndex: 5, background: '#111827', minWidth: 620 }}>
           <div style={{ width: 40, flexShrink: 0 }} />
           {weekDates.map(({ date, label, isToday, isPast }) => {
             const dh = getDayHours(date)
@@ -1556,11 +1958,10 @@ function ScheduleBoard({ sites, allEmps, schedules, employeeSiteAssignments, sit
           })}
         </div>
 
-        {/* Scrollable time body */}
-        <div ref={gridRef} style={{ maxHeight: 520, overflowY: 'auto', overflowX: 'auto' }}>
+        {/* Time body */}
           <div style={{ display: 'flex', minWidth: 620 }}>
-            {/* Time axis */}
-            <div style={{ width: 40, flexShrink: 0, background: '#111827' }}>
+            {/* Time axis — sticky to left so it stays visible when scrolling horizontally */}
+            <div style={{ width: 40, flexShrink: 0, background: '#111827', position: 'sticky', left: 0, zIndex: 3 }}>
               {hours.map(h => (
                 <div key={h} style={{ height: SB_HOUR_H, display: 'flex', alignItems: 'flex-start', justifyContent: 'flex-end', paddingRight: 6, paddingTop: 4, boxSizing: 'border-box', borderTop: '1px solid #1e2a45' }}>
                   <span style={{ fontSize: 9, color: '#4a5568', fontFamily: "'JetBrains Mono'" }}>{String(h).padStart(2,'0')}</span>
@@ -1589,7 +1990,12 @@ function ScheduleBoard({ sites, allEmps, schedules, employeeSiteAssignments, sit
                         setDragOverDate(null); setDragTime(null)
                         dropEmp(e.dataTransfer.getData('empId'), date, y)
                       }}
-                      style={{ position: 'relative', height: SB_TOTAL, background: isOver ? 'rgba(59,130,246,.04)' : isToday ? 'rgba(59,130,246,.015)' : 'transparent', transition: 'background .1s' }}>
+                      onClick={e => {
+                        if (!activeEmpId || resizing) return
+                        const y = e.clientY - e.currentTarget.getBoundingClientRect().top
+                        dropEmp(activeEmpId, date, y)
+                      }}
+                      style={{ position: 'relative', height: SB_TOTAL, background: activeEmpId ? (isOver ? 'rgba(16,185,129,.06)' : 'rgba(16,185,129,.02)') : isOver ? 'rgba(59,130,246,.04)' : isToday ? 'rgba(59,130,246,.015)' : 'transparent', transition: 'background .1s', cursor: activeEmpId ? 'crosshair' : 'default' }}>
                       {/* Hour lines */}
                       {hours.map(h => (
                         <div key={h} style={{ position: 'absolute', top: (h - SB_START) * SB_HOUR_H, left: 0, right: 0, borderTop: '1px solid rgba(30,42,69,.7)', pointerEvents: 'none' }} />
@@ -1609,29 +2015,36 @@ function ScheduleBoard({ sites, allEmps, schedules, employeeSiteAssignments, sit
                         </div>
                       )}
                       {/* Schedule blocks */}
-                      {dayScheds.map(s => {
-                        const emp = allEmps.find(e => e.id === s.employee_id)
-                        const startT = s.start_time?.slice(0, 5) || '09:00'
-                        const rawEnd = s.end_time?.slice(0, 5) || '18:00'
-                        const isRes = resizing?.schedId === s.id
-                        const endT = (isRes && resizePrev?.schedId === s.id) ? resizePrev.time : rawEnd
-                        const top = sbTimeToY(startT)
-                        const height = Math.max(SB_HOUR_H / 2, sbTimeToY(endT) - top)
-                        return (
-                          <div key={s.id} style={{ position: 'absolute', top, left: 2, right: 2, height, background: isRes ? 'rgba(59,130,246,.25)' : 'rgba(59,130,246,.14)', border: `1px solid ${isRes ? '#3b82f6' : 'rgba(59,130,246,.35)'}`, borderRadius: 5, overflow: 'hidden', zIndex: isRes ? 10 : 2, boxSizing: 'border-box' }}>
-                            <div style={{ padding: '3px 18px 3px 5px', overflow: 'hidden' }}>
-                              <div style={{ fontSize: 10, fontWeight: 700, color: '#f1f5f9', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{emp?.name || '?'}</div>
-                              <div style={{ fontSize: 9, color: '#8892a8', fontFamily: "'JetBrains Mono'" }}>{startT}–{endT}</div>
+                      {(() => {
+                        const { layout, totalCols } = computeLayout(dayScheds)
+                        return dayScheds.map(s => {
+                          const emp = allEmps.find(e => e.id === s.employee_id)
+                          const startT = s.start_time?.slice(0, 5) || '09:00'
+                          const rawEnd = s.end_time?.slice(0, 5) || '18:00'
+                          const isRes = resizing?.schedId === s.id
+                          const endT = (isRes && resizePrev?.schedId === s.id) ? resizePrev.time : rawEnd
+                          const top = sbTimeToY(startT)
+                          const height = Math.max(SB_HOUR_H / 2, sbTimeToY(endT) - top)
+                          const color = empColorMap[s.employee_id] || '#3b82f6'
+                          const colIdx = layout[s.id] || 0
+                          const colW = 100 / totalCols
+                          const leftPct = colIdx * colW
+                          const rightPct = 100 - (colIdx + 1) * colW
+                          return (
+                            <div key={s.id} style={{ position: 'absolute', top, left: `calc(${leftPct}% + 2px)`, right: `calc(${rightPct}% + 2px)`, height, background: isRes ? color + '44' : color + '26', border: `1px solid ${color}${isRes ? 'cc' : '66'}`, borderRadius: 5, overflow: 'hidden', zIndex: isRes ? 10 : 2, boxSizing: 'border-box' }}>
+                              <div onClick={() => setEditSched({ id: s.id, empId: s.employee_id, date: s.date, start_time: startT, end_time: rawEnd })} style={{ padding: '3px 18px 3px 5px', overflow: 'hidden', cursor: 'pointer' }}>
+                                <div style={{ fontSize: 10, fontWeight: 700, color, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{emp?.name || '?'}</div>
+                                <div style={{ fontSize: 9, color: color + 'aa', fontFamily: "'JetBrains Mono'" }}>{startT}–{endT}</div>
+                              </div>
+                              <button onClick={e => { e.stopPropagation(); removeSchedule(s.id) }} style={{ position: 'absolute', top: 2, right: 2, background: 'none', border: 'none', color: '#4a5568', cursor: 'pointer', fontSize: 11, lineHeight: 1, padding: '1px 3px' }} title='Eliminar'>✕</button>
+                              <div onMouseDown={e => { e.preventDefault(); e.stopPropagation(); setResizing({ schedId: s.id, startTime: startT, origEnd: rawEnd, date }) }}
+                                style={{ position: 'absolute', bottom: 0, left: 0, right: 0, height: 8, cursor: 'ns-resize', background: color + '30', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                <div style={{ width: 16, height: 2, background: color + '88', borderRadius: 1 }} />
+                              </div>
                             </div>
-                            <button onClick={() => removeSchedule(s.id)} style={{ position: 'absolute', top: 2, right: 2, background: 'none', border: 'none', color: '#4a5568', cursor: 'pointer', fontSize: 11, lineHeight: 1, padding: '1px 3px' }} title='Eliminar'>✕</button>
-                            {/* Resize handle */}
-                            <div onMouseDown={e => { e.preventDefault(); e.stopPropagation(); setResizing({ schedId: s.id, startTime: startT, origEnd: rawEnd, date }) }}
-                              style={{ position: 'absolute', bottom: 0, left: 0, right: 0, height: 8, cursor: 'ns-resize', background: 'rgba(59,130,246,.18)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                              <div style={{ width: 16, height: 2, background: 'rgba(59,130,246,.55)', borderRadius: 1 }} />
-                            </div>
-                          </div>
-                        )
-                      })}
+                          )
+                        })
+                      })()}
                     </div>
                   </div>
                 )
@@ -1641,21 +2054,6 @@ function ScheduleBoard({ sites, allEmps, schedules, employeeSiteAssignments, sit
         </div>
       </div>
 
-      {/* Employee chips */}
-      <div style={{ marginTop: 12 }}>
-        <div style={{ fontSize: 9, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '.6px', color: '#4a5568', marginBottom: 8 }}>Empleados — arrastra al calendario para asignar</div>
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-          {filteredEmps.length === 0 && <div style={{ fontSize: 11, color: '#4a5568' }}>Sin empleados asignados a esta tienda.</div>}
-          {filteredEmps.map(emp => (
-            <div key={emp.id} draggable
-              onDragStart={e => { e.dataTransfer.setData('empId', emp.id); e.dataTransfer.effectAllowed = 'copy' }}
-              style={{ background: '#1a2035', border: '1px solid #1e2a45', borderRadius: 8, padding: '6px 12px', cursor: 'grab', userSelect: 'none', fontSize: 12, display: 'flex', alignItems: 'center', gap: 6 }}>
-              <span style={{ fontSize: 14, color: '#4a5568' }}>⠿</span>
-              <span style={{ whiteSpace: 'nowrap' }}>{emp.name}</span>
-            </div>
-          ))}
-        </div>
-      </div>
 
       {showSiteHours && selSiteId && (
         <SiteHoursModal
@@ -1670,6 +2068,123 @@ function ScheduleBoard({ sites, allEmps, schedules, employeeSiteAssignments, sit
           onClose={() => setShowSiteHours(false)}
         />
       )}
+
+      {/* Inline schedule block edit modal */}
+      {editSched && <SchedEditModal sched={editSched} allEmps={allEmps}
+        onSave={saveEditSched}
+        onDelete={() => { removeSchedule(editSched.id); setEditSched(null) }}
+        onClose={() => setEditSched(null)} />}
+
+      {/* Quick shift creator on drop/click */}
+      {pendingDrop && (
+        <QuickShiftModal
+          empId={pendingDrop.empId} date={pendingDrop.date} startTime={pendingDrop.startTime}
+          siteId={selSiteId} allEmps={allEmps} defaultDuration={getLastDur()}
+          onConfirm={confirmDrop}
+          onClose={() => setPendingDrop(null)} />
+      )}
+
+      {/* Open full week ScheduleModal from chip 📅 */}
+      {openFormEmpId && allEmps.find(e => e.id === openFormEmpId) && (
+        <ScheduleModal emp={allEmps.find(e => e.id === openFormEmpId)} sites={sites}
+          schedules={localSchedules.filter(s => s.employee_id === openFormEmpId)}
+          onSave={async () => { await onRefresh(); setToast('Horarios guardados'); setOpenFormEmpId(null) }}
+          onClose={() => setOpenFormEmpId(null)} />
+      )}
+    </div>
+  )
+}
+
+function QuickShiftModal({ empId, date, startTime: initialStart, siteId, allEmps, defaultDuration, onConfirm, onClose }) {
+  const [start, setStart] = useState(initialStart)
+  const [duration, setDuration] = useState(defaultDuration || 8)
+  const emp = allEmps.find(e => e.id === empId)
+  const timeOpts = Array.from({ length: 48 }, (_, i) => {
+    const h = String(Math.floor(i/2)).padStart(2,'0'); const m = i%2===0?'00':'30'; return `${h}:${m}`
+  })
+  const [sh, sm] = start.split(':').map(Number)
+  const totalMins = sh * 60 + sm + Math.round(duration * 60)
+  const endH = Math.min(23, Math.floor(totalMins / 60))
+  const endM = totalMins % 60
+  const endTime = `${String(endH).padStart(2,'0')}:${String(endM).padStart(2,'0')}`
+  function adjDur(delta) { setDuration(d => Math.round(Math.min(24, Math.max(0.5, d + delta)) * 2) / 2) }
+  function fmtDur(h) { const hrs = Math.floor(h); const mins = Math.round((h-hrs)*60); return mins === 0 ? `${hrs}h` : `${hrs}h ${mins}m` }
+  return (
+    <div onClick={onClose} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.75)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 500, padding: '0 16px' }}>
+      <div onClick={e => e.stopPropagation()} style={{ background: '#1a2035', border: '1px solid #1e2a45', borderRadius: 14, padding: 24, width: '100%', maxWidth: 300, fontFamily: "'DM Sans', sans-serif" }}>
+        <div style={{ fontSize: 15, fontWeight: 700, color: '#f1f5f9', marginBottom: 2 }}>Nuevo turno</div>
+        <div style={{ fontSize: 11, color: '#8892a8', marginBottom: 18 }}>{emp?.name} · {date}</div>
+        <div style={{ marginBottom: 14 }}>
+          <div style={{ fontSize: 10, color: '#4a5568', marginBottom: 5, textTransform: 'uppercase', letterSpacing: '.5px' }}>Hora de entrada</div>
+          <select value={start} onChange={e => setStart(e.target.value)}
+            style={{ width: '100%', background: '#0d1220', border: '1px solid #1e2a45', color: '#f1f5f9', fontSize: 14, padding: '8px 10px', borderRadius: 8, fontFamily: 'inherit' }}>
+            {timeOpts.map(t => <option key={t} value={t}>{t}</option>)}
+          </select>
+        </div>
+        <div style={{ marginBottom: 20 }}>
+          <div style={{ fontSize: 10, color: '#4a5568', marginBottom: 10, textTransform: 'uppercase', letterSpacing: '.5px' }}>Duración del turno</div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 14, justifyContent: 'center' }}>
+            <button onClick={() => adjDur(-0.5)}
+              style={{ width: 40, height: 40, borderRadius: 10, border: '1px solid #1e2a45', background: '#0d1220', color: '#f1f5f9', fontSize: 22, cursor: 'pointer', fontFamily: 'inherit', display: 'flex', alignItems: 'center', justifyContent: 'center', lineHeight: 1 }}>−</button>
+            <div style={{ textAlign: 'center', minWidth: 90 }}>
+              <div style={{ fontSize: 26, fontWeight: 700, color: '#f1f5f9', lineHeight: 1 }}>{fmtDur(duration)}</div>
+              <div style={{ fontSize: 11, color: '#8892a8', marginTop: 5 }}>Salida: <span style={{ color: '#10b981', fontWeight: 600 }}>{endTime}</span></div>
+            </div>
+            <button onClick={() => adjDur(0.5)}
+              style={{ width: 40, height: 40, borderRadius: 10, border: '1px solid #1e2a45', background: '#0d1220', color: '#f1f5f9', fontSize: 22, cursor: 'pointer', fontFamily: 'inherit', display: 'flex', alignItems: 'center', justifyContent: 'center', lineHeight: 1 }}>+</button>
+          </div>
+        </div>
+        <div style={{ display: 'flex', gap: 8 }}>
+          <button onClick={onClose}
+            style={{ flex: 1, padding: '10px', borderRadius: 9, border: '1px solid #1e2a45', background: 'transparent', color: '#8892a8', fontSize: 13, cursor: 'pointer', fontFamily: 'inherit' }}>Cancelar</button>
+          <button onClick={() => onConfirm(empId, date, start, duration)}
+            style={{ flex: 2, padding: '10px', borderRadius: 9, border: 'none', background: '#3b82f6', color: '#fff', fontSize: 13, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>Crear → {endTime}</button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function SchedEditModal({ sched, allEmps, onSave, onDelete, onClose }) {
+  const [start, setStart] = useState(sched.start_time)
+  const [end, setEnd]     = useState(sched.end_time)
+  const [err, setErr]     = useState('')
+  const emp = allEmps.find(e => e.id === sched.empId)
+  const timeOpts = Array.from({ length: 48 }, (_, i) => { const h = String(Math.floor(i/2)).padStart(2,'0'); const m = i%2===0?'00':'30'; return `${h}:${m}` })
+  function handleSave() {
+    const [sh, sm] = start.split(':').map(Number)
+    const [eh, em] = end.split(':').map(Number)
+    if ((sh * 60 + sm) >= (eh * 60 + em)) { setErr('La entrada debe ser antes de la salida'); return }
+    onSave({ id: sched.id, start_time: start, end_time: end })
+  }
+  return (
+    <div onClick={onClose} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.7)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 400, padding: '0 16px' }}>
+      <div onClick={e => e.stopPropagation()} style={{ background: '#1a2035', border: '1px solid #1e2a45', borderRadius: 14, padding: 22, width: '100%', maxWidth: 320 }}>
+        <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 2 }}>Editar horario</div>
+        <div style={{ fontSize: 11, color: '#8892a8', marginBottom: 16 }}>{emp?.name} · {sched.date}</div>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: err ? 6 : 16 }}>
+          <div>
+            <div style={{ fontSize: 10, color: '#4a5568', marginBottom: 4 }}>Entrada</div>
+            <select value={start} onChange={e => { setStart(e.target.value); setErr('') }}
+              style={{ width: '100%', background: '#0d1220', border: '1px solid #1e2a45', color: '#f1f5f9', fontSize: 13, padding: '7px 8px', borderRadius: 7, fontFamily: 'inherit' }}>
+              {timeOpts.map(t => <option key={t} value={t}>{t}</option>)}
+            </select>
+          </div>
+          <div>
+            <div style={{ fontSize: 10, color: '#4a5568', marginBottom: 4 }}>Salida</div>
+            <select value={end} onChange={e => { setEnd(e.target.value); setErr('') }}
+              style={{ width: '100%', background: '#0d1220', border: '1px solid #1e2a45', color: '#f1f5f9', fontSize: 13, padding: '7px 8px', borderRadius: 7, fontFamily: 'inherit' }}>
+              {timeOpts.map(t => <option key={t} value={t}>{t}</option>)}
+            </select>
+          </div>
+        </div>
+        {err && <div style={{ fontSize: 11, color: '#ef4444', marginBottom: 12 }}>{err}</div>}
+        <div style={{ display: 'flex', gap: 8 }}>
+          <button onClick={onDelete} style={{ padding: '8px 14px', borderRadius: 8, border: '1px solid rgba(239,68,68,.3)', background: 'rgba(239,68,68,.08)', color: '#ef4444', fontSize: 12, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}>Eliminar</button>
+          <button onClick={onClose} style={{ flex: 1, padding: '8px 14px', borderRadius: 8, border: '1px solid #1e2a45', background: 'transparent', color: '#8892a8', fontSize: 12, cursor: 'pointer', fontFamily: 'inherit' }}>Cancelar</button>
+          <button onClick={handleSave} style={{ flex: 1, padding: '8px 14px', borderRadius: 8, border: 'none', background: '#3b82f6', color: '#fff', fontSize: 12, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}>Guardar</button>
+        </div>
+      </div>
     </div>
   )
 }
@@ -1723,6 +2238,175 @@ function SiteHoursModal({ siteId, siteName, siteHours, onSave, onClose }) {
   )
 }
 // ─── Company Modal ────────────────────────────────────────────────────────────
+function AlertsPanel({ adminUserId, adminEmail }) {
+  const [email, setEmail]                   = useState(adminEmail || '')
+  const [onCheckin, setOnCheckin]           = useState(false)
+  const [onLate, setOnLate]                 = useState(false)
+  const [onNoshow, setOnNoshow]             = useState(false)
+  const [onCheckout, setOnCheckout]         = useState(false)
+  const [onMovement, setOnMovement]         = useState(false)
+  const [pushCheckin, setPushCheckin]       = useState(false)
+  const [pushLate, setPushLate]             = useState(false)
+  const [pushNoshow, setPushNoshow]         = useState(false)
+  const [pushCheckout, setPushCheckout]     = useState(false)
+  const [pushMovement, setPushMovement]     = useState(false)
+  const [loading, setLoading]               = useState(true)
+  const [saving, setSaving]                 = useState(false)
+  const [saved, setSaved]                   = useState(false)
+
+  const { permState, subscribed, activate } = usePushNotifications(adminUserId)
+
+  useEffect(() => {
+    if (!adminUserId) return
+    fetch(`/api/alerts/prefs?admin_user_id=${adminUserId}`)
+      .then(r => r.json())
+      .then(({ prefs }) => {
+        if (prefs) {
+          setEmail(prefs.email || adminEmail || '')
+          setOnCheckin(!!prefs.on_checkin)
+          setOnLate(!!prefs.on_late)
+          setOnNoshow(!!prefs.on_noshow)
+          setOnCheckout(!!prefs.on_checkout)
+          setOnMovement(!!prefs.on_movement)
+          setPushCheckin(!!prefs.push_on_checkin)
+          setPushLate(!!prefs.push_on_late)
+          setPushNoshow(!!prefs.push_on_noshow)
+          setPushCheckout(!!prefs.push_on_checkout)
+          setPushMovement(!!prefs.push_on_movement)
+        }
+        setLoading(false)
+      })
+      .catch(() => setLoading(false))
+  }, [adminUserId])
+
+  async function handleSave() {
+    setSaving(true)
+    await fetch('/api/alerts/prefs', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        admin_user_id: adminUserId, email,
+        on_checkin: onCheckin, on_late: onLate, on_noshow: onNoshow, on_checkout: onCheckout, on_movement: onMovement,
+        push_on_checkin: pushCheckin, push_on_late: pushLate, push_on_noshow: pushNoshow, push_on_checkout: pushCheckout, push_on_movement: pushMovement,
+      }),
+    })
+    setSaving(false)
+    setSaved(true)
+    setTimeout(() => setSaved(false), 2500)
+  }
+
+  const pushReady = permState === 'granted' && subscribed
+
+  const ROWS = [
+    { label: 'Check-in 📲', desc: 'Cuando un empleado registra su entrada',
+      mail: onCheckin, setMail: setOnCheckin, push: pushCheckin, setPush: setPushCheckin },
+    { label: 'Ya viene tarde ⏰', desc: 'Pasó la hora de entrada sin registrar (dentro de tolerancia)',
+      mail: onLate, setMail: setOnLate, push: pushLate, setPush: setPushLate },
+    { label: 'No llegó 🚨', desc: 'Pasó la hora + tolerancia y el empleado no ha llegado',
+      mail: onNoshow, setMail: setOnNoshow, push: pushNoshow, setPush: setPushNoshow },
+    { label: 'Check-out 🏁', desc: 'Cuando un empleado registra su salida',
+      mail: onCheckout, setMail: setOnCheckout, push: pushCheckout, setPush: setPushCheckout },
+    { label: 'Cualquier movimiento 🔄', desc: 'Check-in, check-out, descanso, comida — cualquier evento',
+      mail: onMovement, setMail: setOnMovement, push: pushMovement, setPush: setPushMovement },
+  ]
+
+  if (loading) return <div style={{ padding: 40, textAlign: 'center', color: '#4a5568', fontSize: 13 }}>Cargando...</div>
+
+  return (
+    <div style={{ maxWidth: 560, margin: '0 auto', padding: '0 0 40px' }}>
+      <div style={{ fontSize: 17, fontWeight: 700, marginBottom: 4 }}>🔔 Mis alertas</div>
+      <div style={{ fontSize: 12, color: '#4a5568', marginBottom: 20 }}>Elige cómo recibir cada notificación: por correo, push, o ambas.</div>
+
+      {/* Push notifications activation */}
+      <div style={{ background: '#1a2035', border: `1px solid ${pushReady ? 'rgba(29,158,117,.3)' : '#1e2a45'}`, borderRadius: 10, padding: '14px 18px', marginBottom: 20 }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
+          <div>
+            <div style={{ fontSize: 13, fontWeight: 600, color: '#f1f5f9' }}>
+              {pushReady ? '✅ Notificaciones push activas' : '🔔 Activar notificaciones push'}
+            </div>
+            <div style={{ fontSize: 11, color: '#4a5568', marginTop: 2 }}>
+              {permState === 'unsupported' && 'Tu navegador no soporta notificaciones push.'}
+              {permState === 'blocked' && 'Bloqueadas en el navegador. Ve a Configuración del sitio para permitirlas.'}
+              {permState === 'granted' && !subscribed && 'Permiso concedido, suscribiendo...'}
+              {permState === 'granted' && subscribed && 'Recibirás alertas en este dispositivo aunque el navegador esté cerrado.'}
+              {(permState === 'idle' || permState === 'loading') && 'Recibe alertas en este dispositivo sin tener el navegador abierto.'}
+            </div>
+          </div>
+          {permState !== 'unsupported' && permState !== 'blocked' && !pushReady && (
+            <button
+              onClick={activate}
+              disabled={permState === 'loading'}
+              style={{ flexShrink: 0, padding: '8px 14px', borderRadius: 7, border: 'none', background: '#1D9E75', color: '#fff', fontSize: 12, fontWeight: 700, cursor: permState === 'loading' ? 'wait' : 'pointer', fontFamily: 'inherit', whiteSpace: 'nowrap' }}
+            >
+              {permState === 'loading' ? 'Activando...' : 'Activar'}
+            </button>
+          )}
+        </div>
+      </div>
+
+      {/* Alert rows with mail + push toggles */}
+      <div style={{ background: '#1a2035', border: '1px solid #1e2a45', borderRadius: 10, marginBottom: 20, overflow: 'hidden' }}>
+        {/* Header */}
+        <div style={{ display: 'flex', alignItems: 'center', padding: '8px 18px', borderBottom: '1px solid #1e2a45', background: '#111827' }}>
+          <div style={{ flex: 1, fontSize: 10, fontWeight: 600, color: '#4a5568', textTransform: 'uppercase', letterSpacing: 1 }}>Evento</div>
+          <div style={{ display: 'flex', gap: 24, paddingRight: 4 }}>
+            <span style={{ fontSize: 10, fontWeight: 600, color: '#4a5568', textTransform: 'uppercase', letterSpacing: 1, width: 40, textAlign: 'center' }}>✉️ Mail</span>
+            <span style={{ fontSize: 10, fontWeight: 600, color: '#4a5568', textTransform: 'uppercase', letterSpacing: 1, width: 40, textAlign: 'center' }}>🔔 Push</span>
+          </div>
+        </div>
+        {ROWS.map((row, i) => (
+          <div key={i} style={{ display: 'flex', alignItems: 'center', padding: '12px 18px', borderBottom: i < ROWS.length - 1 ? '1px solid #1e2a45' : 'none' }}>
+            <div style={{ flex: 1 }}>
+              <div style={{ fontSize: 13, color: '#f1f5f9' }}>{row.label}</div>
+              <div style={{ fontSize: 11, color: '#4a5568', marginTop: 2 }}>{row.desc}</div>
+            </div>
+            <div style={{ display: 'flex', gap: 24, paddingRight: 4 }}>
+              <div style={{ width: 40, display: 'flex', justifyContent: 'center' }}>
+                <Toggle checked={row.mail} onChange={row.setMail} />
+              </div>
+              <div style={{ width: 40, display: 'flex', justifyContent: 'center' }}>
+                <Toggle checked={row.push} onChange={pushReady ? row.setPush : undefined} color="#1D9E75"
+                  style={{ opacity: pushReady ? 1 : 0.35, cursor: pushReady ? 'pointer' : 'not-allowed' }} />
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* Email input */}
+      <div style={{ marginBottom: 20 }}>
+        <label style={{ fontSize: 10, fontWeight: 600, color: '#8892a8', display: 'block', marginBottom: 5 }}>CORREO PARA ALERTAS</label>
+        <input
+          type="email"
+          value={email}
+          onChange={e => setEmail(e.target.value)}
+          placeholder="tu@correo.com"
+          style={{ width: '100%', background: '#0d1220', border: '1px solid #1e2a45', color: '#f1f5f9', fontSize: 13, padding: '9px 12px', borderRadius: 7, outline: 'none', fontFamily: 'inherit', boxSizing: 'border-box' }}
+        />
+      </div>
+
+      <button
+        onClick={handleSave}
+        disabled={saving || !email.trim()}
+        style={{ padding: '11px 28px', borderRadius: 7, border: 'none', background: saved ? '#10b981' : '#1D9E75', color: '#fff', fontSize: 13, fontWeight: 700, cursor: saving ? 'wait' : 'pointer', fontFamily: 'inherit' }}
+      >
+        {saved ? '✅ Guardado' : saving ? 'Guardando...' : 'Guardar preferencias'}
+      </button>
+    </div>
+  )
+}
+
+function Toggle({ checked, onChange, color = '#f59e0b', style: extraStyle = {} }) {
+  return (
+    <div
+      onClick={() => onChange && onChange(!checked)}
+      style={{ width: 40, height: 22, borderRadius: 11, background: checked ? color : '#1e2a45', cursor: onChange ? 'pointer' : 'not-allowed', position: 'relative', flexShrink: 0, transition: 'background .2s', ...extraStyle }}
+    >
+      <div style={{ position: 'absolute', top: 3, left: checked ? 20 : 3, width: 16, height: 16, borderRadius: '50%', background: checked ? '#fff' : '#4a5568', transition: 'left .2s' }} />
+    </div>
+  )
+}
+
 function CompanyModal({ data, onSave, onClose }) {
   const [name, setName]   = useState(data?.name || '')
   const [slug, setSlug]   = useState(data?.slug || '')
@@ -1740,6 +2424,472 @@ function CompanyModal({ data, onSave, onClose }) {
         <div style={{ display: 'flex', gap: 8 }}>
           <button disabled={!valid} onClick={handleSave} style={{ flex:1,padding:'10px 16px',borderRadius:7,border:'none',background:valid?'#3b82f6':'#1e2a45',color:'#fff',fontSize:12,fontWeight:600,cursor:valid?'pointer':'not-allowed',fontFamily:'inherit' }}>Guardar</button>
           <button onClick={onClose} style={{ padding:'10px 16px',borderRadius:7,border:'1px solid #1e2a45',background:'transparent',color:'#8892a8',fontSize:12,cursor:'pointer',fontFamily:'inherit' }}>Cancelar</button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ─── Sales Import Modal ────────────────────────────────────────────────────────
+function SalesImportModal({ sites, allEmps, onClose, onDone, setToast }) {
+  const [rows, setRows] = useState([])
+  const [preview, setPreview] = useState([])
+  const [saving, setSaving] = useState(false)
+  const [err, setErr] = useState('')
+  const fileRef = useRef(null)
+
+  function parseCSV(text) {
+    const lines = text.trim().split(/\r?\n/)
+    if (lines.length < 2) { setErr('El archivo debe tener encabezado y al menos una fila.'); return }
+    const headers = lines[0].split(',').map(h => h.replace(/"/g,'').trim().toLowerCase())
+    const dateIdx = headers.findIndex(h => h.includes('fecha') || h.includes('date'))
+    const empIdx  = headers.findIndex(h => h.includes('empleado') || h.includes('email') || h.includes('nombre'))
+    const salesIdx = headers.findIndex(h => h.includes('venta') || h.includes('sale') || h.includes('monto'))
+    if (dateIdx < 0 || empIdx < 0 || salesIdx < 0) {
+      setErr('El CSV debe tener columnas: Fecha, Empleado (email o nombre), Ventas')
+      return
+    }
+    const parsed = []
+    for (let i = 1; i < lines.length; i++) {
+      const cols = lines[i].split(',').map(c => c.replace(/^"|"$/g,'').trim())
+      if (!cols[dateIdx] || !cols[empIdx]) continue
+      const rawDate = cols[dateIdx]
+      // Accept YYYY-MM-DD or DD/MM/YYYY
+      let date = rawDate
+      if (/^\d{2}\/\d{2}\/\d{4}$/.test(rawDate)) {
+        const [d,m,y] = rawDate.split('/')
+        date = `${y}-${m}-${d}`
+      }
+      const empQuery = cols[empIdx].toLowerCase()
+      const emp = allEmps.find(e => e.email?.toLowerCase() === empQuery || e.name?.toLowerCase() === empQuery)
+      const amount = parseFloat(cols[salesIdx].replace(/[$,\s]/g,'')) || 0
+      parsed.push({ date, empQuery, emp, amount, valid: !!emp && !!date && amount > 0 })
+    }
+    setRows(parsed)
+    setPreview(parsed.slice(0, 8))
+    setErr('')
+  }
+
+  function handleFile(e) {
+    const file = e.target.files?.[0]
+    if (!file) return
+    const reader = new FileReader()
+    reader.onload = ev => parseCSV(ev.target.result)
+    reader.readAsText(file, 'utf-8')
+  }
+
+  async function handleSave() {
+    const valid = rows.filter(r => r.valid)
+    if (!valid.length) return
+    setSaving(true)
+    let updated = 0, skipped = 0
+    for (const row of valid) {
+      const { data: existing } = await supabase.from('attendance').select('id, sales_amount').eq('employee_id', row.emp.id).eq('date', row.date).maybeSingle()
+      if (existing) {
+        await supabase.from('attendance').update({ sales_amount: row.amount }).eq('id', existing.id)
+        updated++
+      } else {
+        skipped++
+      }
+    }
+    setSaving(false)
+    setToast(`${updated} ventas actualizadas${skipped > 0 ? `, ${skipped} sin registro de asistencia (omitidas)` : ''}`)
+    onDone()
+  }
+
+  const validCount = rows.filter(r => r.valid).length
+  const invalidCount = rows.filter(r => !r.valid).length
+
+  return (
+    <div onClick={onClose} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.65)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 400, padding: 16 }}>
+      <div onClick={e => e.stopPropagation()} style={{ background: '#1a2035', border: '1px solid #1e2a45', borderRadius: 14, padding: 24, width: '100%', maxWidth: 520 }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
+          <div style={{ fontSize: 15, fontWeight: 700 }}>⬆ Importar ventas</div>
+          <button onClick={onClose} style={{ background: 'none', border: 'none', color: '#8892a8', fontSize: 20, cursor: 'pointer' }}>×</button>
+        </div>
+        <div style={{ fontSize: 11, color: '#8892a8', marginBottom: 14, lineHeight: 1.6 }}>
+          Sube un CSV con columnas: <strong style={{ color: '#f1f5f9' }}>Fecha</strong> (YYYY-MM-DD o DD/MM/YYYY), <strong style={{ color: '#f1f5f9' }}>Empleado</strong> (email o nombre), <strong style={{ color: '#f1f5f9' }}>Ventas</strong> (monto).<br />
+          Solo actualiza registros que ya existen en asistencia.
+        </div>
+        <input ref={fileRef} type='file' accept='.csv,.txt' style={{ display: 'none' }} onChange={handleFile} />
+        <button onClick={() => fileRef.current?.click()}
+          style={{ width: '100%', padding: '10px', borderRadius: 9, border: '1px dashed rgba(139,92,246,.4)', background: 'rgba(139,92,246,.06)', color: '#a78bfa', fontSize: 12, cursor: 'pointer', fontFamily: 'inherit', marginBottom: 12 }}>
+          📂 Seleccionar archivo CSV
+        </button>
+        {err && <div style={{ fontSize: 11, color: '#ef4444', marginBottom: 10 }}>{err}</div>}
+        {rows.length > 0 && (
+          <>
+            <div style={{ fontSize: 11, marginBottom: 8, display: 'flex', gap: 12 }}>
+              <span style={{ color: '#10b981' }}>✓ {validCount} válidos</span>
+              {invalidCount > 0 && <span style={{ color: '#ef4444' }}>✗ {invalidCount} no encontrados</span>}
+            </div>
+            <div style={{ background: '#0d1220', borderRadius: 8, overflow: 'hidden', marginBottom: 14, maxHeight: 200, overflowY: 'auto' }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11 }}>
+                <thead><tr>{['Fecha','Empleado','Ventas','Estado'].map(h => <th key={h} style={{ textAlign: 'left', padding: '6px 10px', color: '#4a5568', fontWeight: 600, borderBottom: '1px solid #1e2a45' }}>{h}</th>)}</tr></thead>
+                <tbody>{preview.map((r, i) => (
+                  <tr key={i} style={{ borderBottom: '1px solid rgba(30,42,69,.3)' }}>
+                    <td style={{ padding: '5px 10px', color: '#8892a8' }}>{r.date}</td>
+                    <td style={{ padding: '5px 10px', color: r.emp ? '#f1f5f9' : '#ef4444' }}>{r.emp ? r.emp.name : `¿${r.empQuery}?`}</td>
+                    <td style={{ padding: '5px 10px', color: '#10b981', fontFamily: "'JetBrains Mono'" }}>${Number(r.amount).toLocaleString('es-MX')}</td>
+                    <td style={{ padding: '5px 10px' }}>{r.valid ? <span style={{ color: '#10b981' }}>✓</span> : <span style={{ color: '#ef4444' }}>✗</span>}</td>
+                  </tr>
+                ))}</tbody>
+              </table>
+            </div>
+            <button onClick={handleSave} disabled={validCount === 0 || saving}
+              style={{ width: '100%', padding: '11px', borderRadius: 9, border: 'none', background: validCount > 0 && !saving ? '#a78bfa' : '#1e2a45', color: validCount > 0 && !saving ? '#fff' : '#4a5568', fontSize: 13, fontWeight: 700, cursor: validCount > 0 && !saving ? 'pointer' : 'not-allowed', fontFamily: 'inherit' }}>
+              {saving ? 'Guardando...' : `Actualizar ${validCount} registros`}
+            </button>
+          </>
+        )}
+      </div>
+    </div>
+  )
+}
+
+// ─── Feedback Modal ───────────────────────────────────────────────────────────
+function FeedbackButton({ open, onClose, adminUser }) {
+  const [type, setType] = useState('idea')
+  const [msg, setMsg] = useState('')
+  const [status, setStatus] = useState('idle')
+  const [screenshot, setScreenshot] = useState(null) // { name, base64, preview }
+  const fileRef = useRef(null)
+
+  function handleFile(e) {
+    const file = e.target.files?.[0]
+    if (!file) return
+    const reader = new FileReader()
+    reader.onload = ev => setScreenshot({ name: file.name, base64: ev.target.result.split(',')[1], preview: ev.target.result })
+    reader.readAsDataURL(file)
+  }
+
+  async function send() {
+    if (!msg.trim()) return
+    setStatus('loading')
+    try {
+      const { data: { session } } = await supabase.auth.getSession()
+      const res = await fetch('/api/feedback', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...(session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {}) },
+        body: JSON.stringify({
+          type, message: msg,
+          userName: adminUser?.name, userEmail: adminUser?.email,
+          companyName: adminUser?.companies?.name,
+          page: typeof window !== 'undefined' ? window.location.pathname : '/admin',
+          screenshot: screenshot?.base64 || null,
+          screenshotName: screenshot?.name || null,
+        }),
+      })
+      if (res.ok) { setStatus('done'); setMsg(''); setScreenshot(null) }
+      else setStatus('error')
+    } catch { setStatus('error') }
+  }
+
+  function close() { onClose(); setStatus('idle'); setMsg(''); setScreenshot(null) }
+
+  const types = [
+    { id: 'error', emoji: '🐛', label: 'Reportar error' },
+    { id: 'idea',  emoji: '💡', label: 'Tengo una idea' },
+    { id: 'other', emoji: '💬', label: 'Comentario' },
+  ]
+
+  if (!open) return null
+  return (
+    <div onClick={close} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.65)', display: 'flex', alignItems: 'flex-end', justifyContent: 'center', zIndex: 1000, padding: '0 0 24px' }}>
+      <div onClick={e => e.stopPropagation()} style={{ background: '#1a2035', border: '1px solid #1e2a45', borderRadius: 16, padding: '24px 20px', width: '100%', maxWidth: 440 }}>
+        {status === 'done' ? (
+          <div style={{ textAlign: 'center', padding: '20px 0' }}>
+            <div style={{ fontSize: 40, marginBottom: 10 }}>🙌</div>
+            <div style={{ fontSize: 16, fontWeight: 700, color: '#10b981', marginBottom: 6 }}>¡Gracias!</div>
+            <div style={{ fontSize: 13, color: '#8892a8', marginBottom: 20 }}>Tu mensaje nos ayuda a mejorar Worktic.</div>
+            <button onClick={close} style={{ padding: '10px 28px', borderRadius: 9, border: 'none', background: '#10b981', color: '#fff', fontSize: 13, fontWeight: 700, cursor: 'pointer' }}>Cerrar</button>
+          </div>
+        ) : (
+          <>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
+              <div>
+                <div style={{ fontSize: 15, fontWeight: 700, color: '#f1f5f9' }}>💬 Cuéntanos</div>
+                <div style={{ fontSize: 11, color: '#8892a8', marginTop: 2 }}>Tu opinión hace que Worktic mejore</div>
+              </div>
+              <button onClick={close} style={{ background: 'none', border: '1px solid #1e2a45', borderRadius: 6, color: '#8892a8', fontSize: 18, cursor: 'pointer', padding: '2px 10px', lineHeight: 1 }}>×</button>
+            </div>
+
+            {/* Type selector */}
+            <div style={{ display: 'flex', gap: 8, marginBottom: 14 }}>
+              {types.map(t => (
+                <button key={t.id} onClick={() => setType(t.id)}
+                  style={{ flex: 1, padding: '9px 6px', borderRadius: 9, border: `1.5px solid ${type === t.id ? '#10b981' : '#1e2a45'}`, background: type === t.id ? 'rgba(16,185,129,.1)' : '#0d1220', color: type === t.id ? '#10b981' : '#8892a8', fontSize: 11, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit', textAlign: 'center', lineHeight: 1.4 }}>
+                  <div style={{ fontSize: 18 }}>{t.emoji}</div>
+                  <div>{t.label}</div>
+                </button>
+              ))}
+            </div>
+
+            <textarea
+              value={msg} onChange={e => setMsg(e.target.value)}
+              placeholder={type === 'error' ? '¿Qué pasó? ¿Qué esperabas que pasara?' : type === 'idea' ? '¿Qué te gustaría que tuviera Worktic?' : '¿Algo que quieras decirnos?'}
+              rows={4}
+              style={{ width: '100%', background: '#0d1220', border: '1px solid #1e2a45', borderRadius: 9, color: '#f1f5f9', fontSize: 13, padding: '11px 13px', resize: 'none', fontFamily: 'inherit', outline: 'none', boxSizing: 'border-box', marginBottom: 10 }}
+            />
+
+            {/* Screenshot attachment */}
+            <input ref={fileRef} type='file' accept='image/*' style={{ display: 'none' }} onChange={handleFile} />
+            {screenshot ? (
+              <div style={{ marginBottom: 12, position: 'relative' }}>
+                <img src={screenshot.preview} alt='captura' style={{ width: '100%', maxHeight: 160, objectFit: 'cover', borderRadius: 8, border: '1px solid #1e2a45' }} />
+                <button onClick={() => { setScreenshot(null); if (fileRef.current) fileRef.current.value = '' }}
+                  style={{ position: 'absolute', top: 6, right: 6, background: 'rgba(0,0,0,.7)', border: 'none', borderRadius: '50%', color: '#fff', width: 24, height: 24, fontSize: 14, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', lineHeight: 1 }}>×</button>
+                <div style={{ fontSize: 10, color: '#4a5568', marginTop: 4 }}>{screenshot.name}</div>
+              </div>
+            ) : (
+              <button onClick={() => fileRef.current?.click()}
+                style={{ width: '100%', marginBottom: 10, padding: '8px', borderRadius: 8, border: '1px dashed #1e2a45', background: 'transparent', color: '#4a5568', fontSize: 12, cursor: 'pointer', fontFamily: 'inherit', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
+                📎 Adjuntar captura de pantalla
+              </button>
+            )}
+
+            {status === 'error' && <div style={{ fontSize: 11, color: '#ef4444', marginBottom: 8 }}>Error al enviar. Intenta de nuevo.</div>}
+
+            <button onClick={send} disabled={!msg.trim() || status === 'loading'}
+              style={{ width: '100%', padding: '12px', borderRadius: 9, border: 'none', background: !msg.trim() || status === 'loading' ? '#1e2a45' : '#10b981', color: !msg.trim() || status === 'loading' ? '#4a5568' : '#fff', fontSize: 13, fontWeight: 700, cursor: !msg.trim() || status === 'loading' ? 'not-allowed' : 'pointer', fontFamily: 'inherit', transition: 'background .2s' }}>
+              {status === 'loading' ? 'Enviando...' : 'Enviar →'}
+            </button>
+          </>
+        )}
+      </div>
+    </div>
+  )
+}
+
+// ─── Competitions Panel ───────────────────────────────────────────────────────
+function CompetitionsPanel({ competitions, compSites, sites, allEmps, att, adminUser, isSuperAdmin, onEdit, onRefresh }) {
+  const [selComp, setSelComp] = useState(null)
+  const today = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Cancun' })
+
+  function getCompSites(compId) {
+    return compSites.filter(cs => cs.competition_id === compId).map(cs => sites.find(s => s.id === cs.site_id)).filter(Boolean)
+  }
+
+  function getDateRange(comp) {
+    if (comp.type === 'auto_week') {
+      const d = new Date(); const day = d.getDay()
+      const mon = new Date(d); mon.setDate(d.getDate() - (day === 0 ? 6 : day - 1))
+      const sun = new Date(mon); sun.setDate(mon.getDate() + 6)
+      const toS = x => x.toLocaleDateString('en-CA')
+      return { start: toS(mon), end: toS(sun) }
+    }
+    if (comp.type === 'auto_month') return { start: today.slice(0,7) + '-01', end: today }
+    return { start: comp.start_date || today, end: comp.end_date || today }
+  }
+
+  function computeRanking(comp) {
+    const siteIds = new Set(compSites.filter(cs => cs.competition_id === comp.id).map(cs => cs.site_id))
+    const { start, end } = getDateRange(comp)
+    const relevant = att.filter(r => siteIds.has(r.site_id) && r.date >= start && r.date <= end)
+    const scores = {}
+    relevant.forEach(r => {
+      if (!scores[r.employee_id]) scores[r.employee_id] = 0
+      if (comp.metric === 'sales') scores[r.employee_id] += parseFloat(r.sales_amount) || 0
+      else if (comp.metric === 'attendance') scores[r.employee_id] += 1
+      else if (comp.metric === 'punctuality') scores[r.employee_id] += r.status === 'on_time' ? 1 : 0
+      else scores[r.employee_id] += parseFloat(r.sales_amount) || 0
+    })
+    return Object.entries(scores).sort((a, b) => b[1] - a[1]).map(([empId, score], i) => ({
+      rank: i + 1, emp: allEmps.find(e => e.id === empId), score
+    })).filter(r => r.emp)
+  }
+
+  const typeLabel = { auto_week: '📅 Sem. automática', auto_month: '📆 Mes automático', custom: '⚙️ Personalizada' }
+  const metricLabel = { sales: 'Ventas', attendance: 'Asistencia', punctuality: 'Puntualidad', combined: 'Combinado' }
+  const metricFmt = (metric, score) => {
+    if (metric === 'sales') return '$' + Number(score).toLocaleString('es-MX')
+    return score + (metric === 'attendance' ? ' días' : metric === 'punctuality' ? ' puntuales' : ' pts')
+  }
+  const rankIcon = r => r === 1 ? '🥇' : r === 2 ? '🥈' : r === 3 ? '🥉' : `#${r}`
+
+  if (competitions.length === 0) return (
+    <div style={{ padding: 40, textAlign: 'center', color: '#4a5568', fontSize: 13, background: '#1a2035', borderRadius: 10, border: '1px solid #1e2a45' }}>
+      No hay competencias. Crea una con el botón de arriba.
+    </div>
+  )
+
+  return (
+    <div>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: 14, marginBottom: selComp ? 16 : 0 }}>
+        {competitions.map(comp => {
+          const cSites = getCompSites(comp.id)
+          const { start, end } = getDateRange(comp)
+          const isActive = comp.active && start <= today && end >= today
+          return (
+            <div key={comp.id}
+              onClick={() => setSelComp(selComp?.id === comp.id ? null : comp)}
+              style={{ background: '#1a2035', border: `2px solid ${selComp?.id === comp.id ? '#f59e0b' : isActive ? 'rgba(245,158,11,.3)' : '#1e2a45'}`, borderRadius: 12, padding: 16, cursor: 'pointer', transition: 'border-color .2s' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 10 }}>
+                <div>
+                  <div style={{ fontSize: 14, fontWeight: 700, color: '#f1f5f9' }}>{comp.name}</div>
+                  <div style={{ fontSize: 10, color: '#8892a8', marginTop: 2 }}>{typeLabel[comp.type] || comp.type}</div>
+                </div>
+                <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                  {isActive && <span style={{ fontSize: 9, fontWeight: 700, color: '#10b981', background: 'rgba(16,185,129,.12)', border: '1px solid rgba(16,185,129,.3)', borderRadius: 4, padding: '2px 7px' }}>ACTIVA</span>}
+                  {!comp.active && <span style={{ fontSize: 9, color: '#4a5568', background: 'rgba(74,85,104,.1)', border: '1px solid #1e2a45', borderRadius: 4, padding: '2px 7px' }}>PAUSADA</span>}
+                  <button onClick={e => { e.stopPropagation(); onEdit(comp) }}
+                    style={{ background: 'none', border: '1px solid #1e2a45', borderRadius: 5, color: '#8892a8', fontSize: 10, padding: '2px 8px', cursor: 'pointer', fontFamily: 'inherit' }}>Editar</button>
+                </div>
+              </div>
+              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 8 }}>
+                <span style={{ fontSize: 10, color: '#8b5cf6', background: 'rgba(139,92,246,.1)', borderRadius: 4, padding: '2px 7px' }}>📊 {metricLabel[comp.metric]}</span>
+                {cSites.map(s => <span key={s.id} style={{ fontSize: 10, color: '#3b82f6', background: 'rgba(59,130,246,.1)', borderRadius: 4, padding: '2px 7px' }}>{s.name}</span>)}
+              </div>
+              {comp.type === 'custom' && comp.start_date && (
+                <div style={{ fontSize: 10, color: '#4a5568' }}>{comp.start_date} → {comp.end_date || 'sin fin'}</div>
+              )}
+              {comp.prize_text && <div style={{ fontSize: 10, color: '#f59e0b', marginTop: 4 }}>🎁 {comp.prize_text}</div>}
+            </div>
+          )
+        })}
+      </div>
+
+      {selComp && (() => {
+        const ranking = computeRanking(selComp)
+        return (
+          <div style={{ background: '#1a2035', border: '1px solid rgba(245,158,11,.3)', borderRadius: 12, padding: 20 }}>
+            <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 4 }}>🏆 Ranking — {selComp.name}</div>
+            <div style={{ fontSize: 11, color: '#8892a8', marginBottom: 16 }}>{metricLabel[selComp.metric]} · {getDateRange(selComp).start} → {getDateRange(selComp).end}</div>
+            {ranking.length === 0 ? (
+              <div style={{ fontSize: 12, color: '#4a5568', padding: '20px 0', textAlign: 'center' }}>Sin datos aún para este período.</div>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                {ranking.slice(0, 20).map(({ rank, emp, score }) => {
+                  const maxScore = ranking[0]?.score || 1
+                  const pct = Math.round(score / maxScore * 100)
+                  return (
+                    <div key={emp.id} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 14px', background: rank <= 3 ? 'rgba(245,158,11,.06)' : 'rgba(30,42,69,.3)', borderRadius: 8, border: rank === 1 ? '1px solid rgba(245,158,11,.3)' : '1px solid transparent' }}>
+                      <div style={{ fontSize: rank <= 3 ? 20 : 13, fontWeight: 700, minWidth: 28, textAlign: 'center', color: '#f1f5f9' }}>{rankIcon(rank)}</div>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ fontSize: 12, fontWeight: 600, color: '#f1f5f9', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{emp.name}</div>
+                        <div style={{ marginTop: 4, height: 3, background: 'rgba(30,42,69,.8)', borderRadius: 2, overflow: 'hidden' }}>
+                          <div style={{ height: '100%', width: pct + '%', background: rank === 1 ? '#f59e0b' : '#3b82f6', borderRadius: 2 }} />
+                        </div>
+                      </div>
+                      <div style={{ fontSize: 13, fontWeight: 700, fontFamily: "'JetBrains Mono'", color: rank === 1 ? '#f59e0b' : '#f1f5f9' }}>{metricFmt(selComp.metric, score)}</div>
+                    </div>
+                  )
+                })}
+              </div>
+            )}
+          </div>
+        )
+      })()}
+    </div>
+  )
+}
+
+// ─── Competition Modal ────────────────────────────────────────────────────────
+function CompetitionModal({ data, sites, allEmps, adminUser, permittedSiteIds, onSave, onDelete, onClose }) {
+  const isNew = !data?.id
+  const [name, setName] = useState(data?.name || '')
+  const [type, setType] = useState(data?.type || 'auto_week')
+  const [metric, setMetric] = useState(data?.metric || 'sales')
+  const [prize, setPrize] = useState(data?.prize_text || '')
+  const [startDate, setStartDate] = useState(data?.start_date || '')
+  const [endDate, setEndDate] = useState(data?.end_date || '')
+  const [active, setActive] = useState(data?.active !== false)
+  const [selSiteIds, setSelSiteIds] = useState(data ? [] : [])
+  const [err, setErr] = useState('')
+
+  useEffect(() => {
+    if (data?.id) {
+      // Will be loaded from compSites prop if passed, for now default to empty
+    }
+  }, [])
+
+  function toggleSite(siteId) {
+    setSelSiteIds(prev => prev.includes(siteId) ? prev.filter(id => id !== siteId) : [...prev, siteId])
+  }
+
+  async function handleSave() {
+    if (!name.trim()) { setErr('El nombre es obligatorio'); return }
+    if (selSiteIds.length === 0) { setErr('Selecciona al menos una sucursal'); return }
+    if (type === 'custom' && !startDate) { setErr('Indica la fecha de inicio'); return }
+    const formData = { name: name.trim(), type, metric, prize_text: prize || null, active, ...(data?.id ? { id: data.id } : {}), ...(type === 'custom' ? { start_date: startDate, end_date: endDate || null } : { start_date: null, end_date: null }) }
+    await onSave(formData, selSiteIds)
+  }
+
+  const allowedSites = sites.filter(s => permittedSiteIds.includes(s.id))
+
+  return (
+    <div onClick={onClose} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.75)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 400, padding: '0 16px' }}>
+      <div onClick={e => e.stopPropagation()} style={{ background: '#1a2035', border: '1px solid #1e2a45', borderRadius: 14, padding: 24, width: '100%', maxWidth: 460, maxHeight: '90vh', overflowY: 'auto', fontFamily: "'DM Sans', sans-serif" }}>
+        <div style={{ fontSize: 15, fontWeight: 700, marginBottom: 18 }}>{isNew ? 'Nueva Competencia' : 'Editar Competencia'}</div>
+
+        <div style={{ marginBottom: 14 }}>
+          <div style={{ fontSize: 10, color: '#4a5568', marginBottom: 5, textTransform: 'uppercase', letterSpacing: '.5px' }}>Nombre</div>
+          <input value={name} onChange={e => { setName(e.target.value); setErr('') }}
+            placeholder='Ej: Vendedor del Mes Marzo' style={{ width: '100%', background: '#0d1220', border: '1px solid #1e2a45', color: '#f1f5f9', fontSize: 13, padding: '9px 12px', borderRadius: 8, fontFamily: 'inherit', boxSizing: 'border-box' }} />
+        </div>
+
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 14 }}>
+          <div>
+            <div style={{ fontSize: 10, color: '#4a5568', marginBottom: 5, textTransform: 'uppercase', letterSpacing: '.5px' }}>Tipo</div>
+            <select value={type} onChange={e => setType(e.target.value)} style={{ width: '100%', background: '#0d1220', border: '1px solid #1e2a45', color: '#f1f5f9', fontSize: 13, padding: '9px 8px', borderRadius: 8, fontFamily: 'inherit' }}>
+              <option value='auto_week'>Semana (auto-reset)</option>
+              <option value='auto_month'>Mes (auto-reset)</option>
+              <option value='custom'>Personalizada (fechas)</option>
+            </select>
+          </div>
+          <div>
+            <div style={{ fontSize: 10, color: '#4a5568', marginBottom: 5, textTransform: 'uppercase', letterSpacing: '.5px' }}>Métrica</div>
+            <select value={metric} onChange={e => setMetric(e.target.value)} style={{ width: '100%', background: '#0d1220', border: '1px solid #1e2a45', color: '#f1f5f9', fontSize: 13, padding: '9px 8px', borderRadius: 8, fontFamily: 'inherit' }}>
+              <option value='sales'>Ventas totales</option>
+              <option value='attendance'>Días trabajados</option>
+              <option value='punctuality'>Días puntuales</option>
+            </select>
+          </div>
+        </div>
+
+        {type === 'custom' && (
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 14 }}>
+            {[['Inicio', startDate, setStartDate], ['Fin (opcional)', endDate, setEndDate]].map(([lbl, val, set]) => (
+              <div key={lbl}>
+                <div style={{ fontSize: 10, color: '#4a5568', marginBottom: 5, textTransform: 'uppercase', letterSpacing: '.5px' }}>{lbl}</div>
+                <input type='date' value={val} onChange={e => set(e.target.value)} style={{ width: '100%', background: '#0d1220', border: '1px solid #1e2a45', color: '#f1f5f9', fontSize: 13, padding: '9px 8px', borderRadius: 8, fontFamily: 'inherit', boxSizing: 'border-box' }} />
+              </div>
+            ))}
+          </div>
+        )}
+
+        <div style={{ marginBottom: 14 }}>
+          <div style={{ fontSize: 10, color: '#4a5568', marginBottom: 8, textTransform: 'uppercase', letterSpacing: '.5px' }}>Sucursales participantes</div>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+            {allowedSites.map(s => (
+              <button key={s.id} onClick={() => toggleSite(s.id)}
+                style={{ padding: '5px 12px', borderRadius: 7, border: `1px solid ${selSiteIds.includes(s.id) ? '#f59e0b' : '#1e2a45'}`, background: selSiteIds.includes(s.id) ? 'rgba(245,158,11,.15)' : 'transparent', color: selSiteIds.includes(s.id) ? '#f59e0b' : '#8892a8', fontSize: 12, cursor: 'pointer', fontFamily: 'inherit', fontWeight: selSiteIds.includes(s.id) ? 600 : 400, transition: 'all .15s' }}>
+                {s.name}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <div style={{ marginBottom: 14 }}>
+          <div style={{ fontSize: 10, color: '#4a5568', marginBottom: 5, textTransform: 'uppercase', letterSpacing: '.5px' }}>Premio (opcional)</div>
+          <input value={prize} onChange={e => setPrize(e.target.value)}
+            placeholder='Ej: Bono de $500, día libre, trofeo...' style={{ width: '100%', background: '#0d1220', border: '1px solid #1e2a45', color: '#f1f5f9', fontSize: 13, padding: '9px 12px', borderRadius: 8, fontFamily: 'inherit', boxSizing: 'border-box' }} />
+        </div>
+
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 18 }}>
+          <button onClick={() => setActive(a => !a)}
+            style={{ width: 36, height: 20, borderRadius: 10, border: 'none', background: active ? '#10b981' : '#1e2a45', cursor: 'pointer', position: 'relative', transition: 'background .2s', flexShrink: 0 }}>
+            <div style={{ position: 'absolute', top: 2, left: active ? 18 : 2, width: 16, height: 16, borderRadius: '50%', background: '#fff', transition: 'left .2s' }} />
+          </button>
+          <span style={{ fontSize: 12, color: '#8892a8' }}>Competencia {active ? 'activa' : 'pausada'}</span>
+        </div>
+
+        {err && <div style={{ fontSize: 11, color: '#ef4444', marginBottom: 12, fontWeight: 600 }}>{err}</div>}
+
+        <div style={{ display: 'flex', gap: 8 }}>
+          {!isNew && <button onClick={() => onDelete(data.id)} style={{ padding: '9px 14px', borderRadius: 8, border: '1px solid rgba(239,68,68,.3)', background: 'rgba(239,68,68,.08)', color: '#ef4444', fontSize: 12, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}>Eliminar</button>}
+          <button onClick={onClose} style={{ flex: 1, padding: '9px', borderRadius: 8, border: '1px solid #1e2a45', background: 'transparent', color: '#8892a8', fontSize: 12, cursor: 'pointer', fontFamily: 'inherit' }}>Cancelar</button>
+          <button onClick={handleSave} style={{ flex: 2, padding: '9px', borderRadius: 8, border: 'none', background: '#f59e0b', color: '#fff', fontSize: 12, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>Guardar</button>
         </div>
       </div>
     </div>
