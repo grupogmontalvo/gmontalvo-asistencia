@@ -34,11 +34,11 @@ export default function LoginPage() {
   }
 
   const S = {
-    page:  { minHeight: '100vh', background: '#050810', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: "'DM Sans', sans-serif", padding: 16 },
-    card:  { background: '#111827', border: '1px solid #1e2a45', borderRadius: 16, padding: 32, width: '100%', maxWidth: 380 },
-    label: { fontSize: 10, fontWeight: 600, color: '#8892a8', display: 'block', marginBottom: 5, textTransform: 'uppercase', letterSpacing: '.5px' },
-    input: { width: '100%', background: '#0d1220', border: '1px solid #1e2a45', color: '#f1f5f9', fontSize: 14, padding: '11px 14px', borderRadius: 8, outline: 'none', fontFamily: 'inherit', boxSizing: 'border-box' },
-    btn:   (ok) => ({ width: '100%', padding: '13px', borderRadius: 9, border: 'none', background: ok ? '#3b82f6' : '#1e2a45', color: '#fff', fontSize: 14, fontWeight: 700, cursor: ok ? 'pointer' : 'not-allowed', fontFamily: 'inherit', marginTop: 8 }),
+    page:  { minHeight: '100vh', background: '#f8fafc', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: "'DM Sans', sans-serif", padding: 16 },
+    card:  { background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: 16, padding: 32, width: '100%', maxWidth: 380 },
+    label: { fontSize: 10, fontWeight: 600, color: '#64748b', display: 'block', marginBottom: 5, textTransform: 'uppercase', letterSpacing: '.5px' },
+    input: { width: '100%', background: '#f8fafc', border: '1px solid #e2e8f0', color: '#0f172a', fontSize: 14, padding: '11px 14px', borderRadius: 8, outline: 'none', fontFamily: 'inherit', boxSizing: 'border-box' },
+    btn:   (ok) => ({ width: '100%', padding: '13px', borderRadius: 9, border: 'none', background: ok ? '#3b82f6' : '#e2e8f0', color: '#fff', fontSize: 14, fontWeight: 700, cursor: ok ? 'pointer' : 'not-allowed', fontFamily: 'inherit', marginTop: 8 }),
     err:   { background: 'rgba(239,68,68,.1)', border: '1px solid rgba(239,68,68,.25)', borderRadius: 7, padding: '10px 14px', fontSize: 12, color: '#ef4444', marginBottom: 14 },
     link:  { background: 'none', border: 'none', color: '#3b82f6', cursor: 'pointer', fontSize: 12, fontFamily: 'inherit', padding: 0, textDecoration: 'underline' },
   }
@@ -48,18 +48,18 @@ export default function LoginPage() {
   return (
     <div style={S.page}>
       <div style={S.card}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 28 }}>
-          <div style={{ width: 40, height: 40, borderRadius: 10, background: '#050810', border: '1.5px solid #1D9E75', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 20, fontWeight: 700, color: '#1D9E75', fontFamily: 'Georgia, serif', flexShrink: 0 }}>W</div>
+        <a href="https://worktic.app" style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 28, textDecoration: 'none' }}>
+          <div style={{ width: 40, height: 40, borderRadius: 10, background: '#f8fafc', border: '1.5px solid #1D9E75', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 20, fontWeight: 700, color: '#1D9E75', fontFamily: 'Georgia, serif', flexShrink: 0 }}>W</div>
           <div>
-            <div style={{ fontSize: 16, fontWeight: 700, color: '#f1f5f9' }}>Worktic</div>
-            <div style={{ fontSize: 11, color: '#8892a8' }}>Panel de Administración</div>
+            <div style={{ fontSize: 16, fontWeight: 700, color: '#0f172a' }}>Worktic</div>
+            <div style={{ fontSize: 11, color: '#64748b' }}>Panel de Administración</div>
           </div>
-        </div>
+        </a>
 
         {mode === 'login' ? (
           <>
-            <div style={{ fontSize: 18, fontWeight: 700, color: '#f1f5f9', marginBottom: 6 }}>Iniciar sesión</div>
-            <div style={{ fontSize: 12, color: '#8892a8', marginBottom: 24 }}>Acceso exclusivo para administradores.</div>
+            <div style={{ fontSize: 18, fontWeight: 700, color: '#0f172a', marginBottom: 6 }}>Iniciar sesión</div>
+            <div style={{ fontSize: 12, color: '#64748b', marginBottom: 24 }}>Acceso exclusivo para administradores.</div>
 
             {err && <div style={S.err}>{err}</div>}
 
@@ -79,7 +79,7 @@ export default function LoginPage() {
                   onChange={e => { setPassword(e.target.value); setErr('') }}
                   onKeyDown={e => e.key === 'Enter' && handleLogin()}
                 />
-                <button onClick={() => setShowPw(p => !p)} type='button' style={{ position: 'absolute', right: 12, top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', color: '#4a5568', cursor: 'pointer', fontSize: 16, lineHeight: 1, padding: 0 }}>
+                <button onClick={() => setShowPw(p => !p)} type='button' style={{ position: 'absolute', right: 12, top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', color: '#94a3b8', cursor: 'pointer', fontSize: 16, lineHeight: 1, padding: 0 }}>
                   {showPw ? '🙈' : '👁'}
                 </button>
               </div>
@@ -97,8 +97,8 @@ export default function LoginPage() {
           </>
         ) : (
           <>
-            <div style={{ fontSize: 18, fontWeight: 700, color: '#f1f5f9', marginBottom: 6 }}>Recuperar contraseña</div>
-            <div style={{ fontSize: 12, color: '#8892a8', marginBottom: 24 }}>Te mandamos un link a tu correo para que puedas crear una nueva contraseña.</div>
+            <div style={{ fontSize: 18, fontWeight: 700, color: '#0f172a', marginBottom: 6 }}>Recuperar contraseña</div>
+            <div style={{ fontSize: 12, color: '#64748b', marginBottom: 24 }}>Te mandamos un link a tu correo para que puedas crear una nueva contraseña.</div>
 
             {err && <div style={S.err}>{err}</div>}
 
@@ -106,7 +106,7 @@ export default function LoginPage() {
               <div style={{ background: 'rgba(16,185,129,.08)', border: '1px solid rgba(16,185,129,.2)', borderRadius: 10, padding: '16px 18px', textAlign: 'center' }}>
                 <div style={{ fontSize: 28, marginBottom: 8 }}>📧</div>
                 <div style={{ fontSize: 13, fontWeight: 700, color: '#10b981', marginBottom: 6 }}>¡Listo! Revisa tu correo</div>
-                <div style={{ fontSize: 11, color: '#8892a8' }}>Mandamos el link a <strong style={{ color: '#f1f5f9' }}>{email}</strong>. Ábrelo desde Chrome (no desde Gmail).</div>
+                <div style={{ fontSize: 11, color: '#64748b' }}>Mandamos el link a <strong style={{ color: '#0f172a' }}>{email}</strong>. Ábrelo desde Chrome (no desde Gmail).</div>
               </div>
             ) : (
               <>

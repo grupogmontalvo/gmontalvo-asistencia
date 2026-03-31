@@ -1,21 +1,25 @@
+import ContactForm from './components/ContactForm'
+
 export const metadata = {
-  title: 'Worktic — Control de asistencia reinventado',
-  description: 'Plataforma de gestión de asistencia diseñada para equipos en campo. Sin apps complejas. Entra, marca, listo.',
+  title: 'Worktic — Sabe quién trabaja, cuándo y dónde',
+  description: 'Control de asistencia con QR + GPS para equipos en campo. Sin apps. Sin excusas. Notificaciones en tiempo real.',
 }
 
 const css = `
-  @import url('https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Sans:wght@300;400;500;600&display=swap');
+  @import url('https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Sans:wght@300;400;500;600;700&display=swap');
 
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
   :root {
-    --negro: #1A1A18;
+    --negro: #ffffff;
+    --negro2: #f1f5f9;
+    --negro3: #f8fafc;
     --verde: #1D9E75;
     --verde-medio: #5DCAA5;
     --verde-fondo: #E1F5EE;
-    --verde-claro: #C0E8D8;
-    --gris: #6B6A65;
-    --blanco: #FAFAF8;
+    --gris: #6B7280;
+    --gris-claro: #9CA3AF;
+    --blanco: #0f172a;
   }
 
   html { scroll-behavior: smooth; }
@@ -27,27 +31,18 @@ const css = `
     overflow-x: hidden;
   }
 
-  body::before {
-    content: '';
-    position: fixed;
-    inset: 0;
-    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.04'/%3E%3C/svg%3E");
-    pointer-events: none;
-    z-index: 0;
-    opacity: 0.6;
-  }
-
+  /* ── NAV ── */
   nav {
     position: fixed;
     top: 0; left: 0; right: 0;
     z-index: 100;
-    padding: 20px 48px;
+    padding: 18px 48px;
     display: flex;
     align-items: center;
     justify-content: space-between;
-    border-bottom: 1px solid rgba(255,255,255,0.06);
+    border-bottom: 1px solid rgba(0,0,0,0.05);
     backdrop-filter: blur(20px);
-    background: rgba(26,26,24,0.85);
+    background: rgba(255,255,255,0.92);
   }
 
   .logo {
@@ -58,32 +53,21 @@ const css = `
   }
 
   .logo-icon {
-    width: 36px; height: 36px;
-    background: var(--negro);
-    border: 1.5px solid var(--verde);
+    width: 34px; height: 34px;
+    background: var(--verde);
     border-radius: 8px;
     display: flex;
     align-items: center;
     justify-content: center;
     font-family: 'DM Serif Display', serif;
-    font-size: 18px;
-    color: var(--verde);
-    position: relative;
-  }
-
-  .logo-icon::after {
-    content: '';
-    position: absolute;
-    bottom: -1px; left: 4px; right: 4px;
-    height: 2px;
-    background: var(--verde);
-    border-radius: 2px;
+    font-size: 17px;
+    color: #fff;
+    font-weight: bold;
   }
 
   .logo-text {
-    font-family: 'DM Sans', sans-serif;
-    font-weight: 600;
-    font-size: 18px;
+    font-weight: 700;
+    font-size: 17px;
     color: var(--blanco);
     letter-spacing: -0.3px;
   }
@@ -91,11 +75,11 @@ const css = `
   .nav-cta {
     display: flex;
     align-items: center;
-    gap: 24px;
+    gap: 20px;
   }
 
   .nav-link {
-    color: rgba(250,250,248,0.55);
+    color: rgba(15,23,42,0.5);
     text-decoration: none;
     font-size: 14px;
     font-weight: 400;
@@ -104,17 +88,39 @@ const css = `
   .nav-link:hover { color: var(--blanco); }
 
   .btn-nav {
-    background: var(--verde);
-    color: var(--negro);
-    padding: 9px 20px;
+    background: transparent;
+    color: rgba(15,23,42,0.75);
+    border: 1px solid rgba(0,0,0,0.10);
+    padding: 8px 18px;
     border-radius: 8px;
-    font-size: 14px;
+    font-size: 13px;
+    font-weight: 500;
+    text-decoration: none;
+    transition: all 0.2s;
+    white-space: nowrap;
+    flex-shrink: 0;
+  }
+  .btn-nav:hover { border-color: rgba(0,0,0,0.20); color: var(--blanco); }
+
+  .btn-nav-primary {
+    background: var(--verde);
+    color: #fff;
+    border: 1px solid var(--verde);
+    padding: 8px 18px;
+    border-radius: 8px;
+    font-size: 13px;
     font-weight: 600;
     text-decoration: none;
-    transition: background 0.2s, transform 0.15s;
+    transition: all 0.2s;
+    white-space: nowrap;
+    flex-shrink: 0;
   }
-  .btn-nav:hover { background: var(--verde-medio); transform: translateY(-1px); }
+  .btn-nav-primary:hover { background: var(--verde-medio); border-color: var(--verde-medio); transform: translateY(-1px); }
 
+  .btn-nav .txt-short { display: none; }
+  .btn-nav-primary .txt-short { display: none; }
+
+  /* ── HERO ── */
   .hero {
     min-height: 100vh;
     display: flex;
@@ -124,31 +130,44 @@ const css = `
     text-align: center;
     padding: 120px 24px 80px;
     position: relative;
+    overflow: hidden;
   }
 
-  .hero-glow {
+  .hero-bg-glow {
     position: absolute;
-    top: 20%;
-    left: 50%;
+    top: 0; left: 50%;
     transform: translateX(-50%);
-    width: 600px; height: 400px;
-    background: radial-gradient(ellipse, rgba(29,158,117,0.18) 0%, transparent 70%);
+    width: 800px; height: 600px;
+    background: radial-gradient(ellipse at center top, rgba(29,158,117,0.14) 0%, transparent 65%);
     pointer-events: none;
+  }
+
+  .hero-bg-grid {
+    position: absolute;
+    inset: 0;
+    background-image:
+      linear-gradient(rgba(29,158,117,0.04) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(29,158,117,0.04) 1px, transparent 1px);
+    background-size: 60px 60px;
+    pointer-events: none;
+    mask-image: radial-gradient(ellipse 80% 60% at center top, black 0%, transparent 70%);
   }
 
   .badge {
     display: inline-flex;
     align-items: center;
     gap: 8px;
-    background: rgba(29,158,117,0.12);
-    border: 1px solid rgba(29,158,117,0.3);
+    background: rgba(29,158,117,0.1);
+    border: 1px solid rgba(29,158,117,0.25);
     color: var(--verde-medio);
-    padding: 6px 16px;
+    padding: 5px 14px;
     border-radius: 100px;
-    font-size: 13px;
+    font-size: 12.5px;
     font-weight: 500;
-    margin-bottom: 32px;
-    animation: fadeUp 0.6s ease both;
+    margin-bottom: 28px;
+    position: relative;
+    z-index: 1;
+    animation: fadeUp 0.5s ease both;
   }
 
   .badge-dot {
@@ -160,17 +179,19 @@ const css = `
 
   @keyframes pulse {
     0%, 100% { opacity: 1; transform: scale(1); }
-    50% { opacity: 0.5; transform: scale(0.8); }
+    50% { opacity: 0.4; transform: scale(0.75); }
   }
 
   .hero h1 {
     font-family: 'DM Serif Display', serif;
-    font-size: clamp(48px, 7vw, 88px);
-    line-height: 1.05;
+    font-size: clamp(40px, 6.5vw, 80px);
+    line-height: 1.06;
     letter-spacing: -2px;
-    max-width: 800px;
-    margin-bottom: 24px;
-    animation: fadeUp 0.6s 0.1s ease both;
+    max-width: 780px;
+    margin-bottom: 22px;
+    position: relative;
+    z-index: 1;
+    animation: fadeUp 0.5s 0.08s ease both;
   }
 
   .hero h1 em {
@@ -178,283 +199,643 @@ const css = `
     color: var(--verde);
   }
 
-  .hero p {
-    font-size: clamp(16px, 2vw, 20px);
-    color: rgba(250,250,248,0.6);
-    max-width: 520px;
-    line-height: 1.6;
+  .hero-sub {
+    font-size: clamp(15px, 1.8vw, 19px);
+    color: rgba(15,23,42,0.55);
+    max-width: 500px;
+    line-height: 1.65;
     font-weight: 300;
-    margin-bottom: 48px;
-    animation: fadeUp 0.6s 0.2s ease both;
+    margin-bottom: 44px;
+    position: relative;
+    z-index: 1;
+    animation: fadeUp 0.5s 0.16s ease both;
   }
 
   .hero-actions {
     display: flex;
-    gap: 16px;
+    gap: 12px;
     align-items: center;
     flex-wrap: wrap;
     justify-content: center;
-    animation: fadeUp 0.6s 0.3s ease both;
+    position: relative;
+    z-index: 1;
+    animation: fadeUp 0.5s 0.24s ease both;
   }
 
   .btn-primary {
     background: var(--verde);
-    color: var(--negro);
-    padding: 14px 32px;
+    color: #fff;
+    padding: 14px 28px;
     border-radius: 10px;
-    font-size: 16px;
+    font-size: 15px;
     font-weight: 600;
     text-decoration: none;
     display: inline-flex;
     align-items: center;
     gap: 8px;
     transition: all 0.2s;
+    box-shadow: 0 4px 20px rgba(29,158,117,0.25);
   }
-  .btn-primary:hover { background: var(--verde-medio); transform: translateY(-2px); box-shadow: 0 8px 32px rgba(29,158,117,0.3); }
+  .btn-primary:hover { background: #18b584; transform: translateY(-2px); box-shadow: 0 8px 32px rgba(29,158,117,0.35); }
 
-  .btn-secondary {
-    color: rgba(250,250,248,0.7);
-    padding: 14px 24px;
+  .btn-ghost {
+    color: rgba(15,23,42,0.6);
+    padding: 14px 22px;
     border-radius: 10px;
-    font-size: 15px;
+    font-size: 14px;
     font-weight: 400;
     text-decoration: none;
     display: inline-flex;
     align-items: center;
-    gap: 8px;
+    gap: 6px;
     transition: color 0.2s;
   }
-  .btn-secondary:hover { color: var(--blanco); }
+  .btn-ghost:hover { color: var(--blanco); }
 
+  /* ── HERO VISUAL: split phone + browser ── */
   .hero-visual {
-    margin-top: 80px;
+    margin-top: 72px;
     width: 100%;
-    max-width: 900px;
-    position: relative;
-    animation: fadeUp 0.8s 0.4s ease both;
-  }
-
-  .mockup-frame {
-    background: #111110;
-    border: 1px solid rgba(255,255,255,0.1);
-    border-radius: 16px;
-    padding: 0;
-    overflow: hidden;
-    box-shadow: 0 40px 120px rgba(0,0,0,0.6), 0 0 0 1px rgba(29,158,117,0.1);
-  }
-
-  .mockup-topbar {
-    background: #1A1A18;
-    border-bottom: 1px solid rgba(255,255,255,0.07);
-    padding: 14px 20px;
-    display: flex;
-    align-items: center;
-    gap: 8px;
-  }
-
-  .dot { width: 10px; height: 10px; border-radius: 50%; }
-  .dot-r { background: #FF5F57; }
-  .dot-y { background: #FFBD2E; }
-  .dot-g { background: #28CA41; }
-
-  .mockup-url {
-    margin-left: 12px;
-    background: rgba(255,255,255,0.05);
-    border-radius: 6px;
-    padding: 4px 16px;
-    font-size: 12px;
-    color: rgba(250,250,248,0.3);
-  }
-
-  .mockup-body {
+    max-width: 960px;
     display: grid;
-    grid-template-columns: 220px 1fr;
-    min-height: 340px;
+    grid-template-columns: 260px 1fr;
+    gap: 24px;
+    align-items: end;
+    position: relative;
+    z-index: 1;
+    animation: fadeUp 0.7s 0.32s ease both;
   }
 
-  .mockup-sidebar {
-    background: #161614;
-    border-right: 1px solid rgba(255,255,255,0.06);
-    padding: 20px 16px;
+  /* phone mockup */
+  .phone-frame {
+    background: #ffffff;
+    border: 2px solid rgba(0,0,0,0.08);
+    border-radius: 36px;
+    overflow: hidden;
+    box-shadow: 0 32px 80px rgba(0,0,0,0.08), 0 0 0 1px rgba(29,158,117,0.08);
+    position: relative;
+    padding-bottom: 16px;
   }
 
-  .sidebar-logo {
+  .phone-notch {
+    background: #ffffff;
+    height: 28px;
     display: flex;
     align-items: center;
-    gap: 8px;
-    padding: 8px;
-    margin-bottom: 24px;
+    justify-content: center;
+    position: relative;
   }
 
-  .sidebar-logo-icon {
-    width: 28px; height: 28px;
+  .phone-notch-bar {
+    width: 80px; height: 14px;
+    background: #f1f5f9;
+    border-radius: 0 0 10px 10px;
+  }
+
+  .phone-status-bar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 2px 20px 8px;
+    font-size: 10px;
+    color: rgba(15,23,42,0.4);
+  }
+
+  .phone-body { padding: 0 16px 8px; }
+
+  .phone-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px 0 14px;
+  }
+
+  .phone-site-badge {
+    background: rgba(29,158,117,0.15);
+    border: 1px solid rgba(29,158,117,0.25);
+    border-radius: 100px;
+    padding: 3px 10px;
+    font-size: 10px;
+    color: var(--verde-medio);
+    font-weight: 600;
+  }
+
+  .phone-gps {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 10px;
+    color: var(--verde-medio);
+  }
+  .gps-dot {
+    width: 6px; height: 6px;
     background: var(--verde);
-    border-radius: 6px;
+    border-radius: 50%;
+  }
+
+  .phone-avatar-area {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+    padding: 12px 0 16px;
+  }
+
+  .phone-avatar {
+    width: 64px; height: 64px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, rgba(29,158,117,0.3), rgba(29,158,117,0.1));
+    border: 2px solid rgba(29,158,117,0.4);
     display: flex;
     align-items: center;
     justify-content: center;
     font-family: 'DM Serif Display', serif;
-    font-size: 14px;
-    color: var(--negro);
+    font-size: 22px;
+    color: var(--verde-medio);
+    overflow: hidden;
+    position: relative;
+  }
+
+  .phone-avatar-img {
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(180deg, rgba(29,158,117,0.15) 0%, rgba(255,255,255,0) 100%);
+  }
+
+  .phone-emp-name {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--blanco);
+    text-align: center;
+  }
+
+  .phone-emp-role {
+    font-size: 10px;
+    color: var(--gris-claro);
+    text-align: center;
+  }
+
+  .phone-kpis {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+    margin-bottom: 14px;
+  }
+
+  .phone-kpi {
+    background: rgba(0,0,0,0.03);
+    border: 1px solid rgba(0,0,0,0.05);
+    border-radius: 10px;
+    padding: 10px;
+    text-align: center;
+  }
+
+  .phone-kpi-val {
+    font-size: 18px;
+    font-weight: 700;
+    color: var(--verde-medio);
+    display: block;
+    line-height: 1;
+    margin-bottom: 4px;
+  }
+
+  .phone-kpi-label {
+    font-size: 9px;
+    color: var(--gris-claro);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+
+  .phone-btn-in {
+    width: 100%;
+    background: var(--verde);
+    color: #fff;
+    border: none;
+    border-radius: 12px;
+    padding: 13px;
+    font-size: 13px;
+    font-weight: 700;
+    margin-bottom: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    cursor: default;
+  }
+
+  .phone-btn-out {
+    width: 100%;
+    background: rgba(0,0,0,0.04);
+    color: rgba(15,23,42,0.5);
+    border: 1px solid rgba(0,0,0,0.07);
+    border-radius: 12px;
+    padding: 11px;
+    font-size: 12px;
+    font-weight: 500;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    cursor: default;
+  }
+
+  /* browser mockup */
+  .browser-frame {
+    background: #ffffff;
+    border: 1px solid rgba(0,0,0,0.07);
+    border-radius: 14px;
+    overflow: hidden;
+    box-shadow: 0 32px 80px rgba(0,0,0,0.06), 0 0 0 1px rgba(29,158,117,0.06);
+  }
+
+  .browser-bar {
+    background: #f8fafc;
+    border-bottom: 1px solid rgba(0,0,0,0.05);
+    padding: 10px 16px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .b-dot { width: 9px; height: 9px; border-radius: 50%; }
+  .b-r { background: #FF5F57; }
+  .b-y { background: #FFBD2E; }
+  .b-g { background: #28CA41; }
+
+  .browser-url {
+    margin-left: 8px;
+    background: rgba(0,0,0,0.04);
+    border-radius: 5px;
+    padding: 4px 14px;
+    font-size: 11px;
+    color: rgba(249,250,251,0.3);
+    flex: 1;
+    max-width: 200px;
+  }
+
+  .admin-body {
+    display: grid;
+    grid-template-columns: 180px 1fr;
+    min-height: 280px;
+  }
+
+  .admin-sidebar {
+    background: #0f1724;
+    border-right: 1px solid rgba(0,0,0,0.05);
+    padding: 16px 12px;
+  }
+
+  .admin-sidebar-logo {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    padding: 6px 8px;
+    margin-bottom: 20px;
+  }
+
+  .asl-icon {
+    width: 24px; height: 24px;
+    background: var(--verde);
+    border-radius: 5px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 12px;
+    color: #fff;
     font-weight: bold;
   }
 
-  .sidebar-logo-text {
-    font-size: 14px;
-    font-weight: 600;
-    color: var(--blanco);
-  }
+  .asl-text { font-size: 12px; font-weight: 700; color: var(--blanco); }
 
-  .sidebar-item {
+  .admin-nav-item {
     display: flex;
     align-items: center;
-    gap: 10px;
-    padding: 9px 12px;
-    border-radius: 8px;
-    font-size: 13px;
-    color: rgba(250,250,248,0.45);
-    margin-bottom: 2px;
+    gap: 8px;
+    padding: 7px 10px;
+    border-radius: 7px;
+    font-size: 11.5px;
+    color: rgba(15,23,42,0.4);
+    margin-bottom: 1px;
   }
 
-  .sidebar-item.active {
+  .admin-nav-item.active {
     background: rgba(29,158,117,0.12);
     color: var(--verde-medio);
   }
 
-  .sidebar-dot {
-    width: 6px; height: 6px;
+  .admin-nav-dot {
+    width: 5px; height: 5px;
     border-radius: 50%;
     background: currentColor;
     flex-shrink: 0;
   }
 
-  .mockup-content { padding: 20px 24px; }
+  .admin-main { padding: 16px 20px; }
 
-  .content-header {
+  .admin-header {
     display: flex;
-    align-items: center;
     justify-content: space-between;
-    margin-bottom: 20px;
+    align-items: center;
+    margin-bottom: 14px;
   }
 
-  .content-title { font-size: 15px; font-weight: 600; color: var(--blanco); }
-  .content-date  { font-size: 12px; color: var(--gris); }
+  .admin-title { font-size: 13px; font-weight: 600; color: var(--blanco); }
+  .admin-date  { font-size: 10.5px; color: var(--gris); }
 
-  .stats-row {
+  .admin-stats {
     display: grid;
     grid-template-columns: repeat(3, 1fr);
-    gap: 12px;
-    margin-bottom: 20px;
+    gap: 8px;
+    margin-bottom: 14px;
   }
 
-  .stat-card {
+  .a-stat {
     background: rgba(255,255,255,0.03);
-    border: 1px solid rgba(255,255,255,0.07);
-    border-radius: 10px;
-    padding: 14px;
-  }
-
-  .stat-label { font-size: 11px; color: var(--gris); margin-bottom: 6px; }
-  .stat-value { font-size: 22px; font-weight: 600; font-family: 'DM Serif Display', serif; }
-  .stat-value.green  { color: var(--verde); }
-  .stat-value.yellow { color: #F5A623; }
-  .stat-value.red    { color: #E05252; }
-
-  .table-header {
-    display: grid;
-    grid-template-columns: 1fr 80px 80px 70px;
-    gap: 8px;
-    padding: 0 12px 8px;
-    font-size: 11px;
-    color: var(--gris);
-    border-bottom: 1px solid rgba(255,255,255,0.06);
-    margin-bottom: 8px;
-  }
-
-  .table-row {
-    display: grid;
-    grid-template-columns: 1fr 80px 80px 70px;
-    gap: 8px;
-    padding: 10px 12px;
+    border: 1px solid rgba(0,0,0,0.05);
     border-radius: 8px;
-    align-items: center;
-    font-size: 13px;
+    padding: 10px 12px;
   }
-  .table-row:hover { background: rgba(255,255,255,0.03); }
 
-  .employee-name { display: flex; align-items: center; gap: 8px; }
+  .a-stat-lbl { font-size: 9.5px; color: var(--gris); margin-bottom: 4px; }
+  .a-stat-val { font-size: 20px; font-weight: 700; font-family: 'DM Serif Display', serif; }
+  .a-stat-val.g { color: var(--verde); }
+  .a-stat-val.y { color: #F59E0B; }
+  .a-stat-val.r { color: #EF4444; }
 
-  .avatar {
-    width: 24px; height: 24px;
+  .a-table-hdr {
+    display: grid;
+    grid-template-columns: 1fr 60px 60px 62px;
+    gap: 6px;
+    padding: 0 10px 6px;
+    font-size: 9.5px;
+    color: var(--gris);
+    border-bottom: 1px solid rgba(0,0,0,0.05);
+    margin-bottom: 4px;
+  }
+
+  .a-table-row {
+    display: grid;
+    grid-template-columns: 1fr 60px 60px 62px;
+    gap: 6px;
+    padding: 7px 10px;
+    border-radius: 6px;
+    align-items: center;
+    font-size: 11.5px;
+  }
+  .a-table-row:hover { background: rgba(255,255,255,0.02); }
+
+  .a-emp { display: flex; align-items: center; gap: 6px; }
+
+  .a-av {
+    width: 20px; height: 20px;
     border-radius: 50%;
     display: flex;
     align-items: center;
     justify-content: center;
-    font-size: 10px;
-    font-weight: 600;
+    font-size: 8px;
+    font-weight: 700;
     flex-shrink: 0;
   }
 
-  .pill { display: inline-block; padding: 3px 10px; border-radius: 100px; font-size: 11px; font-weight: 500; }
-  .pill-green  { background: rgba(29,158,117,0.15); color: var(--verde-medio); }
-  .pill-yellow { background: rgba(245,166,35,0.15);  color: #F5A623; }
-  .pill-red    { background: rgba(224,82,82,0.15);   color: #E05252; }
+  .a-pill {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 100px;
+    font-size: 9.5px;
+    font-weight: 600;
+  }
+  .a-pill.g { background: rgba(29,158,117,0.15); color: var(--verde-medio); }
+  .a-pill.y { background: rgba(245,158,11,0.15); color: #F59E0B; }
+  .a-pill.r { background: rgba(239,68,68,0.15);  color: #EF4444; }
 
-  .features {
+  /* ── SECTION SHARED ── */
+  .section-label {
+    font-size: 11.5px;
+    font-weight: 600;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    color: var(--verde);
+    margin-bottom: 14px;
+  }
+
+  .section-title {
+    font-family: 'DM Serif Display', serif;
+    font-size: clamp(32px, 3.8vw, 50px);
+    line-height: 1.08;
+    letter-spacing: -1.5px;
+  }
+
+  .section-sub {
+    font-size: 16px;
+    color: rgba(15,23,42,0.5);
+    line-height: 1.65;
+    font-weight: 300;
+    margin-top: 16px;
+  }
+
+  /* ── COMO FUNCIONA ── */
+  .como {
     padding: 120px 48px;
     max-width: 1100px;
     margin: 0 auto;
   }
 
-  .section-label {
-    font-size: 12px;
-    font-weight: 600;
-    letter-spacing: 2px;
-    text-transform: uppercase;
-    color: var(--verde);
-    margin-bottom: 16px;
-  }
+  .como-header { max-width: 560px; margin-bottom: 72px; }
 
-  .section-title {
-    font-family: 'DM Serif Display', serif;
-    font-size: clamp(36px, 4vw, 52px);
-    line-height: 1.1;
-    letter-spacing: -1.5px;
-    max-width: 560px;
-    margin-bottom: 64px;
-  }
-
-  .features-grid {
+  .steps-grid {
     display: grid;
     grid-template-columns: repeat(3, 1fr);
-    gap: 2px;
-    background: rgba(255,255,255,0.06);
-    border-radius: 16px;
-    overflow: hidden;
+    gap: 32px;
+    position: relative;
   }
 
-  .feature-card { background: var(--negro); padding: 40px 32px; transition: background 0.2s; }
-  .feature-card:hover { background: #1f1f1d; }
+  .steps-grid::before {
+    content: '';
+    position: absolute;
+    top: 30px;
+    left: calc(16.66% + 20px);
+    right: calc(16.66% + 20px);
+    height: 1px;
+    background: linear-gradient(90deg, var(--verde) 0%, rgba(29,158,117,0.15) 100%);
+    pointer-events: none;
+  }
 
-  .feature-icon {
-    width: 44px; height: 44px;
-    background: rgba(29,158,117,0.12);
-    border: 1px solid rgba(29,158,117,0.2);
-    border-radius: 10px;
+  .step {
+    position: relative;
+  }
+
+  .step-number {
+    width: 48px; height: 48px;
+    border-radius: 50%;
+    background: rgba(29,158,117,0.1);
+    border: 1.5px solid rgba(29,158,117,0.35);
     display: flex;
     align-items: center;
     justify-content: center;
-    font-size: 20px;
-    margin-bottom: 20px;
+    font-family: 'DM Serif Display', serif;
+    font-size: 18px;
+    color: var(--verde);
+    margin-bottom: 24px;
+    position: relative;
+    z-index: 1;
   }
 
-  .feature-title { font-size: 17px; font-weight: 600; margin-bottom: 10px; color: var(--blanco); }
-  .feature-desc  { font-size: 14px; color: rgba(250,250,248,0.5); line-height: 1.6; font-weight: 300; }
+  .step-icon {
+    font-size: 22px;
+    margin-bottom: 16px;
+    display: block;
+  }
 
-  .divider { border: none; border-top: 1px solid rgba(255,255,255,0.07); margin: 0 48px; }
+  .step-title {
+    font-size: 17px;
+    font-weight: 600;
+    color: var(--blanco);
+    margin-bottom: 10px;
+    line-height: 1.3;
+  }
 
+  .step-desc {
+    font-size: 14px;
+    color: rgba(15,23,42,0.5);
+    line-height: 1.65;
+    font-weight: 300;
+  }
+
+  /* ── BENEFICIOS ── */
+  .beneficios {
+    padding: 0 48px 120px;
+    max-width: 1100px;
+    margin: 0 auto;
+  }
+
+  .bene-header {
+    max-width: 640px;
+    margin-bottom: 60px;
+  }
+
+  .bene-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 16px;
+  }
+
+  .bene-card {
+    background: var(--negro2);
+    border: 1px solid rgba(0,0,0,0.05);
+    border-radius: 16px;
+    padding: 32px;
+    transition: border-color 0.2s, background 0.2s;
+  }
+  .bene-card:hover { border-color: rgba(29,158,117,0.2); background: #141e2f; }
+
+  .bene-card.featured {
+    background: linear-gradient(135deg, rgba(29,158,117,0.12) 0%, rgba(10,14,26,0) 60%);
+    border-color: rgba(29,158,117,0.2);
+  }
+
+  .bene-icon {
+    font-size: 28px;
+    margin-bottom: 16px;
+    display: block;
+  }
+
+  .bene-title {
+    font-size: 18px;
+    font-weight: 600;
+    color: var(--blanco);
+    margin-bottom: 10px;
+    line-height: 1.3;
+  }
+
+  .bene-desc {
+    font-size: 14px;
+    color: rgba(15,23,42,0.5);
+    line-height: 1.65;
+    font-weight: 300;
+  }
+
+  .bene-quote {
+    margin-top: 20px;
+    padding-top: 20px;
+    border-top: 1px solid rgba(0,0,0,0.05);
+    font-size: 13px;
+    color: var(--verde-medio);
+    font-style: italic;
+    font-weight: 400;
+  }
+
+  /* ── CTA BANNER ── */
+  .cta-banner {
+    margin: 0 48px 80px;
+    max-width: 1004px;
+    margin-left: auto;
+    margin-right: auto;
+    background: linear-gradient(135deg, rgba(29,158,117,0.15) 0%, rgba(10,14,26,0) 60%);
+    border: 1px solid rgba(29,158,117,0.25);
+    border-radius: 20px;
+    padding: 64px 80px;
+    text-align: center;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .cta-banner::before {
+    content: '';
+    position: absolute;
+    top: -80px; left: 50%;
+    transform: translateX(-50%);
+    width: 400px; height: 300px;
+    background: radial-gradient(ellipse, rgba(29,158,117,0.2) 0%, transparent 70%);
+    pointer-events: none;
+  }
+
+  .cta-banner h2 {
+    font-family: 'DM Serif Display', serif;
+    font-size: clamp(28px, 4vw, 46px);
+    line-height: 1.1;
+    letter-spacing: -1.5px;
+    max-width: 640px;
+    margin: 0 auto 16px;
+    position: relative;
+    z-index: 1;
+  }
+
+  .cta-banner h2 em { font-style: italic; color: var(--verde); }
+
+  .cta-banner p {
+    font-size: 16px;
+    color: rgba(15,23,42,0.55);
+    max-width: 440px;
+    margin: 0 auto 36px;
+    line-height: 1.6;
+    font-weight: 300;
+    position: relative;
+    z-index: 1;
+  }
+
+  .cta-banner-actions {
+    display: flex;
+    gap: 12px;
+    justify-content: center;
+    flex-wrap: wrap;
+    position: relative;
+    z-index: 1;
+  }
+
+  .cta-detail {
+    margin-top: 20px;
+    font-size: 12.5px;
+    color: rgba(249,250,251,0.3);
+    position: relative;
+    z-index: 1;
+  }
+
+  /* ── DIVIDER ── */
+  .divider { border: none; border-top: 1px solid rgba(0,0,0,0.05); margin: 0 48px; }
+
+  /* ── CONTACT ── */
   .contact {
-    padding: 120px 48px;
+    padding: 100px 48px;
     max-width: 1100px;
     margin: 0 auto;
     display: grid;
@@ -465,123 +846,157 @@ const css = `
 
   .contact-left h2 {
     font-family: 'DM Serif Display', serif;
-    font-size: clamp(36px, 4vw, 52px);
+    font-size: clamp(32px, 3.8vw, 48px);
     line-height: 1.1;
     letter-spacing: -1.5px;
-    margin-bottom: 20px;
+    margin-bottom: 18px;
   }
 
   .contact-left p {
-    font-size: 16px;
-    color: rgba(250,250,248,0.5);
+    font-size: 15px;
+    color: rgba(15,23,42,0.5);
     line-height: 1.65;
     font-weight: 300;
-    margin-bottom: 40px;
+    margin-bottom: 36px;
   }
 
-  .contact-details { display: flex; flex-direction: column; gap: 16px; }
+  .contact-details { display: flex; flex-direction: column; gap: 14px; }
 
   .contact-item {
     display: flex;
     align-items: center;
     gap: 12px;
-    font-size: 15px;
-    color: rgba(250,250,248,0.7);
+    font-size: 14px;
+    color: rgba(249,250,251,0.65);
   }
 
   .contact-item-icon {
-    width: 36px; height: 36px;
+    width: 34px; height: 34px;
     background: rgba(29,158,117,0.1);
     border-radius: 8px;
     display: flex;
     align-items: center;
     justify-content: center;
-    font-size: 16px;
+    font-size: 15px;
     flex-shrink: 0;
   }
 
+  /* ── CONTACT FORM ── */
   .contact-form {
-    background: #111110;
+    background: var(--negro2);
     border: 1px solid rgba(255,255,255,0.09);
     border-radius: 16px;
     padding: 40px;
   }
 
-  .form-title    { font-size: 18px; font-weight: 600; margin-bottom: 8px; }
-  .form-subtitle { font-size: 14px; color: var(--gris); margin-bottom: 32px; }
-  .form-group    { margin-bottom: 20px; }
+  .form-title    { font-size: 17px; font-weight: 600; margin-bottom: 6px; }
+  .form-subtitle { font-size: 13px; color: var(--gris); margin-bottom: 28px; }
+  .form-group    { margin-bottom: 18px; }
 
   .form-label {
     display: block;
-    font-size: 13px;
+    font-size: 12.5px;
     font-weight: 500;
-    color: rgba(250,250,248,0.6);
-    margin-bottom: 8px;
+    color: rgba(15,23,42,0.55);
+    margin-bottom: 7px;
   }
 
   .form-input {
     width: 100%;
-    background: rgba(255,255,255,0.04);
-    border: 1px solid rgba(255,255,255,0.1);
+    background: rgba(0,0,0,0.03);
+    border: 1px solid rgba(0,0,0,0.07);
     border-radius: 8px;
-    padding: 12px 16px;
+    padding: 11px 14px;
     font-size: 14px;
     color: var(--blanco);
     font-family: 'DM Sans', sans-serif;
     transition: border-color 0.2s;
     outline: none;
   }
-  .form-input::placeholder { color: rgba(250,250,248,0.25); }
+  .form-input::placeholder { color: rgba(249,250,251,0.2); }
   .form-input:focus { border-color: var(--verde); }
 
-  textarea.form-input { resize: vertical; min-height: 100px; }
+  textarea.form-input { resize: vertical; min-height: 90px; }
 
-  .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
 
   .btn-submit {
     width: 100%;
     background: var(--verde);
-    color: var(--negro);
+    color: #fff;
     border: none;
-    padding: 14px;
+    padding: 13px;
     border-radius: 8px;
-    font-size: 15px;
+    font-size: 14px;
     font-weight: 600;
     font-family: 'DM Sans', sans-serif;
     cursor: pointer;
-    margin-top: 8px;
+    margin-top: 6px;
     transition: all 0.2s;
   }
-  .btn-submit:hover { background: var(--verde-medio); transform: translateY(-1px); }
+  .btn-submit:hover { background: #18b584; transform: translateY(-1px); }
 
+  /* ── FOOTER ── */
   footer {
-    border-top: 1px solid rgba(255,255,255,0.07);
-    padding: 40px 48px;
+    border-top: 1px solid rgba(0,0,0,0.05);
+    padding: 36px 48px;
     display: flex;
     align-items: center;
     justify-content: space-between;
   }
 
-  .footer-copy  { font-size: 13px; color: rgba(250,250,248,0.3); }
+  .footer-copy  { font-size: 12.5px; color: rgba(249,250,251,0.25); }
   .footer-links { display: flex; gap: 24px; }
-  .footer-link  { font-size: 13px; color: rgba(250,250,248,0.3); text-decoration: none; transition: color 0.2s; }
-  .footer-link:hover { color: rgba(250,250,248,0.7); }
+  .footer-link  { font-size: 12.5px; color: rgba(249,250,251,0.25); text-decoration: none; transition: color 0.2s; }
+  .footer-link:hover { color: rgba(15,23,42,0.6); }
 
   @keyframes fadeUp {
-    from { opacity: 0; transform: translateY(20px); }
+    from { opacity: 0; transform: translateY(18px); }
     to   { opacity: 1; transform: translateY(0); }
   }
 
+  /* ── MOBILE ── */
   @media (max-width: 768px) {
-    nav { padding: 16px 20px; }
+    nav { padding: 12px 16px; }
+    .nav-cta { gap: 8px; }
     .nav-cta .nav-link { display: none; }
-    .features { padding: 80px 20px; }
-    .features-grid { grid-template-columns: 1fr; }
-    .contact { grid-template-columns: 1fr; padding: 80px 20px; gap: 48px; }
-    footer { flex-direction: column; gap: 16px; text-align: center; padding: 32px 20px; }
-    .mockup-body { grid-template-columns: 1fr; }
-    .mockup-sidebar { display: none; }
+    .btn-nav { padding: 7px 12px; font-size: 12px; }
+    .btn-nav-primary { padding: 7px 12px; font-size: 12px; }
+    .btn-nav .txt-full { display: none; }
+    .btn-nav .txt-short { display: inline; }
+    .btn-nav-primary .txt-full { display: none; }
+    .btn-nav-primary .txt-short { display: inline; }
+  }
+
+  @media (max-width: 400px) {
+    nav { padding: 10px 12px; }
+    .nav-cta { gap: 6px; }
+    .btn-nav { padding: 6px 10px; font-size: 11px; }
+    .btn-nav-primary { padding: 6px 10px; font-size: 11px; }
+  }
+
+  @media (max-width: 768px) {
+
+    .hero { padding: 100px 20px 60px; }
+    .hero h1 { letter-spacing: -1px; }
+
+    .hero-visual { grid-template-columns: 1fr; max-width: 300px; }
+    .phone-frame { max-width: 260px; margin: 0 auto; }
+    .browser-frame { display: none; }
+
+    .como { padding: 80px 20px; }
+    .steps-grid { grid-template-columns: 1fr; gap: 40px; }
+    .steps-grid::before { display: none; }
+
+    .beneficios { padding: 0 20px 80px; }
+    .bene-grid { grid-template-columns: 1fr; }
+
+    .cta-banner { margin: 0 16px 60px; padding: 48px 28px; }
+
+    .contact { grid-template-columns: 1fr; padding: 80px 20px; gap: 40px; }
     .form-grid { grid-template-columns: 1fr; }
+    footer { flex-direction: column; gap: 14px; text-align: center; padding: 28px 20px; }
+    .divider { margin: 0 20px; }
   }
 `
 
@@ -590,165 +1005,295 @@ export default function Home() {
     <>
       <style dangerouslySetInnerHTML={{ __html: css }} />
 
-      {/* NAV */}
+      {/* ── NAV ── */}
       <nav>
         <a href="#" className="logo">
           <div className="logo-icon">W</div>
           <span className="logo-text">Worktic</span>
         </a>
         <div className="nav-cta">
-          <a href="#caracteristicas" className="nav-link">Características</a>
+          <a href="#como-funciona" className="nav-link">Cómo funciona</a>
           <a href="#contacto" className="nav-link">Contacto</a>
-          <a href="https://gmontalvo-asistencia.vercel.app/admin" className="btn-nav">Iniciar sesión →</a>
+          <a href="/registro" className="btn-nav-primary">
+            <span className="txt-full">Crear cuenta gratis</span>
+            <span className="txt-short">Crear cuenta</span>
+          </a>
+          <a href="/admin/login" className="btn-nav">
+            <span className="txt-full">Iniciar sesión →</span>
+            <span className="txt-short">Entrar →</span>
+          </a>
         </div>
       </nav>
 
-      {/* HERO */}
+      {/* ── HERO ── */}
       <section className="hero">
-        <div className="hero-glow"></div>
+        <div className="hero-bg-glow"></div>
+        <div className="hero-bg-grid"></div>
+
         <div className="badge">
           <span className="badge-dot"></span>
           Control de asistencia para negocios reales
         </div>
-        <h1>Sabe quién trabaja,<br /><em>cuándo y dónde.</em></h1>
-        <p>Worktic es la plataforma de gestión de asistencia diseñada para equipos en campo. Sin apps complejas. Entra, marca, listo.</p>
+
+        <h1>Deja de adivinar<br /><em>quién vino a trabajar.</em></h1>
+
+        <p className="hero-sub">
+          Worktic registra entrada, salida y ubicación con QR + GPS.
+          Sin apps que instalar. Sin excusas. Tú ves todo en tiempo real.
+        </p>
+
         <div className="hero-actions">
-          <a href="#contacto" className="btn-primary">
-            Solicitar demo
-            <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-              <path d="M3 8h10M9 4l4 4-4 4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+          <a href="/registro" className="btn-primary">
+            Empezar gratis
+            <svg width="15" height="15" viewBox="0 0 16 16" fill="none">
+              <path d="M3 8h10M9 4l4 4-4 4" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
             </svg>
           </a>
-          <a href="#caracteristicas" className="btn-secondary">
-            Ver características
-            <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
+          <a href="#como-funciona" className="btn-ghost">
+            Ver cómo funciona
+            <svg width="13" height="13" viewBox="0 0 16 16" fill="none">
               <path d="M8 3v10M3 8l5 5 5-5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
             </svg>
           </a>
         </div>
 
-        {/* MOCKUP */}
+        {/* HERO VISUAL */}
         <div className="hero-visual">
-          <div className="mockup-frame">
-            <div className="mockup-topbar">
-              <div className="dot dot-r"></div>
-              <div className="dot dot-y"></div>
-              <div className="dot dot-g"></div>
-              <div className="mockup-url">worktic.app/admin</div>
+
+          {/* Phone: check-in screen */}
+          <div className="phone-frame">
+            <div className="phone-notch">
+              <div className="phone-notch-bar"></div>
             </div>
-            <div className="mockup-body">
-              <div className="mockup-sidebar">
-                <div className="sidebar-logo">
-                  <div className="sidebar-logo-icon">W</div>
-                  <span className="sidebar-logo-text">Worktic</span>
+            <div className="phone-status-bar">
+              <span>9:41</span>
+              <span>●●● 100%</span>
+            </div>
+            <div className="phone-body">
+              <div className="phone-header">
+                <div className="phone-site-badge">📍 Sucursal Centro</div>
+                <div className="phone-gps">
+                  <div className="gps-dot"></div>
+                  GPS OK
                 </div>
-                <div className="sidebar-item active"><span className="sidebar-dot"></span> Asistencia</div>
-                <div className="sidebar-item"><span className="sidebar-dot"></span> Empleados</div>
-                <div className="sidebar-item"><span className="sidebar-dot"></span> Sitios</div>
-                <div className="sidebar-item"><span className="sidebar-dot"></span> Horarios</div>
-                <div className="sidebar-item"><span className="sidebar-dot"></span> Reportes</div>
               </div>
-              <div className="mockup-content">
-                <div className="content-header">
-                  <span className="content-title">Hoy — Semana 12</span>
-                  <span className="content-date">Martes 24 mar 2026</span>
+
+              <div className="phone-avatar-area">
+                <div className="phone-avatar">
+                  JL
+                  <div className="phone-avatar-img"></div>
                 </div>
-                <div className="stats-row">
-                  <div className="stat-card">
-                    <div className="stat-label">A tiempo</div>
-                    <div className="stat-value green">14</div>
+                <div className="phone-emp-name">Juan López</div>
+                <div className="phone-emp-role">Vendedor • Turno matutino</div>
+              </div>
+
+              <div className="phone-kpis">
+                <div className="phone-kpi">
+                  <span className="phone-kpi-val">18</span>
+                  <div className="phone-kpi-label">Días trabajados</div>
+                </div>
+                <div className="phone-kpi">
+                  <span className="phone-kpi-val" style={{ color: '#F59E0B' }}>94%</span>
+                  <div className="phone-kpi-label">Puntualidad</div>
+                </div>
+              </div>
+
+              <div className="phone-btn-in">
+                <span>✓</span> Registrar entrada
+              </div>
+              <div className="phone-btn-out">
+                Registrar salida
+              </div>
+            </div>
+          </div>
+
+          {/* Browser: admin dashboard */}
+          <div className="browser-frame">
+            <div className="browser-bar">
+              <div className="b-dot b-r"></div>
+              <div className="b-dot b-y"></div>
+              <div className="b-dot b-g"></div>
+              <div className="browser-url">worktic.app/admin</div>
+            </div>
+            <div className="admin-body">
+              <div className="admin-sidebar">
+                <div className="admin-sidebar-logo">
+                  <div className="asl-icon">W</div>
+                  <span className="asl-text">Worktic</span>
+                </div>
+                <div className="admin-nav-item active"><span className="admin-nav-dot"></span> Asistencia</div>
+                <div className="admin-nav-item"><span className="admin-nav-dot"></span> Empleados</div>
+                <div className="admin-nav-item"><span className="admin-nav-dot"></span> Sitios</div>
+                <div className="admin-nav-item"><span className="admin-nav-dot"></span> Horarios</div>
+                <div className="admin-nav-item"><span className="admin-nav-dot"></span> Reportes</div>
+              </div>
+
+              <div className="admin-main">
+                <div className="admin-header">
+                  <span className="admin-title">Hoy — Semana 12</span>
+                  <span className="admin-date">Vie 27 mar 2026</span>
+                </div>
+
+                <div className="admin-stats">
+                  <div className="a-stat">
+                    <div className="a-stat-lbl">A tiempo</div>
+                    <div className="a-stat-val g">14</div>
                   </div>
-                  <div className="stat-card">
-                    <div className="stat-label">Tardanza</div>
-                    <div className="stat-value yellow">2</div>
+                  <div className="a-stat">
+                    <div className="a-stat-lbl">Tardanza</div>
+                    <div className="a-stat-val y">2</div>
                   </div>
-                  <div className="stat-card">
-                    <div className="stat-label">Ausentes</div>
-                    <div className="stat-value red">1</div>
+                  <div className="a-stat">
+                    <div className="a-stat-lbl">Ausentes</div>
+                    <div className="a-stat-val r">1</div>
                   </div>
                 </div>
-                <div className="table-header">
+
+                <div className="a-table-hdr">
                   <span>Empleado</span><span>Entrada</span><span>Salida</span><span>Estado</span>
                 </div>
-                <div className="table-row">
-                  <div className="employee-name">
-                    <div className="avatar" style={{ background: 'rgba(29,158,117,0.2)', color: '#5DCAA5' }}>JL</div>
+                <div className="a-table-row">
+                  <div className="a-emp">
+                    <div className="a-av" style={{ background: 'rgba(29,158,117,0.2)', color: '#5DCAA5' }}>JL</div>
                     Juan López
                   </div>
-                  <span style={{ color: 'rgba(250,250,248,.6)' }}>09:01</span>
-                  <span style={{ color: 'rgba(250,250,248,.6)' }}>18:58</span>
-                  <span className="pill pill-green">✓ OK</span>
+                  <span style={{ color: 'rgba(249,250,251,.55)' }}>09:01</span>
+                  <span style={{ color: 'rgba(249,250,251,.55)' }}>18:58</span>
+                  <span className="a-pill g">✓ OK</span>
                 </div>
-                <div className="table-row">
-                  <div className="employee-name">
-                    <div className="avatar" style={{ background: 'rgba(245,166,35,0.2)', color: '#F5A623' }}>AG</div>
+                <div className="a-table-row">
+                  <div className="a-emp">
+                    <div className="a-av" style={{ background: 'rgba(245,158,11,0.2)', color: '#F59E0B' }}>AG</div>
                     Ana García
                   </div>
-                  <span style={{ color: 'rgba(250,250,248,.6)' }}>09:18</span>
-                  <span style={{ color: 'rgba(250,250,248,.6)' }}>—</span>
-                  <span className="pill pill-yellow">⚠ Tarde</span>
+                  <span style={{ color: 'rgba(249,250,251,.55)' }}>09:18</span>
+                  <span style={{ color: 'rgba(249,250,251,.55)' }}>—</span>
+                  <span className="a-pill y">⚠ Tarde</span>
                 </div>
-                <div className="table-row">
-                  <div className="employee-name">
-                    <div className="avatar" style={{ background: 'rgba(224,82,82,0.2)', color: '#E05252' }}>MR</div>
+                <div className="a-table-row">
+                  <div className="a-emp">
+                    <div className="a-av" style={{ background: 'rgba(239,68,68,0.2)', color: '#EF4444' }}>MR</div>
                     Mario Ruiz
                   </div>
-                  <span style={{ color: 'rgba(250,250,248,.6)' }}>—</span>
-                  <span style={{ color: 'rgba(250,250,248,.6)' }}>—</span>
-                  <span className="pill pill-red">✕ Ausente</span>
+                  <span style={{ color: 'rgba(249,250,251,.55)' }}>—</span>
+                  <span style={{ color: 'rgba(249,250,251,.55)' }}>—</span>
+                  <span className="a-pill r">✕ Ausente</span>
                 </div>
               </div>
+            </div>
+          </div>
+
+        </div>
+      </section>
+
+      {/* ── CÓMO FUNCIONA ── */}
+      <section className="como" id="como-funciona">
+        <div className="como-header">
+          <div className="section-label">Cómo funciona</div>
+          <h2 className="section-title">Tres pasos.<br />Cero fricción.</h2>
+          <p className="section-sub">
+            Sin apps que descargar, sin hardware especial. Solo un código QR y el celular que ya todos tienen.
+          </p>
+        </div>
+
+        <div className="steps-grid">
+          <div className="step">
+            <div className="step-number">1</div>
+            <span className="step-icon">🏪</span>
+            <div className="step-title">Coloca el QR en tu sucursal</div>
+            <div className="step-desc">
+              Imprime o muestra el código QR de cada sitio. Lo pegas en la entrada y listo. No necesitas nada más.
+            </div>
+          </div>
+          <div className="step">
+            <div className="step-number">2</div>
+            <span className="step-icon">📱</span>
+            <div className="step-title">El empleado escanea al llegar</div>
+            <div className="step-desc">
+              Abre la cámara, escanea, confirma con su email. El sistema valida que esté físicamente en el lugar con GPS.
+            </div>
+          </div>
+          <div className="step">
+            <div className="step-number">3</div>
+            <span className="step-icon">🔔</span>
+            <div className="step-title">Tú recibes notificación al instante</div>
+            <div className="step-desc">
+              Push o correo: quién llegó, a qué hora, desde dónde. Si no aparece, te avisamos antes de que empieces a preguntar.
             </div>
           </div>
         </div>
       </section>
 
-      {/* FEATURES */}
-      <section className="features" id="caracteristicas">
-        <div className="section-label">Características</div>
-        <h2 className="section-title">Todo lo que necesitas.<br />Nada que no.</h2>
-        <div className="features-grid">
-          <div className="feature-card">
-            <div className="feature-icon">📍</div>
-            <div className="feature-title">Check-in por QR + GPS</div>
-            <div className="feature-desc">El empleado escanea el QR de su sucursal. El sistema valida que esté físicamente en el lugar. Sin trampa posible.</div>
+      {/* ── BENEFICIOS ── */}
+      <section className="beneficios">
+        <div className="bene-header">
+          <div className="section-label">Por qué Worktic</div>
+          <h2 className="section-title">Control sin estar ahí.</h2>
+          <p className="section-sub">
+            Para equipos que trabajan en campo, en tienda, o en varios lugares al mismo tiempo.
+          </p>
+        </div>
+
+        <div className="bene-grid">
+          <div className="bene-card featured">
+            <span className="bene-icon">📍</span>
+            <div className="bene-title">Asistencia verificada con GPS</div>
+            <div className="bene-desc">
+              El sistema solo acepta el check-in si el empleado está físicamente dentro del radio de la sucursal. No hay forma de marcar desde casa.
+            </div>
+            <div className="bene-quote">"Ya no tengo que preguntar si llegaron. Me llega la notificación sola."</div>
           </div>
-          <div className="feature-card">
-            <div className="feature-icon">📸</div>
-            <div className="feature-title">Selfie de entrada y salida</div>
-            <div className="feature-desc">Foto automática en cada check-in y check-out. Registro visual inalterable, guardado en la nube.</div>
+
+          <div className="bene-card">
+            <span className="bene-icon">⏰</span>
+            <div className="bene-title">Alertas de tardanza y ausentismo</div>
+            <div className="bene-desc">
+              Si alguien no llegó a su hora, te enterás antes de que el día se arruine. Configura tolerancia y recibe alertas automáticas por push o correo.
+            </div>
           </div>
-          <div className="feature-card">
-            <div className="feature-icon">📅</div>
-            <div className="feature-title">Horarios flexibles</div>
-            <div className="feature-desc">Cada empleado puede tener sitio y horario diferente cada día. Sin plantillas rígidas. Ideal para equipos rotativos.</div>
+
+          <div className="bene-card">
+            <span className="bene-icon">📊</span>
+            <div className="bene-title">Menos seguimiento manual</div>
+            <div className="bene-desc">
+              Sin llamadas para saber quién está. Sin hojas de excel. Sin WhatsApp de confirmación. El panel te muestra en tiempo real el estado de cada persona.
+            </div>
           </div>
-          <div className="feature-card">
-            <div className="feature-icon">🏪</div>
-            <div className="feature-title">Multi-sucursal</div>
-            <div className="feature-desc">Administra todas tus tiendas desde un solo panel. Los gerentes solo ven sus ubicaciones asignadas.</div>
-          </div>
-          <div className="feature-card">
-            <div className="feature-icon">📊</div>
-            <div className="feature-title">Reportes en tiempo real</div>
-            <div className="feature-desc">Quién está presente, quién llegó tarde, quién no se presentó. Todo visible al instante, filtrable por semana y sucursal.</div>
-          </div>
-          <div className="feature-card">
-            <div className="feature-icon">💬</div>
-            <div className="feature-title">Sin apps que instalar</div>
-            <div className="feature-desc">Funciona desde el navegador del teléfono. El empleado solo necesita su correo la primera vez. Después, entra solo.</div>
+
+          <div className="bene-card featured">
+            <span className="bene-icon">🏆</span>
+            <div className="bene-title">Diseñado para equipos de ventas</div>
+            <div className="bene-desc">
+              Cada empleado ve su propia historial: días trabajados, puntualidad, racha. La transparencia motiva. Los datos no mienten.
+            </div>
+            <div className="bene-quote">"Mis vendedores compiten por quién tiene mejor puntualidad."</div>
           </div>
         </div>
       </section>
+
+      {/* ── CTA BANNER ── */}
+      <div className="cta-banner">
+        <h2>Prueba Worktic gratis.<br /><em>Sin instalación. Sin fricción.</em></h2>
+        <p>Con notificaciones desde el primer día. Configura tu primera sucursal en menos de 5 minutos.</p>
+        <div className="cta-banner-actions">
+          <a href="/registro" className="btn-primary" style={{ fontSize: 15, padding: '14px 32px' }}>
+            Empezar gratis →
+          </a>
+          <a href="#contacto" className="btn-ghost">
+            Hablar con alguien primero
+          </a>
+        </div>
+        <div className="cta-detail">Sin tarjeta de crédito · Sin compromisos · Cancela cuando quieras</div>
+      </div>
 
       <hr className="divider" />
 
-      {/* CONTACT */}
+      {/* ── CONTACT ── */}
       <section className="contact" id="contacto">
         <div className="contact-left">
           <div className="section-label">Contacto</div>
-          <h2>¿Listo para<br /><em style={{ fontStyle: 'italic', color: 'var(--verde)' }}>probarlo?</em></h2>
-          <p>Cuéntanos sobre tu negocio. Te mostramos cómo Worktic se adapta a tu operación y te damos acceso a una demo en vivo.</p>
+          <h2>¿Tienes<br /><em style={{ fontStyle: 'italic', color: 'var(--verde)' }}>preguntas?</em></h2>
+          <p>Cuéntanos sobre tu operación. Te mostramos cómo Worktic se adapta a tu negocio y te ayudamos a configurarlo desde cero.</p>
           <div className="contact-details">
             <div className="contact-item">
               <div className="contact-item-icon">✉️</div>
@@ -764,42 +1309,16 @@ export default function Home() {
             </div>
           </div>
         </div>
-        <div className="contact-form">
-          <div className="form-title">Solicitar demo</div>
-          <div className="form-subtitle">Sin compromisos. Te contactamos nosotros.</div>
-          <div className="form-grid">
-            <div className="form-group">
-              <label className="form-label">Nombre</label>
-              <input className="form-input" type="text" placeholder="Tu nombre" />
-            </div>
-            <div className="form-group">
-              <label className="form-label">Empresa</label>
-              <input className="form-input" type="text" placeholder="Nombre del negocio" />
-            </div>
-          </div>
-          <div className="form-group">
-            <label className="form-label">Correo electrónico</label>
-            <input className="form-input" type="email" placeholder="tu@empresa.com" />
-          </div>
-          <div className="form-group">
-            <label className="form-label">¿Cuántos empleados tienes?</label>
-            <input className="form-input" type="text" placeholder="Ej. 15 empleados en 3 sucursales" />
-          </div>
-          <div className="form-group">
-            <label className="form-label">Mensaje (opcional)</label>
-            <textarea className="form-input" placeholder="Cuéntanos sobre tu operación..."></textarea>
-          </div>
-          <button className="btn-submit">Enviar solicitud →</button>
-        </div>
+        <ContactForm />
       </section>
 
-      {/* FOOTER */}
+      {/* ── FOOTER ── */}
       <footer>
         <div className="footer-copy">© 2026 Worktic. Todos los derechos reservados.</div>
         <div className="footer-links">
           <a href="#" className="footer-link">Privacidad</a>
           <a href="#" className="footer-link">Términos</a>
-          <a href="https://gmontalvo-asistencia.vercel.app/admin" className="footer-link">Admin →</a>
+          <a href="/admin/login" className="footer-link">Admin →</a>
         </div>
       </footer>
     </>
