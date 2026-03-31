@@ -203,7 +203,7 @@ export default function AdminPage() {
   }, [toast])
   useEffect(() => { if (adminUser) load() }, [tab])
   if (authLoading) return (
-    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100vh', background: '#0a0e1a', color: '#8892a8', fontFamily: "'DM Sans'" }}>Cargando...</div>
+    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100vh', background: '#f8fafc', color: '#64748b', fontFamily: "'DM Sans'" }}>Cargando...</div>
   )
   const todaySchedules = schedules.filter(s => s.date === today)
   // Sort so latest record per employee comes first (supports multiple check-ins per day)
@@ -234,12 +234,12 @@ export default function AdminPage() {
       if (start) {
         const [sh, sm] = start.split(':').map(Number); const [nh, nm] = nowTime.split(':').map(Number)
         const diffMins = (nh * 60 + nm) - (sh * 60 + sm)
-        if (diffMins < 0) { color = '#8892a8'; bg = 'rgba(136,146,168,.1)'; statusLabel = 'Esperado' }
+        if (diffMins < 0) { color = '#64748b'; bg = 'rgba(136,146,168,.1)'; statusLabel = 'Esperado' }
         else if (diffMins === 0) { color = '#10b981'; bg = 'rgba(16,185,129,.12)'; statusLabel = 'En hora' }
         else if (diffMins <= grace) { color = '#f59e0b'; bg = 'rgba(245,158,11,.12)'; statusLabel = 'En tolerancia' }
         else if (diffMins <= absent) { color = '#f59e0b'; bg = 'rgba(245,158,11,.12)'; statusLabel = 'Tolerancia vencida' }
         else { color = '#ef4444'; bg = 'rgba(239,68,68,.12)'; statusLabel = 'No se presentó' }
-      } else { color = '#8892a8'; bg = 'rgba(136,146,168,.1)'; statusLabel = 'Esperado' }
+      } else { color = '#64748b'; bg = 'rgba(136,146,168,.1)'; statusLabel = 'Esperado' }
     }
     return { sc, emp, site, record, color, bg, statusLabel }
   })
@@ -344,91 +344,91 @@ export default function AdminPage() {
     return `${window.location.origin}/checkin/${code}`
   }
   if (loading) return (
-    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100vh', background: '#0a0e1a', color: '#8892a8', fontFamily: "'DM Sans'" }}>Cargando...</div>
+    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100vh', background: '#f8fafc', color: '#64748b', fontFamily: "'DM Sans'" }}>Cargando...</div>
   )
   if (empPage) {
     const empAtt = att.filter(r => r.employee_id === empPage.id)
     return (
-      <div style={{ background: '#0a0e1a', minHeight: '100vh', fontFamily: "'DM Sans', sans-serif", color: '#f1f5f9', display: 'flex', flexDirection: 'column' }}>
-        <div style={{ padding: '12px 18px', borderBottom: '1px solid #1e2a45', background: '#111827', display: 'flex', alignItems: 'center', gap: 12, flexShrink: 0 }}>
-          <button onClick={() => setEmpPage(null)} style={{ background: 'none', border: '1px solid #1e2a45', borderRadius: 7, color: '#8892a8', cursor: 'pointer', padding: '6px 14px', fontSize: 13, fontFamily: 'inherit', display: 'flex', alignItems: 'center', gap: 6 }}>← Volver</button>
+      <div style={{ background: '#f8fafc', minHeight: '100vh', fontFamily: "'DM Sans', sans-serif", color: '#0f172a', display: 'flex', flexDirection: 'column' }}>
+        <div style={{ padding: '12px 18px', borderBottom: '1px solid #e2e8f0', background: '#ffffff', display: 'flex', alignItems: 'center', gap: 12, flexShrink: 0 }}>
+          <button onClick={() => setEmpPage(null)} style={{ background: 'none', border: '1px solid #e2e8f0', borderRadius: 7, color: '#64748b', cursor: 'pointer', padding: '6px 14px', fontSize: 13, fontFamily: 'inherit', display: 'flex', alignItems: 'center', gap: 6 }}>← Volver</button>
           <div>
             <div style={{ fontSize: 15, fontWeight: 700 }}>{empPage.name}</div>
-            <div style={{ fontSize: 11, color: '#8892a8' }}>{empPage.email} · {empPage.role}</div>
+            <div style={{ fontSize: 11, color: '#64748b' }}>{empPage.email} · {empPage.role}</div>
           </div>
         </div>
         <EmpSidePanel emp={empPage} att={empAtt} sites={sites} onClose={() => setEmpPage(null)} onRefresh={load} fullPage />
       </div>
     )
   }
-  const inputStyle = { width: '100%', background: '#0d1220', border: '1px solid #1e2a45', color: '#f1f5f9', fontSize: 12, padding: '7px 10px', borderRadius: 6, outline: 'none', fontFamily: 'inherit' }
+  const inputStyle = { width: '100%', background: '#ffffff', border: '1px solid #e2e8f0', color: '#0f172a', fontSize: 12, padding: '7px 10px', borderRadius: 6, outline: 'none', fontFamily: 'inherit' }
   const selectStyle = { ...inputStyle }
   const activeCompany = isSuperAdmin
     ? (selectedCompanyId ? companies.find(c => c.id === selectedCompanyId) : null)
     : companies.find(c => c.id === adminUser?.company_id)
   return (
-    <div style={{ display: 'flex', height: '100vh', overflow: 'hidden', fontFamily: "'DM Sans', sans-serif", background: '#0a0e1a', color: '#f1f5f9' }}>
+    <div style={{ display: 'flex', height: '100vh', overflow: 'hidden', fontFamily: "'DM Sans', sans-serif", background: '#f8fafc', color: '#0f172a' }}>
       <style>{`@media(max-width:767px){.sb-overlay{display:block!important}}`}</style>
       {sidebarOpen && <div onClick={() => setSidebarOpen(false)} className="sb-overlay" style={{ display: 'none', position: 'fixed', inset: 0, background: 'rgba(0,0,0,.5)', zIndex: 99 }} />}
-      <div style={{ width: sidebarOpen ? 210 : 0, minWidth: sidebarOpen ? 210 : 0, background: '#111827', borderRight: sidebarOpen ? '1px solid #1e2a45' : 'none', display: 'flex', flexDirection: 'column', flexShrink: 0, overflow: 'hidden', transition: 'width .2s ease, min-width .2s ease', position: 'relative', zIndex: 100 }}>
+      <div style={{ width: sidebarOpen ? 210 : 0, minWidth: sidebarOpen ? 210 : 0, background: '#f1f5f9', borderRight: sidebarOpen ? '1px solid #e2e8f0' : 'none', display: 'flex', flexDirection: 'column', flexShrink: 0, overflow: 'hidden', transition: 'width .2s ease, min-width .2s ease', position: 'relative', zIndex: 100 }}>
         <div style={{ width: 210, display: 'flex', flexDirection: 'column', height: '100%' }}>
-          <div style={{ padding: 16, borderBottom: '1px solid #1e2a45', display: 'flex', alignItems: 'center', gap: 10 }}>
+          <div style={{ padding: 16, borderBottom: '1px solid #e2e8f0', display: 'flex', alignItems: 'center', gap: 10 }}>
             <img src="/logo.jpeg" style={{ width: 32, height: 32, borderRadius: 8 }} alt="GM" />
             <div>
               <div style={{ fontSize: 13, fontWeight: 700 }}>G.Montalvo</div>
-              <div style={{ fontSize: 9, color: '#8892a8' }}>Control de Asistencia</div>
+              <div style={{ fontSize: 9, color: '#64748b' }}>Control de Asistencia</div>
             </div>
           </div>
           {isSuperAdmin && (
-            <div style={{ padding: '8px 10px', borderBottom: '1px solid #1e2a45', background: 'rgba(59,130,246,.05)' }}>
-              <div style={{ fontSize: 9, color: '#4a5568', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '.5px', marginBottom: 4 }}>Empresa</div>
-              <select value={selectedCompanyId} onChange={e => setSelectedCompanyId(e.target.value)} style={{ width: '100%', background: '#0d1220', border: '1px solid #1e2a45', color: '#f1f5f9', fontSize: 11, padding: '5px 8px', borderRadius: 5, fontFamily: 'inherit' }}>
+            <div style={{ padding: '8px 10px', borderBottom: '1px solid #e2e8f0', background: 'rgba(59,130,246,.05)' }}>
+              <div style={{ fontSize: 9, color: '#94a3b8', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '.5px', marginBottom: 4 }}>Empresa</div>
+              <select value={selectedCompanyId} onChange={e => setSelectedCompanyId(e.target.value)} style={{ width: '100%', background: '#ffffff', border: '1px solid #e2e8f0', color: '#0f172a', fontSize: 11, padding: '5px 8px', borderRadius: 5, fontFamily: 'inherit' }}>
                 <option value=''>Todas</option>
                 {companies.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
               </select>
             </div>
           )}
           <nav style={{ flex: 1, padding: 8, display: 'flex', flexDirection: 'column', gap: 2 }}>
-            <div style={{ fontSize: 9, fontWeight: 600, textTransform: 'uppercase', letterSpacing: 1, color: '#4a5568', padding: '8px 8px 4px' }}>Principal</div>
+            <div style={{ fontSize: 9, fontWeight: 600, textTransform: 'uppercase', letterSpacing: 1, color: '#94a3b8', padding: '8px 8px 4px' }}>Principal</div>
             {[{ id: 'dashboard', lb: '🏠 Dashboard' }, { id: 'schedules', lb: '📅 Horarios' }, { id: 'alerts', lb: '🔔 Mis alertas' }, { id: 'attendance', lb: '✅ Asistencia' }, { id: 'competitions', lb: '🏆 Competencias' }].map(n => (
-              <button key={n.id} onClick={() => { setTab(n.id); if (window.innerWidth < 768) setSidebarOpen(false) }} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 10px', borderRadius: 6, cursor: 'pointer', fontSize: 12, fontWeight: 500, color: tab === n.id ? (n.id === 'alerts' ? '#f59e0b' : '#3b82f6') : '#8892a8', background: tab === n.id ? (n.id === 'alerts' ? 'rgba(245,158,11,.1)' : 'rgba(59,130,246,.12)') : 'transparent', border: 'none', width: '100%', textAlign: 'left', fontFamily: 'inherit' }}>{n.lb}</button>
+              <button key={n.id} onClick={() => { setTab(n.id); if (window.innerWidth < 768) setSidebarOpen(false) }} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 10px', borderRadius: 6, cursor: 'pointer', fontSize: 12, fontWeight: 500, color: tab === n.id ? (n.id === 'alerts' ? '#f59e0b' : '#3b82f6') : '#64748b', background: tab === n.id ? (n.id === 'alerts' ? 'rgba(245,158,11,.1)' : 'rgba(59,130,246,.12)') : 'transparent', border: 'none', width: '100%', textAlign: 'left', fontFamily: 'inherit' }}>{n.lb}</button>
             ))}
-            <div style={{ fontSize: 9, fontWeight: 600, textTransform: 'uppercase', letterSpacing: 1, color: '#4a5568', padding: '12px 8px 4px' }}>Gestión</div>
+            <div style={{ fontSize: 9, fontWeight: 600, textTransform: 'uppercase', letterSpacing: 1, color: '#94a3b8', padding: '12px 8px 4px' }}>Gestión</div>
             {[{ id: 'employees', lb: '👥 Empleados' }, { id: 'sites', lb: '📍 Sitios' }].map(n => (
-              <button key={n.id} onClick={() => { setTab(n.id); if (window.innerWidth < 768) setSidebarOpen(false) }} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 10px', borderRadius: 6, cursor: 'pointer', fontSize: 12, fontWeight: 500, color: tab === n.id ? '#3b82f6' : '#8892a8', background: tab === n.id ? 'rgba(59,130,246,.12)' : 'transparent', border: 'none', width: '100%', textAlign: 'left', fontFamily: 'inherit' }}>{n.lb}</button>
+              <button key={n.id} onClick={() => { setTab(n.id); if (window.innerWidth < 768) setSidebarOpen(false) }} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 10px', borderRadius: 6, cursor: 'pointer', fontSize: 12, fontWeight: 500, color: tab === n.id ? '#3b82f6' : '#64748b', background: tab === n.id ? 'rgba(59,130,246,.12)' : 'transparent', border: 'none', width: '100%', textAlign: 'left', fontFamily: 'inherit' }}>{n.lb}</button>
             ))}
             {(isSuperAdmin || isCompanyAdmin) && <>
-              <div style={{ fontSize: 9, fontWeight: 600, textTransform: 'uppercase', letterSpacing: 1, color: '#4a5568', padding: '12px 8px 4px' }}>Admin</div>
+              <div style={{ fontSize: 9, fontWeight: 600, textTransform: 'uppercase', letterSpacing: 1, color: '#94a3b8', padding: '12px 8px 4px' }}>Admin</div>
               {[{ id: 'users', lb: '🔑 Usuarios' }, ...(isSuperAdmin ? [{ id: 'companies', lb: '🏢 Empresas' }] : [])].map(n => (
-                <button key={n.id} onClick={() => { setTab(n.id); if (window.innerWidth < 768) setSidebarOpen(false) }} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 10px', borderRadius: 6, cursor: 'pointer', fontSize: 12, fontWeight: 500, color: tab === n.id ? '#3b82f6' : '#8892a8', background: tab === n.id ? 'rgba(59,130,246,.12)' : 'transparent', border: 'none', width: '100%', textAlign: 'left', fontFamily: 'inherit' }}>{n.lb}</button>
+                <button key={n.id} onClick={() => { setTab(n.id); if (window.innerWidth < 768) setSidebarOpen(false) }} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 10px', borderRadius: 6, cursor: 'pointer', fontSize: 12, fontWeight: 500, color: tab === n.id ? '#3b82f6' : '#64748b', background: tab === n.id ? 'rgba(59,130,246,.12)' : 'transparent', border: 'none', width: '100%', textAlign: 'left', fontFamily: 'inherit' }}>{n.lb}</button>
               ))}
             </>}
             {/* Instalar PWA */}
             <InstallButton style={{ marginTop: 8 }} />
             {/* Te escuchamos */}
-            <div style={{ marginTop: 8, borderTop: '1px solid #1e2a45', paddingTop: 8 }}>
+            <div style={{ marginTop: 8, borderTop: '1px solid #e2e8f0', paddingTop: 8 }}>
               <button onClick={() => setFeedbackOpen(true)}
                 style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 10px', borderRadius: 6, cursor: 'pointer', fontSize: 12, fontWeight: 600, color: feedbackLabel[0] === '💡' ? '#a78bfa' : '#10b981', background: feedbackLabel[0] === '💡' ? 'rgba(139,92,246,.08)' : 'rgba(16,185,129,.07)', border: `1px solid ${feedbackLabel[0] === '💡' ? 'rgba(139,92,246,.2)' : 'rgba(16,185,129,.15)'}`, width: '100%', textAlign: 'left', fontFamily: 'inherit' }}>
                 {feedbackLabel[0]} {feedbackLabel[1]}
               </button>
             </div>
           </nav>
-          <div style={{ padding: '12px 8px', borderTop: '1px solid #1e2a45', marginTop: 4 }}>
-            <div style={{ fontSize: 10, color: '#4a5568', padding: '0 8px 6px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{adminUser?.name || authUser?.email}</div>
+          <div style={{ padding: '12px 8px', borderTop: '1px solid #e2e8f0', marginTop: 4 }}>
+            <div style={{ fontSize: 10, color: '#94a3b8', padding: '0 8px 6px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{adminUser?.name || authUser?.email}</div>
             <button onClick={handleLogout} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 10px', borderRadius: 6, cursor: 'pointer', fontSize: 12, color: '#ef4444', background: 'transparent', border: 'none', width: '100%', textAlign: 'left', fontFamily: 'inherit' }}>Cerrar sesión</button>
           </div>
         </div>
       </div>
       <div style={{ flex: 1, overflow: 'auto', display: 'flex', flexDirection: 'column' }}>
-        <div style={{ padding: '16px 22px', borderBottom: '1px solid #1e2a45', background: '#111827', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexShrink: 0 }}>
+        <div style={{ padding: '16px 22px', borderBottom: '1px solid #e2e8f0', background: '#ffffff', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexShrink: 0 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-            <button onClick={() => setSidebarOpen(o => !o)} style={{ background: 'none', border: '1px solid #1e2a45', borderRadius: 6, color: '#8892a8', cursor: 'pointer', padding: '5px 9px', fontSize: 16, lineHeight: 1, fontFamily: 'inherit' }}>☰</button>
+            <button onClick={() => setSidebarOpen(o => !o)} style={{ background: 'none', border: '1px solid #e2e8f0', borderRadius: 6, color: '#64748b', cursor: 'pointer', padding: '5px 9px', fontSize: 16, lineHeight: 1, fontFamily: 'inherit' }}>☰</button>
             <div>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                 <h1 style={{ fontSize: 17, fontWeight: 700 }}>{{ dashboard: 'Dashboard', schedules: 'Horarios', attendance: 'Asistencia', employees: 'Empleados', sites: 'Sitios', users: 'Usuarios', companies: 'Empresas', competitions: 'Competencias' }[tab]}</h1>
                 {activeCompany && <span style={{ fontSize: 10, color: '#3b82f6', background: 'rgba(59,130,246,.1)', border: '1px solid rgba(59,130,246,.2)', borderRadius: 4, padding: '2px 8px', fontWeight: 600 }}>{activeCompany.name}</span>}
               </div>
-              <p style={{ fontSize: 11, color: '#8892a8', marginTop: 1 }}>{new Date().toLocaleDateString('es-MX', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric', timeZone: 'America/Cancun' })}</p>
+              <p style={{ fontSize: 11, color: '#64748b', marginTop: 1 }}>{new Date().toLocaleDateString('es-MX', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric', timeZone: 'America/Cancun' })}</p>
             </div>
           </div>
           {tab === 'employees'  && <button onClick={() => setModal({ type: 'emp', data: null })} style={{ padding: '7px 14px', borderRadius: 7, border: 'none', background: '#3b82f6', color: '#fff', fontSize: 12, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}>+ Nuevo Empleado</button>}
@@ -447,11 +447,11 @@ export default function AdminPage() {
             setEmpPage={setEmpPage}
           />}
           {tab === 'attendance' && <>
-            <div style={{ background: '#1a2035', border: '1px solid #1e2a45', borderRadius: 10, padding: '14px 16px', marginBottom: 14, display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: 10 }}>
+            <div style={{ background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: 10, padding: '14px 16px', marginBottom: 14, display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: 10 }}>
               {/* FIX BUG 2: usar allEmps para el filtro de empleados */}
               {[['Empleado', filterEmp, setFilterEmp, allEmps.map(e => [e.id, e.name])],['Sucursal', filterSite, setFilterSite, sites.map(s => [s.id, s.name])]].map(([l, val, set, opts]) => (
                 <div key={l}>
-                  <div style={{ fontSize: 10, color: '#4a5568', marginBottom: 4, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '.5px' }}>{l}</div>
+                  <div style={{ fontSize: 10, color: '#94a3b8', marginBottom: 4, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '.5px' }}>{l}</div>
                   <select value={val} onChange={e => set(e.target.value)} style={selectStyle}>
                     <option value=''>Todos</option>
                     {opts.map(([v, n]) => <option key={v} value={v}>{n}</option>)}
@@ -460,12 +460,12 @@ export default function AdminPage() {
               ))}
               {[['Desde', filterFrom, setFilterFrom], ['Hasta', filterTo, setFilterTo]].map(([l, val, set]) => (
                 <div key={l}>
-                  <div style={{ fontSize: 10, color: '#4a5568', marginBottom: 4, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '.5px' }}>{l}</div>
+                  <div style={{ fontSize: 10, color: '#94a3b8', marginBottom: 4, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '.5px' }}>{l}</div>
                   <input type='date' value={val} onChange={e => set(e.target.value)} style={inputStyle} />
                 </div>
               ))}
               <div>
-                <div style={{ fontSize: 10, color: '#4a5568', marginBottom: 4, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '.5px' }}>Estado</div>
+                <div style={{ fontSize: 10, color: '#94a3b8', marginBottom: 4, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '.5px' }}>Estado</div>
                 <select value={filterStatus} onChange={e => setFilterStatus(e.target.value)} style={selectStyle}>
                   <option value=''>Todos</option>
                   <option value='on_time'>Puntual</option><option value='tolerancia'>Tolerancia</option><option value='late'>Retardo</option><option value='absent'>Falta</option>
@@ -473,39 +473,39 @@ export default function AdminPage() {
               </div>
             </div>
             <div style={{ marginBottom: 10, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-              <span style={{ fontSize: 11, color: '#8892a8' }}>{filteredAtt.length} registro{filteredAtt.length !== 1 ? 's' : ''} encontrado{filteredAtt.length !== 1 ? 's' : ''}</span>
+              <span style={{ fontSize: 11, color: '#64748b' }}>{filteredAtt.length} registro{filteredAtt.length !== 1 ? 's' : ''} encontrado{filteredAtt.length !== 1 ? 's' : ''}</span>
               <div style={{ display: 'flex', gap: 8 }}>
               <button onClick={exportAttCSV} disabled={filteredAtt.length === 0}
-                style={{ background: filteredAtt.length > 0 ? 'rgba(16,185,129,.1)' : 'transparent', border: '1px solid ' + (filteredAtt.length > 0 ? 'rgba(16,185,129,.3)' : '#1e2a45'), borderRadius: 5, color: filteredAtt.length > 0 ? '#10b981' : '#4a5568', fontSize: 10, padding: '4px 12px', cursor: filteredAtt.length > 0 ? 'pointer' : 'default', fontFamily: 'inherit', fontWeight: 600 }}>⬇ CSV</button>
+                style={{ background: filteredAtt.length > 0 ? 'rgba(16,185,129,.1)' : 'transparent', border: '1px solid ' + (filteredAtt.length > 0 ? 'rgba(16,185,129,.3)' : '#e2e8f0'), borderRadius: 5, color: filteredAtt.length > 0 ? '#10b981' : '#94a3b8', fontSize: 10, padding: '4px 12px', cursor: filteredAtt.length > 0 ? 'pointer' : 'default', fontFamily: 'inherit', fontWeight: 600 }}>⬇ CSV</button>
               <button onClick={() => setSalesImportOpen(true)}
                 style={{ background: 'rgba(139,92,246,.1)', border: '1px solid rgba(139,92,246,.3)', borderRadius: 5, color: '#a78bfa', fontSize: 10, padding: '4px 12px', cursor: 'pointer', fontFamily: 'inherit', fontWeight: 600 }}>⬆ Ventas</button>
-              <button onClick={() => { setFilterEmp(''); setFilterSite(''); setFilterFrom(''); setFilterTo(''); setFilterStatus('') }} style={{ background: (filterEmp||filterSite||filterFrom||filterTo||filterStatus) ? 'rgba(59,130,246,.12)' : 'transparent', border: '1px solid '+((filterEmp||filterSite||filterFrom||filterTo||filterStatus)?'#3b82f6':'#1e2a45'), borderRadius: 5, color: (filterEmp||filterSite||filterFrom||filterTo||filterStatus)?'#3b82f6':'#4a5568', fontSize: 10, padding: '4px 12px', cursor: 'pointer', fontFamily: 'inherit', fontWeight: 600 }}>Limpiar filtros</button>
+              <button onClick={() => { setFilterEmp(''); setFilterSite(''); setFilterFrom(''); setFilterTo(''); setFilterStatus('') }} style={{ background: (filterEmp||filterSite||filterFrom||filterTo||filterStatus) ? 'rgba(59,130,246,.12)' : 'transparent', border: '1px solid '+((filterEmp||filterSite||filterFrom||filterTo||filterStatus)?'#3b82f6':'#e2e8f0'), borderRadius: 5, color: (filterEmp||filterSite||filterFrom||filterTo||filterStatus)?'#3b82f6':'#94a3b8', fontSize: 10, padding: '4px 12px', cursor: 'pointer', fontFamily: 'inherit', fontWeight: 600 }}>Limpiar filtros</button>
               </div>
             </div>
-            <div style={{ background: '#1a2035', border: '1px solid #1e2a45', borderRadius: 10, overflow: 'hidden' }}>
+            <div style={{ background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: 10, overflow: 'hidden' }}>
               <div style={{ overflowX: 'auto' }}>
               <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 600 }}>
                 <thead><tr>{['Fecha','Empleado','Sucursal','Entrada','Salida','Horas','Ventas','Estado'].map(h => (
-                  <th key={h} style={{ textAlign: 'left', fontSize: 9, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '.6px', color: '#4a5568', padding: '9px 16px', borderBottom: '1px solid #1e2a45' }}>{h}</th>
+                  <th key={h} style={{ textAlign: 'left', fontSize: 9, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '.6px', color: '#94a3b8', padding: '9px 16px', borderBottom: '1px solid #e2e8f0' }}>{h}</th>
                 ))}</tr></thead>
                 <tbody>
                   {filteredAtt.slice(0, 300).map(r => {
                     // FIX BUG 2: buscar en allEmps para que siempre resuelva el nombre
                     const emp = allEmps.find(e => e.id === r.employee_id); const site = sites.find(s => s.id === r.site_id)
                     return (
-                      <tr key={r.id} style={{ borderBottom: '1px solid rgba(30,42,69,.3)' }}>
+                      <tr key={r.id} style={{ borderBottom: '1px solid rgba(226,232,240,.3)' }}>
                         <td style={{ padding: '9px 16px', fontSize: 11, fontFamily: "'JetBrains Mono'" }}>{fmtDate(r.date)}</td>
                         <td style={{ padding: '9px 16px' }}><button onClick={() => setEmpPage(emp)} style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', textAlign: 'left', fontFamily: 'inherit' }}><span style={{ fontSize: 12, fontWeight: 600, color: '#3b82f6', textDecoration: 'underline', textDecorationColor: 'rgba(59,130,246,.3)' }}>{emp?.name || '?'}</span></button></td>
-                        <td style={{ padding: '9px 16px', fontSize: 11, color: '#8892a8' }}>{site?.name || '?'}</td>
+                        <td style={{ padding: '9px 16px', fontSize: 11, color: '#64748b' }}>{site?.name || '?'}</td>
                         <td style={{ padding: '9px 16px', fontSize: 11, fontFamily: "'JetBrains Mono'" }}>{fmtTime(r.check_in, site?.timezone)}</td>
                         <td style={{ padding: '9px 16px', fontSize: 11, fontFamily: "'JetBrains Mono'" }}>{fmtTime(r.check_out, site?.timezone)}</td>
                         <td style={{ padding: '9px 16px', fontSize: 11, fontFamily: "'JetBrains Mono'" }}>{fmtHours(r.hours_worked)}</td>
-                        <td style={{ padding: '9px 16px', fontSize: 11, fontFamily: "'JetBrains Mono'", color: r.sales_amount > 0 ? '#10b981' : '#4a5568' }}>{r.sales_amount > 0 ? '$'+Number(r.sales_amount).toLocaleString('es-MX') : '–'}</td>
-                        <td style={{ padding: '9px 16px' }}><span style={{ padding: '2px 8px', borderRadius: 4, fontSize: 10, fontWeight: 600, color: stClr[r.status]||'#8892a8', background: stBg[r.status]||'rgba(136,146,168,.1)' }}>{stLbl[r.status]||r.status||'–'}</span></td>
+                        <td style={{ padding: '9px 16px', fontSize: 11, fontFamily: "'JetBrains Mono'", color: r.sales_amount > 0 ? '#10b981' : '#94a3b8' }}>{r.sales_amount > 0 ? '$'+Number(r.sales_amount).toLocaleString('es-MX') : '–'}</td>
+                        <td style={{ padding: '9px 16px' }}><span style={{ padding: '2px 8px', borderRadius: 4, fontSize: 10, fontWeight: 600, color: stClr[r.status]||'#64748b', background: stBg[r.status]||'rgba(136,146,168,.1)' }}>{stLbl[r.status]||r.status||'–'}</span></td>
                       </tr>
                     )
                   })}
-                  {filteredAtt.length === 0 && <tr><td colSpan={8} style={{ padding: 24, textAlign: 'center', color: '#4a5568', fontSize: 12 }}>Sin registros con los filtros seleccionados</td></tr>}
+                  {filteredAtt.length === 0 && <tr><td colSpan={8} style={{ padding: 24, textAlign: 'center', color: '#94a3b8', fontSize: 12 }}>Sin registros con los filtros seleccionados</td></tr>}
                 </tbody>
               </table>
               </div>
@@ -521,11 +521,11 @@ export default function AdminPage() {
           />}
           {tab === 'schedules' && <ScheduleBoard sites={sites} allEmps={allEmps} schedules={schedules} employeeSiteAssignments={employeeSiteAssignments} siteHours={siteHours} isSuperAdmin={isSuperAdmin} adminUser={adminUser} onRefresh={load} setToast={setToast} />}
           {tab === 'employees' && (
-            <div style={{ background: '#1a2035', border: '1px solid #1e2a45', borderRadius: 10, overflow: 'hidden' }}>
+            <div style={{ background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: 10, overflow: 'hidden' }}>
               <div style={{ overflowX: 'auto' }}>
               <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 700 }}>
                 <thead><tr>{['Empleado','Email','Rol','Sucursales','Meta semanal','Próx. turno',''].map(h => (
-                  <th key={h} style={{ textAlign: 'left', fontSize: 9, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '.6px', color: '#4a5568', padding: '9px 16px', borderBottom: '1px solid #1e2a45' }}>{h}</th>
+                  <th key={h} style={{ textAlign: 'left', fontSize: 9, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '.6px', color: '#94a3b8', padding: '9px 16px', borderBottom: '1px solid #e2e8f0' }}>{h}</th>
                 ))}</tr></thead>
                 <tbody>
                   {emps.map(emp => {
@@ -535,16 +535,16 @@ export default function AdminPage() {
                     const empSiteIds = employeeSiteAssignments.filter(a => a.employee_id === emp.id).map(a => a.site_id)
                     const empSiteNames = empSiteIds.map(sid => sites.find(s => s.id === sid)?.name).filter(Boolean)
                     return (
-                      <tr key={emp.id} style={{ borderBottom: '1px solid rgba(30,42,69,.3)' }}>
+                      <tr key={emp.id} style={{ borderBottom: '1px solid rgba(226,232,240,.3)' }}>
                         <td style={{ padding: '9px 16px' }}>
                           <button onClick={() => setEmpPage(emp)} style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', textAlign: 'left', fontFamily: 'inherit' }}>
                             <div style={{ fontSize: 12, fontWeight: 600, color: '#3b82f6', textDecoration: 'underline', textDecorationColor: 'rgba(59,130,246,.3)' }}>{emp.name}</div>
-                            <div style={{ fontSize: 10, color: '#4a5568' }}>{emp.phone || ''}</div>
+                            <div style={{ fontSize: 10, color: '#94a3b8' }}>{emp.phone || ''}</div>
                           </button>
                         </td>
-                        <td style={{ padding: '9px 16px', fontSize: 11, color: '#8892a8' }}>{emp.email}</td>
+                        <td style={{ padding: '9px 16px', fontSize: 11, color: '#64748b' }}>{emp.email}</td>
                         <td style={{ padding: '9px 16px' }}>
-                          <span style={{ fontSize: 11, color: '#8892a8' }}>{emp.role}</span>
+                          <span style={{ fontSize: 11, color: '#64748b' }}>{emp.role}</span>
                           {emp.free_roam && <span style={{ marginLeft: 6, color: '#10b981', fontSize: 9, fontWeight: 600, background: 'rgba(16,185,129,.12)', padding: '1px 6px', borderRadius: 3 }}>Libre</span>}
                         </td>
                         <td style={{ padding: '9px 16px' }}>
@@ -559,13 +559,13 @@ export default function AdminPage() {
                         </td>
                         <td style={{ padding: '9px 16px' }}>
                           {goal ? <span style={{ fontSize: 11, fontFamily: "'JetBrains Mono'", color: '#10b981', fontWeight: 600 }}>${Number(goal.weekly_goal).toLocaleString('es-MX')}</span>
-                                : <span style={{ fontSize: 10, color: '#4a5568' }}>Sin meta</span>}
+                                : <span style={{ fontSize: 10, color: '#94a3b8' }}>Sin meta</span>}
                         </td>
                         <td style={{ padding: '9px 16px' }}>
                           {nextSched ? (
                             <div>
-                              <div style={{ fontSize: 11, color: '#f1f5f9', fontWeight: 600 }}>{fmtDate(nextSched.date)}{nextSched.date === today ? <span style={{ marginLeft: 6, fontSize: 9, color: '#10b981', fontWeight: 700 }}>HOY</span> : ''}</div>
-                              <div style={{ fontSize: 10, color: '#4a5568', fontFamily: "'JetBrains Mono'" }}>{nextSched.start_time?.slice(0,5)} – {nextSched.end_time?.slice(0,5)} · {nextSite?.name}</div>
+                              <div style={{ fontSize: 11, color: '#0f172a', fontWeight: 600 }}>{fmtDate(nextSched.date)}{nextSched.date === today ? <span style={{ marginLeft: 6, fontSize: 9, color: '#10b981', fontWeight: 700 }}>HOY</span> : ''}</div>
+                              <div style={{ fontSize: 10, color: '#94a3b8', fontFamily: "'JetBrains Mono'" }}>{nextSched.start_time?.slice(0,5)} – {nextSched.end_time?.slice(0,5)} · {nextSite?.name}</div>
                             </div>
                           ) : <span style={{ fontSize: 10, color: '#f59e0b' }}>Sin turno próximo</span>}
                         </td>
@@ -573,7 +573,7 @@ export default function AdminPage() {
                           <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
                             <button onClick={() => setEmpPage(emp)} style={{ padding: '4px 10px', borderRadius: 5, border: '1px solid rgba(16,185,129,.25)', background: 'rgba(16,185,129,.1)', color: '#10b981', fontSize: 10, cursor: 'pointer', fontFamily: 'inherit', fontWeight: 600 }}>Historial</button>
                             <button onClick={() => setModal({ type: 'schedule', data: emp })} style={{ padding: '4px 10px', borderRadius: 5, border: '1px solid rgba(59,130,246,.25)', background: 'rgba(59,130,246,.12)', color: '#3b82f6', fontSize: 10, cursor: 'pointer', fontFamily: 'inherit', fontWeight: 600 }}>Horarios</button>
-                            <button onClick={() => setModal({ type: 'emp', data: { emp, goal } })} style={{ background: 'none', border: 'none', color: '#8892a8', cursor: 'pointer', fontSize: 11, fontFamily: 'inherit' }}>Editar</button>
+                            <button onClick={() => setModal({ type: 'emp', data: { emp, goal } })} style={{ background: 'none', border: 'none', color: '#64748b', cursor: 'pointer', fontSize: 11, fontFamily: 'inherit' }}>Editar</button>
                             <button onClick={() => { if (confirm('Eliminar ' + emp.name + '?')) delEmp(emp.id) }} style={{ background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer', fontSize: 11, fontFamily: 'inherit' }}>Eliminar</button>
                           </div>
                         </td>
@@ -583,36 +583,36 @@ export default function AdminPage() {
                 </tbody>
               </table>
               </div>
-              {emps.length === 0 && <div style={{ padding: 20, textAlign: 'center', color: '#4a5568', fontSize: 12 }}>No hay empleados. Agrega el primero.</div>}
+              {emps.length === 0 && <div style={{ padding: 20, textAlign: 'center', color: '#94a3b8', fontSize: 12 }}>No hay empleados. Agrega el primero.</div>}
             </div>
           )}
           {tab === 'sites' && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
               {sites.map(site => (
-                <div key={site.id} style={{ background: '#1a2035', border: '1px solid #1e2a45', borderRadius: 10, padding: 16, display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 10 }}>
+                <div key={site.id} style={{ background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: 10, padding: 16, display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 10 }}>
                   <div>
                     <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 2 }}>{site.name}</div>
-                    <div style={{ fontSize: 11, color: '#8892a8' }}>{site.address}</div>
-                    <div style={{ fontSize: 9, color: '#4a5568', marginTop: 4 }}>Tolerancia: {site.grace_mins}min · Radio GPS: {site.radius_m}m</div>
+                    <div style={{ fontSize: 11, color: '#64748b' }}>{site.address}</div>
+                    <div style={{ fontSize: 9, color: '#94a3b8', marginTop: 4 }}>Tolerancia: {site.grace_mins}min · Radio GPS: {site.radius_m}m</div>
                     <div style={{ fontSize: 10, color: '#3b82f6', marginTop: 4, wordBreak: 'break-all' }}>QR: {getSiteUrl(site.code)}</div>
                   </div>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                     <span style={{ fontFamily: "'JetBrains Mono'", fontSize: 11, color: '#3b82f6', background: 'rgba(59,130,246,.12)', padding: '3px 8px', borderRadius: 4, fontWeight: 600 }}>{site.code}</span>
-                    <button onClick={() => { navigator.clipboard.writeText(getSiteUrl(site.code)); setToast('URL copiada') }} style={{ padding: '5px 10px', borderRadius: 5, border: '1px solid #1e2a45', background: 'transparent', color: '#8892a8', fontSize: 10, cursor: 'pointer', fontFamily: 'inherit' }}>Copiar URL</button>
+                    <button onClick={() => { navigator.clipboard.writeText(getSiteUrl(site.code)); setToast('URL copiada') }} style={{ padding: '5px 10px', borderRadius: 5, border: '1px solid #e2e8f0', background: 'transparent', color: '#64748b', fontSize: 10, cursor: 'pointer', fontFamily: 'inherit' }}>Copiar URL</button>
                     <button onClick={() => setModal({ type: 'qr', data: site })} style={{ padding: '5px 10px', borderRadius: 5, border: '1px solid rgba(59,130,246,.25)', background: 'rgba(59,130,246,.12)', color: '#3b82f6', fontSize: 10, cursor: 'pointer', fontFamily: 'inherit', fontWeight: 600 }}>Ver QR</button>
-                    <button onClick={() => setModal({ type: 'site', data: site })} style={{ background: 'none', border: 'none', color: '#8892a8', cursor: 'pointer', fontSize: 11, fontFamily: 'inherit' }}>Editar</button>
+                    <button onClick={() => setModal({ type: 'site', data: site })} style={{ background: 'none', border: 'none', color: '#64748b', cursor: 'pointer', fontSize: 11, fontFamily: 'inherit' }}>Editar</button>
                     <button onClick={() => { if (confirm('Eliminar ' + site.name + '?')) delSite(site.id) }} style={{ background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer', fontSize: 11, fontFamily: 'inherit' }}>Eliminar</button>
                   </div>
                 </div>
               ))}
-              {sites.length === 0 && <div style={{ padding: 20, textAlign: 'center', color: '#4a5568', fontSize: 12, background: '#1a2035', borderRadius: 10, border: '1px solid #1e2a45' }}>No hay sitios. Agrega el primero.</div>}
+              {sites.length === 0 && <div style={{ padding: 20, textAlign: 'center', color: '#94a3b8', fontSize: 12, background: '#ffffff', borderRadius: 10, border: '1px solid #e2e8f0' }}>No hay sitios. Agrega el primero.</div>}
             </div>
           )}
           {tab === 'users' && (isSuperAdmin || isCompanyAdmin) && (
-            <div style={{ background: '#1a2035', border: '1px solid #1e2a45', borderRadius: 10, overflowX: 'auto' }}>
+            <div style={{ background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: 10, overflowX: 'auto' }}>
               <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 600 }}>
                 <thead><tr>{['Usuario','Email','Empresa','Rol','Sucursales',''].map(h => (
-                  <th key={h} style={{ textAlign: 'left', fontSize: 9, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '.6px', color: '#4a5568', padding: '9px 16px', borderBottom: '1px solid #1e2a45' }}>{h}</th>
+                  <th key={h} style={{ textAlign: 'left', fontSize: 9, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '.6px', color: '#94a3b8', padding: '9px 16px', borderBottom: '1px solid #e2e8f0' }}>{h}</th>
                 ))}</tr></thead>
                 <tbody>
                   {adminUsers.map(au => {
@@ -620,20 +620,20 @@ export default function AdminPage() {
                     const auCompany = companies.find(c => c.id === au.company_id)
                     const isActive = au.active !== false
                     return (
-                      <tr key={au.id} style={{ borderBottom: '1px solid rgba(30,42,69,.3)', opacity: isActive ? 1 : 0.5 }}>
+                      <tr key={au.id} style={{ borderBottom: '1px solid rgba(226,232,240,.3)', opacity: isActive ? 1 : 0.5 }}>
                         <td style={{ padding: '9px 16px' }}>
                           <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                            <span style={{ width: 7, height: 7, borderRadius: '50%', background: isActive ? '#10b981' : '#4a5568', flexShrink: 0 }} />
+                            <span style={{ width: 7, height: 7, borderRadius: '50%', background: isActive ? '#10b981' : '#94a3b8', flexShrink: 0 }} />
                             <div style={{ fontSize: 12, fontWeight: 600 }}>{au.name}</div>
                           </div>
                         </td>
-                        <td style={{ padding: '9px 16px', fontSize: 11, color: '#8892a8' }}>{au.email}</td>
-                        <td style={{ padding: '9px 16px', fontSize: 11, color: '#8892a8' }}>{au.role === 'superadmin' ? <span style={{ color: '#4a5568' }}>—</span> : (auCompany?.name || <span style={{ color: '#ef4444' }}>Sin empresa</span>)}</td>
+                        <td style={{ padding: '9px 16px', fontSize: 11, color: '#64748b' }}>{au.email}</td>
+                        <td style={{ padding: '9px 16px', fontSize: 11, color: '#64748b' }}>{au.role === 'superadmin' ? <span style={{ color: '#94a3b8' }}>—</span> : (auCompany?.name || <span style={{ color: '#ef4444' }}>Sin empresa</span>)}</td>
                         <td style={{ padding: '9px 16px' }}><span style={{ padding: '2px 8px', borderRadius: 4, fontSize: 10, fontWeight: 600, color: au.role === 'superadmin' ? '#3b82f6' : au.role === 'company_admin' ? '#a855f7' : '#10b981', background: au.role === 'superadmin' ? 'rgba(59,130,246,.12)' : au.role === 'company_admin' ? 'rgba(168,85,247,.12)' : 'rgba(16,185,129,.12)' }}>{au.role === 'superadmin' ? 'Super Admin' : au.role === 'company_admin' ? 'Admin Empresa' : 'Gerente'}</span></td>
-                        <td style={{ padding: '9px 16px', fontSize: 11, color: '#8892a8' }}>{au.role === 'superadmin' ? <span style={{ color: '#4a5568' }}>Todas</span> : au.role === 'company_admin' ? <span style={{ color: '#4a5568' }}>Empresa</span> : auSites.length > 0 ? auSites.join(', ') : <span style={{ color: '#ef4444' }}>Sin asignar</span>}</td>
+                        <td style={{ padding: '9px 16px', fontSize: 11, color: '#64748b' }}>{au.role === 'superadmin' ? <span style={{ color: '#94a3b8' }}>Todas</span> : au.role === 'company_admin' ? <span style={{ color: '#94a3b8' }}>Empresa</span> : auSites.length > 0 ? auSites.join(', ') : <span style={{ color: '#ef4444' }}>Sin asignar</span>}</td>
                         <td style={{ padding: '9px 16px' }}>
                           <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-                            <button onClick={() => setModal({ type: 'adminUser', data: au })} style={{ background: 'none', border: 'none', color: '#8892a8', cursor: 'pointer', fontSize: 11, fontFamily: 'inherit' }}>Editar</button>
+                            <button onClick={() => setModal({ type: 'adminUser', data: au })} style={{ background: 'none', border: 'none', color: '#64748b', cursor: 'pointer', fontSize: 11, fontFamily: 'inherit' }}>Editar</button>
                             {au.id !== authUser?.id && (<>
                               <button onClick={() => resetAdminPwd(au)} style={{ background: 'none', border: 'none', color: '#f59e0b', cursor: 'pointer', fontSize: 11, fontFamily: 'inherit' }}>Reset pwd</button>
                               {isActive
@@ -646,7 +646,7 @@ export default function AdminPage() {
                       </tr>
                     )
                   })}
-                  {adminUsers.length === 0 && <tr><td colSpan={6} style={{ padding: 24, textAlign: 'center', color: '#4a5568', fontSize: 12 }}>No hay usuarios admin.</td></tr>}
+                  {adminUsers.length === 0 && <tr><td colSpan={6} style={{ padding: 24, textAlign: 'center', color: '#94a3b8', fontSize: 12 }}>No hay usuarios admin.</td></tr>}
                 </tbody>
               </table>
             </div>
@@ -657,20 +657,20 @@ export default function AdminPage() {
                 const compEmps  = emps.filter(e => e.company_id === company.id).length
                 const compSites = sites.filter(s => s.company_id === company.id).length
                 return (
-                  <div key={company.id} style={{ background: '#1a2035', border: '1px solid #1e2a45', borderRadius: 10, padding: 16, display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 10 }}>
+                  <div key={company.id} style={{ background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: 10, padding: 16, display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 10 }}>
                     <div>
                       <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 2 }}>{company.name}</div>
-                      <div style={{ fontSize: 11, color: '#4a5568', fontFamily: "'JetBrains Mono'" }}>slug: {company.slug}</div>
-                      <div style={{ fontSize: 10, color: '#8892a8', marginTop: 4 }}>{compSites} sucursal{compSites !== 1 ? 'es' : ''} · {compEmps} empleado{compEmps !== 1 ? 's' : ''}</div>
+                      <div style={{ fontSize: 11, color: '#94a3b8', fontFamily: "'JetBrains Mono'" }}>slug: {company.slug}</div>
+                      <div style={{ fontSize: 10, color: '#64748b', marginTop: 4 }}>{compSites} sucursal{compSites !== 1 ? 'es' : ''} · {compEmps} empleado{compEmps !== 1 ? 's' : ''}</div>
                     </div>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                       <button onClick={() => setSelectedCompanyId(company.id)} style={{ padding: '5px 10px', borderRadius: 5, border: '1px solid rgba(59,130,246,.25)', background: selectedCompanyId === company.id ? 'rgba(59,130,246,.2)' : 'rgba(59,130,246,.1)', color: '#3b82f6', fontSize: 10, cursor: 'pointer', fontFamily: 'inherit', fontWeight: 600 }}>Ver datos</button>
-                      <button onClick={() => setModal({ type: 'company', data: company })} style={{ background: 'none', border: 'none', color: '#8892a8', cursor: 'pointer', fontSize: 11, fontFamily: 'inherit' }}>Editar</button>
+                      <button onClick={() => setModal({ type: 'company', data: company })} style={{ background: 'none', border: 'none', color: '#64748b', cursor: 'pointer', fontSize: 11, fontFamily: 'inherit' }}>Editar</button>
                     </div>
                   </div>
                 )
               })}
-              {companies.length === 0 && <div style={{ padding: 20, textAlign: 'center', color: '#4a5568', fontSize: 12, background: '#1a2035', borderRadius: 10, border: '1px solid #1e2a45' }}>No hay empresas.</div>}
+              {companies.length === 0 && <div style={{ padding: 20, textAlign: 'center', color: '#94a3b8', fontSize: 12, background: '#ffffff', borderRadius: 10, border: '1px solid #e2e8f0' }}>No hay empresas.</div>}
             </div>
           )}
           {tab === 'alerts' && <AlertsPanel adminUserId={adminUser?.id} adminEmail={adminUser?.email} />}
@@ -725,21 +725,21 @@ export default function AdminPage() {
       {modal?.type === 'company'   && <CompanyModal   data={modal.data} onSave={saveCompany} onClose={() => setModal(null)} />}
       {modal?.type === 'showPwd' && (
         <div onClick={() => setModal(null)} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.7)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 200 }}>
-          <div onClick={e => e.stopPropagation()} style={{ background: '#1a2035', border: '1px solid #1e2a45', borderRadius: 12, padding: 24, width: '100%', maxWidth: 380, textAlign: 'center' }}>
+          <div onClick={e => e.stopPropagation()} style={{ background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: 12, padding: 24, width: '100%', maxWidth: 380, textAlign: 'center' }}>
             <div style={{ fontSize: 13, fontWeight: 700, color: '#10b981', marginBottom: 10 }}>✅ Nueva contraseña generada</div>
-            <div style={{ fontSize: 12, color: '#8892a8', marginBottom: 16 }}>Envía estos datos a <strong style={{ color: '#f1f5f9' }}>{modal.data.name}</strong></div>
-            <div style={{ background: '#0d1220', border: '1px solid #1e2a45', borderRadius: 8, padding: '14px 16px', marginBottom: 16, textAlign: 'left' }}>
-              <div style={{ fontSize: 12, color: '#8892a8', marginBottom: 4 }}>Email: <span style={{ color: '#f1f5f9', fontFamily: "'JetBrains Mono'" }}>{modal.data.email}</span></div>
-              <div style={{ fontSize: 12, color: '#8892a8' }}>Contraseña: <span style={{ color: '#3b82f6', fontFamily: "'JetBrains Mono'", fontWeight: 700, fontSize: 15 }}>{modal.data.pwd}</span></div>
+            <div style={{ fontSize: 12, color: '#64748b', marginBottom: 16 }}>Envía estos datos a <strong style={{ color: '#0f172a' }}>{modal.data.name}</strong></div>
+            <div style={{ background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: 8, padding: '14px 16px', marginBottom: 16, textAlign: 'left' }}>
+              <div style={{ fontSize: 12, color: '#64748b', marginBottom: 4 }}>Email: <span style={{ color: '#0f172a', fontFamily: "'JetBrains Mono'" }}>{modal.data.email}</span></div>
+              <div style={{ fontSize: 12, color: '#64748b' }}>Contraseña: <span style={{ color: '#3b82f6', fontFamily: "'JetBrains Mono'", fontWeight: 700, fontSize: 15 }}>{modal.data.pwd}</span></div>
             </div>
             <button onClick={() => { navigator.clipboard.writeText(`Email: ${modal.data.email}\nContraseña: ${modal.data.pwd}`); setToast('¡Copiado!') }} style={{ width: '100%', padding: '11px', borderRadius: 7, border: 'none', background: '#3b82f6', color: '#fff', fontSize: 13, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', marginBottom: 8 }}>📋 Copiar credenciales</button>
-            <button onClick={() => setModal(null)} style={{ width: '100%', padding: '9px', borderRadius: 7, border: '1px solid #1e2a45', background: 'transparent', color: '#8892a8', fontSize: 12, cursor: 'pointer', fontFamily: 'inherit' }}>Cerrar</button>
+            <button onClick={() => setModal(null)} style={{ width: '100%', padding: '9px', borderRadius: 7, border: '1px solid #e2e8f0', background: 'transparent', color: '#64748b', fontSize: 12, cursor: 'pointer', fontFamily: 'inherit' }}>Cerrar</button>
           </div>
         </div>
       )}
       {salesImportOpen && <SalesImportModal sites={sites} allEmps={allEmps} onClose={() => setSalesImportOpen(false)} onDone={() => { setSalesImportOpen(false); load() }} setToast={setToast} />}
       <FeedbackButton open={feedbackOpen} onClose={() => setFeedbackOpen(false)} adminUser={adminUser} />
-      {toast && <div style={{ position: 'fixed', bottom: 20, right: 20, background: '#1a2035', border: '1px solid rgba(16,185,129,.25)', borderRadius: 8, padding: '10px 16px', fontSize: 12, fontWeight: 500, zIndex: 200, color: '#10b981' }}>{toast}</div>}
+      {toast && <div style={{ position: 'fixed', bottom: 20, right: 20, background: '#ffffff', border: '1px solid rgba(16,185,129,.25)', borderRadius: 8, padding: '10px 16px', fontSize: 12, fontWeight: 500, zIndex: 200, color: '#10b981' }}>{toast}</div>}
     </div>
   )
 }
@@ -767,7 +767,7 @@ function EmpSidePanel({ emp, att, sites, onClose, onRefresh, fullPage }) {
   const onTime = filtered.filter(r => r.status === 'on_time').length
   const late   = filtered.filter(r => r.status === 'late').length
   const absent = filtered.filter(r => r.status === 'absent').length
-  const iS = { background: '#1a2035', border: '1px solid #2d3d5a', color: '#f1f5f9', fontSize: 11, padding: '7px 10px', borderRadius: 6, outline: 'none', fontFamily: 'inherit', colorScheme: 'dark' }
+  const iS = { background: '#ffffff', border: '1px solid #cbd5e1', color: '#0f172a', fontSize: 11, padding: '7px 10px', borderRadius: 6, outline: 'none', fontFamily: 'inherit', colorScheme: 'dark' }
   async function saveSale(attId) {
     setSaleErr('')
     const val = parseFloat(editingSale.value)
@@ -779,21 +779,21 @@ function EmpSidePanel({ emp, att, sites, onClose, onRefresh, fullPage }) {
   }
   return (
     <div style={fullPage
-      ? { flex: 1, background: '#111827', display: 'flex', flexDirection: 'column', overflow: 'auto' }
-      : { position: 'fixed', top: 0, right: 0, width: 480, height: '100vh', background: '#111827', borderLeft: '1px solid #1e2a45', display: 'flex', flexDirection: 'column', zIndex: 150, boxShadow: '-8px 0 32px rgba(0,0,0,.4)' }}>
+      ? { flex: 1, background: '#f8fafc', display: 'flex', flexDirection: 'column', overflow: 'auto' }
+      : { position: 'fixed', top: 0, right: 0, width: 480, height: '100vh', background: '#ffffff', borderLeft: '1px solid #e2e8f0', display: 'flex', flexDirection: 'column', zIndex: 150, boxShadow: '-8px 0 32px rgba(0,0,0,.4)' }}>
       {!fullPage && (
-        <div style={{ padding: '18px 20px', borderBottom: '1px solid #1e2a45', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexShrink: 0 }}>
+        <div style={{ padding: '18px 20px', borderBottom: '1px solid #e2e8f0', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexShrink: 0 }}>
           <div>
             <div style={{ fontSize: 15, fontWeight: 700 }}>{emp.name}</div>
-            <div style={{ fontSize: 11, color: '#8892a8', marginTop: 2 }}>{emp.email} · {emp.role}</div>
+            <div style={{ fontSize: 11, color: '#64748b', marginTop: 2 }}>{emp.email} · {emp.role}</div>
           </div>
           <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
             <div style={{ position: 'relative' }}>
-              <button onClick={() => setShowColPicker(p => !p)} style={{ background: showColPicker ? 'rgba(59,130,246,.12)' : 'none', border: '1px solid '+(showColPicker?'#3b82f6':'#1e2a45'), borderRadius: 6, color: showColPicker?'#3b82f6':'#8892a8', fontSize: 11, cursor: 'pointer', padding: '4px 10px', fontFamily: 'inherit' }}>Columnas</button>
+              <button onClick={() => setShowColPicker(p => !p)} style={{ background: showColPicker ? 'rgba(59,130,246,.12)' : 'none', border: '1px solid '+(showColPicker?'#3b82f6':'#e2e8f0'), borderRadius: 6, color: showColPicker?'#3b82f6':'#64748b', fontSize: 11, cursor: 'pointer', padding: '4px 10px', fontFamily: 'inherit' }}>Columnas</button>
               {showColPicker && (
-                <div onClick={e => e.stopPropagation()} style={{ position: 'absolute', right: 0, top: 34, background: '#1a2035', border: '1px solid #1e2a45', borderRadius: 10, padding: 12, zIndex: 10, minWidth: 160, boxShadow: '0 8px 24px rgba(0,0,0,.4)' }}>
+                <div onClick={e => e.stopPropagation()} style={{ position: 'absolute', right: 0, top: 34, background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: 10, padding: 12, zIndex: 10, minWidth: 160, boxShadow: '0 8px 24px rgba(0,0,0,.4)' }}>
                   {ALL_COLS.map(c => (
-                    <label key={c.key} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, cursor: 'pointer', color: '#f1f5f9', padding: '4px 0' }}>
+                    <label key={c.key} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, cursor: 'pointer', color: '#0f172a', padding: '4px 0' }}>
                       <input type='checkbox' checked={visibleCols.includes(c.key)} onChange={() => setVisibleCols(p => p.includes(c.key) ? p.filter(k => k !== c.key) : [...p, c.key])} style={{ accentColor: '#3b82f6' }} />
                       {c.label}
                     </label>
@@ -801,18 +801,18 @@ function EmpSidePanel({ emp, att, sites, onClose, onRefresh, fullPage }) {
                 </div>
               )}
             </div>
-            <button onClick={onClose} style={{ background: 'none', border: '1px solid #1e2a45', borderRadius: 6, color: '#8892a8', fontSize: 18, cursor: 'pointer', padding: '2px 10px', lineHeight: 1 }}>×</button>
+            <button onClick={onClose} style={{ background: 'none', border: '1px solid #e2e8f0', borderRadius: 6, color: '#64748b', fontSize: 18, cursor: 'pointer', padding: '2px 10px', lineHeight: 1 }}>×</button>
           </div>
         </div>
       )}
       {fullPage && (
-        <div style={{ padding: '10px 16px', borderBottom: '1px solid #1e2a45', display: 'flex', justifyContent: 'flex-end', flexShrink: 0 }}>
+        <div style={{ padding: '10px 16px', borderBottom: '1px solid #e2e8f0', display: 'flex', justifyContent: 'flex-end', flexShrink: 0 }}>
           <div style={{ position: 'relative' }}>
-            <button onClick={() => setShowColPicker(p => !p)} style={{ background: showColPicker ? 'rgba(59,130,246,.12)' : 'none', border: '1px solid '+(showColPicker?'#3b82f6':'#1e2a45'), borderRadius: 6, color: showColPicker?'#3b82f6':'#8892a8', fontSize: 11, cursor: 'pointer', padding: '4px 10px', fontFamily: 'inherit' }}>Columnas</button>
+            <button onClick={() => setShowColPicker(p => !p)} style={{ background: showColPicker ? 'rgba(59,130,246,.12)' : 'none', border: '1px solid '+(showColPicker?'#3b82f6':'#e2e8f0'), borderRadius: 6, color: showColPicker?'#3b82f6':'#64748b', fontSize: 11, cursor: 'pointer', padding: '4px 10px', fontFamily: 'inherit' }}>Columnas</button>
             {showColPicker && (
-              <div onClick={e => e.stopPropagation()} style={{ position: 'absolute', right: 0, top: 34, background: '#1a2035', border: '1px solid #1e2a45', borderRadius: 10, padding: 12, zIndex: 10, minWidth: 160, boxShadow: '0 8px 24px rgba(0,0,0,.4)' }}>
+              <div onClick={e => e.stopPropagation()} style={{ position: 'absolute', right: 0, top: 34, background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: 10, padding: 12, zIndex: 10, minWidth: 160, boxShadow: '0 8px 24px rgba(0,0,0,.4)' }}>
                 {ALL_COLS.map(c => (
-                  <label key={c.key} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, cursor: 'pointer', color: '#f1f5f9', padding: '4px 0' }}>
+                  <label key={c.key} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, cursor: 'pointer', color: '#0f172a', padding: '4px 0' }}>
                     <input type='checkbox' checked={visibleCols.includes(c.key)} onChange={() => setVisibleCols(p => p.includes(c.key) ? p.filter(k => k !== c.key) : [...p, c.key])} style={{ accentColor: '#3b82f6' }} />
                     {c.label}
                   </label>
@@ -822,40 +822,40 @@ function EmpSidePanel({ emp, att, sites, onClose, onRefresh, fullPage }) {
           </div>
         </div>
       )}
-      <div style={{ padding: '12px 20px', borderBottom: '1px solid #1e2a45', display: 'flex', gap: 10, alignItems: 'center', flexShrink: 0 }}>
+      <div style={{ padding: '12px 20px', borderBottom: '1px solid #e2e8f0', display: 'flex', gap: 10, alignItems: 'center', flexShrink: 0 }}>
         <div style={{ flex: 1 }}>
-          <div style={{ fontSize: 9, color: '#4a5568', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '.5px', marginBottom: 3 }}>Desde</div>
+          <div style={{ fontSize: 9, color: '#94a3b8', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '.5px', marginBottom: 3 }}>Desde</div>
           <input type='date' value={from} onChange={e => setFrom(e.target.value)} style={{ ...iS, width: '100%' }} />
         </div>
         <div style={{ flex: 1 }}>
-          <div style={{ fontSize: 9, color: '#4a5568', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '.5px', marginBottom: 3 }}>Hasta</div>
+          <div style={{ fontSize: 9, color: '#94a3b8', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '.5px', marginBottom: 3 }}>Hasta</div>
           <input type='date' value={to} onChange={e => setTo(e.target.value)} style={{ ...iS, width: '100%' }} />
         </div>
-        {(from || to) && <button onClick={() => { setFrom(''); setTo('') }} style={{ background: 'none', border: '1px solid #1e2a45', borderRadius: 5, color: '#8892a8', fontSize: 10, padding: '5px 10px', cursor: 'pointer', fontFamily: 'inherit', marginTop: 14 }}>Limpiar</button>}
+        {(from || to) && <button onClick={() => { setFrom(''); setTo('') }} style={{ background: 'none', border: '1px solid #e2e8f0', borderRadius: 5, color: '#64748b', fontSize: 10, padding: '5px 10px', cursor: 'pointer', fontFamily: 'inherit', marginTop: 14 }}>Limpiar</button>}
       </div>
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(80px, 1fr))', borderBottom: '1px solid #1e2a45', flexShrink: 0 }}>
-        {[['Registros',filtered.length,'#3b82f6'],['Puntuales',onTime,'#10b981'],['Retardos',late,'#f59e0b'],['Faltas',absent,'#ef4444'],['Horas',fmtHours(totalHours),'#8892a8']].map(([l,v,c],i) => (
-          <div key={l} style={{ padding: '10px 14px', borderRight: i < 4 ? '1px solid #1e2a45' : 'none' }}>
-            <div style={{ fontSize: 9, color: '#4a5568', textTransform: 'uppercase', letterSpacing: '.5px', marginBottom: 3 }}>{l}</div>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(80px, 1fr))', borderBottom: '1px solid #e2e8f0', flexShrink: 0 }}>
+        {[['Registros',filtered.length,'#3b82f6'],['Puntuales',onTime,'#10b981'],['Retardos',late,'#f59e0b'],['Faltas',absent,'#ef4444'],['Horas',fmtHours(totalHours),'#64748b']].map(([l,v,c],i) => (
+          <div key={l} style={{ padding: '10px 14px', borderRight: i < 4 ? '1px solid #e2e8f0' : 'none' }}>
+            <div style={{ fontSize: 9, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '.5px', marginBottom: 3 }}>{l}</div>
             <div style={{ fontSize: 18, fontWeight: 700, fontFamily: "'JetBrains Mono'", color: c }}>{v}</div>
           </div>
         ))}
       </div>
       {totalSales > 0 && (
-        <div style={{ padding: '10px 20px', borderBottom: '1px solid #1e2a45', display: 'flex', gap: 20, flexShrink: 0 }}>
-          <div><span style={{ fontSize: 10, color: '#4a5568', textTransform: 'uppercase', letterSpacing: '.5px', marginRight: 8 }}>Ventas</span><span style={{ fontSize: 14, fontWeight: 700, fontFamily: "'JetBrains Mono'", color: '#10b981' }}>${Number(totalSales).toLocaleString('es-MX')}</span></div>
-          <div><span style={{ fontSize: 10, color: '#4a5568', textTransform: 'uppercase', letterSpacing: '.5px', marginRight: 8 }}>Prom. diario</span><span style={{ fontSize: 13, fontWeight: 600, fontFamily: "'JetBrains Mono'", color: '#10b981' }}>${Number(totalSales / Math.max(filtered.filter(r => r.sales_amount > 0).length, 1)).toLocaleString('es-MX', { maximumFractionDigits: 0 })}</span></div>
+        <div style={{ padding: '10px 20px', borderBottom: '1px solid #e2e8f0', display: 'flex', gap: 20, flexShrink: 0 }}>
+          <div><span style={{ fontSize: 10, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '.5px', marginRight: 8 }}>Ventas</span><span style={{ fontSize: 14, fontWeight: 700, fontFamily: "'JetBrains Mono'", color: '#10b981' }}>${Number(totalSales).toLocaleString('es-MX')}</span></div>
+          <div><span style={{ fontSize: 10, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '.5px', marginRight: 8 }}>Prom. diario</span><span style={{ fontSize: 13, fontWeight: 600, fontFamily: "'JetBrains Mono'", color: '#10b981' }}>${Number(totalSales / Math.max(filtered.filter(r => r.sales_amount > 0).length, 1)).toLocaleString('es-MX', { maximumFractionDigits: 0 })}</span></div>
         </div>
       )}
       <div style={{ flex: 1, overflowY: fullPage ? 'visible' : 'auto', overflowX: 'auto' }} onClick={() => showColPicker && setShowColPicker(false)}>
         <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 540 }}>
-          <thead style={{ position: 'sticky', top: 0, background: '#111827', zIndex: 1 }}>
+          <thead style={{ position: 'sticky', top: 0, background: '#f8fafc', zIndex: 1 }}>
             <tr>{ALL_COLS.filter(c => visibleCols.includes(c.key)).map(c => (
-              <th key={c.key} style={{ textAlign: 'left', fontSize: 9, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '.6px', color: '#4a5568', padding: '8px 14px', borderBottom: '1px solid #1e2a45', whiteSpace: 'nowrap' }}>{c.label}</th>
+              <th key={c.key} style={{ textAlign: 'left', fontSize: 9, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '.6px', color: '#94a3b8', padding: '8px 14px', borderBottom: '1px solid #e2e8f0', whiteSpace: 'nowrap' }}>{c.label}</th>
             ))}</tr>
           </thead>
           <tbody>
-            {filtered.length === 0 && <tr><td colSpan={visibleCols.length} style={{ padding: 24, textAlign: 'center', color: '#4a5568', fontSize: 12 }}>Sin registros</td></tr>}
+            {filtered.length === 0 && <tr><td colSpan={visibleCols.length} style={{ padding: 24, textAlign: 'center', color: '#94a3b8', fontSize: 12 }}>Sin registros</td></tr>}
             {filtered.map(r => {
               const site = sites.find(s => s.id === r.site_id)
               const lunchMins = r.lunch_start && r.lunch_end ? Math.round((new Date(r.lunch_end)-new Date(r.lunch_start))/60000) : 0
@@ -866,34 +866,34 @@ function EmpSidePanel({ emp, att, sites, onClose, onRefresh, fullPage }) {
               const gpsLink  = r.gps_lat && r.gps_lng ? `https://maps.google.com/?q=${r.gps_lat},${r.gps_lng}` : null
               const isEditing = editingSale?.id === r.id
               return (
-                <tr key={r.id} style={{ borderBottom: '1px solid rgba(30,42,69,.3)' }}>
+                <tr key={r.id} style={{ borderBottom: '1px solid rgba(226,232,240,.3)' }}>
                   {visibleCols.includes('date')      && <td style={{ padding: '8px 14px', fontSize: 11, fontFamily: "'JetBrains Mono'", whiteSpace: 'nowrap' }}>{fmtDate(r.date)}</td>}
-                  {visibleCols.includes('site')      && <td style={{ padding: '8px 14px', fontSize: 11, color: '#8892a8', whiteSpace: 'nowrap' }}>{site?.name||'?'}</td>}
+                  {visibleCols.includes('site')      && <td style={{ padding: '8px 14px', fontSize: 11, color: '#64748b', whiteSpace: 'nowrap' }}>{site?.name||'?'}</td>}
                   {visibleCols.includes('checkin')   && <td style={{ padding: '8px 14px', fontSize: 11, fontFamily: "'JetBrains Mono'", whiteSpace: 'nowrap' }}>{fmtTime(r.check_in, site?.timezone)}</td>}
                   {visibleCols.includes('checkout')  && <td style={{ padding: '8px 14px', fontSize: 11, fontFamily: "'JetBrains Mono'", whiteSpace: 'nowrap' }}>{fmtTime(r.check_out, site?.timezone)}</td>}
                   {visibleCols.includes('hours')     && <td style={{ padding: '8px 14px', fontSize: 11, fontFamily: "'JetBrains Mono'", whiteSpace: 'nowrap' }}>{fmtHours(r.hours_worked)}</td>}
-                  {visibleCols.includes('time_out')  && <td style={{ padding: '8px 14px', fontSize: 11, fontFamily: "'JetBrains Mono'", color: tom>0?'#f59e0b':'#4a5568', whiteSpace: 'nowrap' }}>{tomLabel}</td>}
+                  {visibleCols.includes('time_out')  && <td style={{ padding: '8px 14px', fontSize: 11, fontFamily: "'JetBrains Mono'", color: tom>0?'#f59e0b':'#94a3b8', whiteSpace: 'nowrap' }}>{tomLabel}</td>}
                   {visibleCols.includes('sales') && (
                     <td style={{ padding: '8px 14px', whiteSpace: 'nowrap' }}>
                       {isEditing ? (
                         <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
-                          <input type='number' value={editingSale.value} onChange={e => { setEditingSale(p => ({ ...p, value: e.target.value })); setSaleErr('') }} onKeyDown={e => { if (e.key === 'Enter') saveSale(r.id); if (e.key === 'Escape') setEditingSale(null) }} autoFocus style={{ width: 90, background: '#0d1220', border: '1px solid '+(saleErr?'#ef4444':'#3b82f6'), color: '#f1f5f9', fontSize: 11, padding: '4px 7px', borderRadius: 5, fontFamily: "'JetBrains Mono'", outline: 'none' }} />
+                          <input type='number' value={editingSale.value} onChange={e => { setEditingSale(p => ({ ...p, value: e.target.value })); setSaleErr('') }} onKeyDown={e => { if (e.key === 'Enter') saveSale(r.id); if (e.key === 'Escape') setEditingSale(null) }} autoFocus style={{ width: 90, background: '#ffffff', border: '1px solid '+(saleErr?'#ef4444':'#3b82f6'), color: '#0f172a', fontSize: 11, padding: '4px 7px', borderRadius: 5, fontFamily: "'JetBrains Mono'", outline: 'none' }} />
                           <button onClick={() => saveSale(r.id)} style={{ background: 'rgba(16,185,129,.15)', border: '1px solid rgba(16,185,129,.3)', borderRadius: 4, color: '#10b981', fontSize: 12, cursor: 'pointer', padding: '3px 7px' }}>✓</button>
-                          <button onClick={() => { setEditingSale(null); setSaleErr('') }} style={{ background: 'none', border: '1px solid #1e2a45', borderRadius: 4, color: '#8892a8', fontSize: 12, cursor: 'pointer', padding: '3px 7px' }}>✕</button>
+                          <button onClick={() => { setEditingSale(null); setSaleErr('') }} style={{ background: 'none', border: '1px solid #e2e8f0', borderRadius: 4, color: '#64748b', fontSize: 12, cursor: 'pointer', padding: '3px 7px' }}>✕</button>
                         </div>
                       ) : (
                         <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-                          <span style={{ fontSize: 11, fontFamily: "'JetBrains Mono'", color: r.sales_amount > 0 ? '#10b981' : '#4a5568' }}>{r.sales_amount > 0 ? '$'+Number(r.sales_amount).toLocaleString('es-MX') : '–'}</span>
-                          <button onClick={() => { setEditingSale({ id: r.id, value: r.sales_amount || 0 }); setSaleErr('') }} style={{ background: 'none', border: 'none', color: '#4a5568', cursor: 'pointer', fontSize: 11, padding: '1px 4px', borderRadius: 3, lineHeight: 1 }} title='Editar venta'>✎</button>
+                          <span style={{ fontSize: 11, fontFamily: "'JetBrains Mono'", color: r.sales_amount > 0 ? '#10b981' : '#94a3b8' }}>{r.sales_amount > 0 ? '$'+Number(r.sales_amount).toLocaleString('es-MX') : '–'}</span>
+                          <button onClick={() => { setEditingSale({ id: r.id, value: r.sales_amount || 0 }); setSaleErr('') }} style={{ background: 'none', border: 'none', color: '#94a3b8', cursor: 'pointer', fontSize: 11, padding: '1px 4px', borderRadius: 3, lineHeight: 1 }} title='Editar venta'>✎</button>
                         </div>
                       )}
                       {isEditing && saleErr && <div style={{ fontSize: 9, color: '#ef4444', marginTop: 2 }}>{saleErr}</div>}
                     </td>
                   )}
-                  {visibleCols.includes('photo_in')  && <td style={{ padding: '8px 14px' }}>{r.photo_url?<a href={r.photo_url} target='_blank' rel='noopener noreferrer'><img src={r.photo_url} alt='in' style={{ width:32,height:32,borderRadius:6,objectFit:'cover',display:'block',border:'1px solid #1e2a45' }} /></a>:<span style={{ fontSize:10,color:'#4a5568' }}>–</span>}</td>}
-                  {visibleCols.includes('photo_out') && <td style={{ padding: '8px 14px' }}>{r.photo_url_out?<a href={r.photo_url_out} target='_blank' rel='noopener noreferrer'><img src={r.photo_url_out} alt='out' style={{ width:32,height:32,borderRadius:6,objectFit:'cover',display:'block',border:'1px solid #1e2a45' }} /></a>:<span style={{ fontSize:10,color:'#4a5568' }}>–</span>}</td>}
-                  {visibleCols.includes('gps')       && <td style={{ padding: '8px 14px', fontSize: 11, whiteSpace: 'nowrap' }}>{gpsLink?<a href={gpsLink} target='_blank' rel='noopener noreferrer' style={{ color:'#3b82f6',textDecoration:'none',fontFamily:"'JetBrains Mono'" }}>{gpsLabel} ↗</a>:<span style={{ color:'#4a5568' }}>–</span>}</td>}
-                  {visibleCols.includes('status')    && <td style={{ padding: '8px 14px' }}>{r.status?<span style={{ padding:'2px 8px',borderRadius:4,fontSize:10,fontWeight:600,color:stClr[r.status]||'#8892a8',background:stBg[r.status]||'rgba(136,146,168,.1)',whiteSpace:'nowrap' }}>{stLbl[r.status]||r.status}</span>:<span style={{ fontSize:10,color:'#4a5568' }}>–</span>}</td>}
+                  {visibleCols.includes('photo_in')  && <td style={{ padding: '8px 14px' }}>{r.photo_url?<a href={r.photo_url} target='_blank' rel='noopener noreferrer'><img src={r.photo_url} alt='in' style={{ width:32,height:32,borderRadius:6,objectFit:'cover',display:'block',border:'1px solid #e2e8f0' }} /></a>:<span style={{ fontSize:10,color:'#94a3b8' }}>–</span>}</td>}
+                  {visibleCols.includes('photo_out') && <td style={{ padding: '8px 14px' }}>{r.photo_url_out?<a href={r.photo_url_out} target='_blank' rel='noopener noreferrer'><img src={r.photo_url_out} alt='out' style={{ width:32,height:32,borderRadius:6,objectFit:'cover',display:'block',border:'1px solid #e2e8f0' }} /></a>:<span style={{ fontSize:10,color:'#94a3b8' }}>–</span>}</td>}
+                  {visibleCols.includes('gps')       && <td style={{ padding: '8px 14px', fontSize: 11, whiteSpace: 'nowrap' }}>{gpsLink?<a href={gpsLink} target='_blank' rel='noopener noreferrer' style={{ color:'#3b82f6',textDecoration:'none',fontFamily:"'JetBrains Mono'" }}>{gpsLabel} ↗</a>:<span style={{ color:'#94a3b8' }}>–</span>}</td>}
+                  {visibleCols.includes('status')    && <td style={{ padding: '8px 14px' }}>{r.status?<span style={{ padding:'2px 8px',borderRadius:4,fontSize:10,fontWeight:600,color:stClr[r.status]||'#64748b',background:stBg[r.status]||'rgba(136,146,168,.1)',whiteSpace:'nowrap' }}>{stLbl[r.status]||r.status}</span>:<span style={{ fontSize:10,color:'#94a3b8' }}>–</span>}</td>}
                 </tr>
               )
             })}
@@ -927,60 +927,60 @@ function EmpModal({ data, currentGoal, sites, currentSiteIds, onSave, onClose })
   }
   return (
     <div onClick={onClose} style={{ position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', background: 'rgba(0,0,0,.7)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 200 }}>
-      <div onClick={e => e.stopPropagation()} style={{ background: '#1a2035', border: '1px solid #1e2a45', borderRadius: 12, padding: 22, width: '100%', maxWidth: 440, maxHeight: '85vh', overflow: 'auto' }}>
+      <div onClick={e => e.stopPropagation()} style={{ background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: 12, padding: 22, width: '100%', maxWidth: 440, maxHeight: '85vh', overflow: 'auto' }}>
         <h3 style={{ fontSize: 15, fontWeight: 700, marginBottom: 14 }}>{data ? 'Editar Empleado' : 'Nuevo Empleado'}</h3>
         {[['Nombre','name','text'],['Email','email','email'],['Teléfono','phone','tel']].map(([l,k,t]) => (
           <div key={k} style={{ marginBottom: 10 }}>
-            <label style={{ fontSize: 10, fontWeight: 600, color: '#8892a8', display: 'block', marginBottom: 4 }}>{l}</label>
-            <input type={t} value={f[k]||''} onChange={e => upd(k, e.target.value)} style={{ width:'100%',background:'#0d1220',border:`1px solid ${k==='email'&&emailErr?'#ef4444':'#1e2a45'}`,color:'#f1f5f9',fontSize:12,padding:'8px 10px',borderRadius:6,outline:'none',fontFamily:'inherit' }} />
+            <label style={{ fontSize: 10, fontWeight: 600, color: '#64748b', display: 'block', marginBottom: 4 }}>{l}</label>
+            <input type={t} value={f[k]||''} onChange={e => upd(k, e.target.value)} style={{ width:'100%',background:'#ffffff',border:`1px solid ${k==='email'&&emailErr?'#ef4444':'#e2e8f0'}`,color:'#0f172a',fontSize:12,padding:'8px 10px',borderRadius:6,outline:'none',fontFamily:'inherit' }} />
             {k === 'email' && emailErr && <div style={{ fontSize: 11, color: '#ef4444', marginTop: 4, fontWeight: 600 }}>⚠ {emailErr}</div>}
           </div>
         ))}
         <div style={{ marginBottom: 10 }}>
-          <label style={{ fontSize: 10, fontWeight: 600, color: '#8892a8', display: 'block', marginBottom: 4 }}>Rol</label>
-          <select value={f.role||'Vendedor(a)'} onChange={e => upd('role', e.target.value)} style={{ width:'100%',background:'#0d1220',border:'1px solid #1e2a45',color:'#f1f5f9',fontSize:12,padding:'8px 10px',borderRadius:6,fontFamily:'inherit' }}>
+          <label style={{ fontSize: 10, fontWeight: 600, color: '#64748b', display: 'block', marginBottom: 4 }}>Rol</label>
+          <select value={f.role||'Vendedor(a)'} onChange={e => upd('role', e.target.value)} style={{ width:'100%',background:'#ffffff',border:'1px solid #e2e8f0',color:'#0f172a',fontSize:12,padding:'8px 10px',borderRadius:6,fontFamily:'inherit' }}>
             <option>Vendedor(a)</option><option>Encargado(a)</option><option>Gerente Regional</option><option>Supervisor(a)</option>
           </select>
         </div>
         {sites.length > 0 && (
-          <div style={{ marginBottom: 14, borderTop: '1px solid #1e2a45', paddingTop: 12 }}>
-            <div style={{ fontSize: 10, fontWeight: 600, color: '#4a5568', textTransform: 'uppercase', letterSpacing: '.5px', marginBottom: 8 }}>Puntos de venta asignados</div>
+          <div style={{ marginBottom: 14, borderTop: '1px solid #e2e8f0', paddingTop: 12 }}>
+            <div style={{ fontSize: 10, fontWeight: 600, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '.5px', marginBottom: 8 }}>Puntos de venta asignados</div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
               {sites.map(s => (
-                <label key={s.id} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, cursor: 'pointer', color: '#f1f5f9', padding: '6px 10px', borderRadius: 6, background: selSites.includes(s.id) ? 'rgba(59,130,246,.1)' : 'transparent', border: '1px solid ' + (selSites.includes(s.id) ? 'rgba(59,130,246,.3)' : '#1e2a45') }}>
+                <label key={s.id} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, cursor: 'pointer', color: '#0f172a', padding: '6px 10px', borderRadius: 6, background: selSites.includes(s.id) ? 'rgba(59,130,246,.1)' : 'transparent', border: '1px solid ' + (selSites.includes(s.id) ? 'rgba(59,130,246,.3)' : '#e2e8f0') }}>
                   <input type='checkbox' checked={selSites.includes(s.id)} onChange={() => setSelSites(p => p.includes(s.id) ? p.filter(x => x !== s.id) : [...p, s.id])} style={{ accentColor: '#3b82f6' }} />
                   {s.name}
                 </label>
               ))}
             </div>
-            <div style={{ fontSize: 10, color: '#4a5568', marginTop: 6 }}>Los gerentes de las sucursales marcadas podrán ver y asignar horarios a este empleado.</div>
+            <div style={{ fontSize: 10, color: '#94a3b8', marginTop: 6 }}>Los gerentes de las sucursales marcadas podrán ver y asignar horarios a este empleado.</div>
           </div>
         )}
         <div style={{ marginBottom: 14, background: 'rgba(16,185,129,.05)', border: `1px solid ${goalErr ? 'rgba(239,68,68,.4)' : 'rgba(16,185,129,.15)'}`, borderRadius: 8, padding: '12px 14px' }}>
           <label style={{ fontSize: 10, fontWeight: 600, color: '#10b981', display: 'block', marginBottom: 6, textTransform: 'uppercase', letterSpacing: '.5px' }}>Meta de ventas semanal</label>
           <div style={{ position: 'relative' }}>
-            <span style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', fontSize: 14, fontWeight: 700, color: '#4a5568', pointerEvents: 'none' }}>$</span>
-            <input type='number' inputMode='decimal' placeholder='Sin meta (dejar vacío)' value={weeklyGoal} onChange={e => { setWeeklyGoal(e.target.value); setGoalErr('') }} style={{ width:'100%',background:'#0d1220',border:`1px solid ${goalErr?'#ef4444':'#1e2a45'}`,color:'#f1f5f9',fontSize:14,fontWeight:700,padding:'10px 10px 10px 26px',borderRadius:8,outline:'none',fontFamily:"'JetBrains Mono', monospace",boxSizing:'border-box' }} />
+            <span style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', fontSize: 14, fontWeight: 700, color: '#94a3b8', pointerEvents: 'none' }}>$</span>
+            <input type='number' inputMode='decimal' placeholder='Sin meta (dejar vacío)' value={weeklyGoal} onChange={e => { setWeeklyGoal(e.target.value); setGoalErr('') }} style={{ width:'100%',background:'#ffffff',border:`1px solid ${goalErr?'#ef4444':'#e2e8f0'}`,color:'#0f172a',fontSize:14,fontWeight:700,padding:'10px 10px 10px 26px',borderRadius:8,outline:'none',fontFamily:"'JetBrains Mono', monospace",boxSizing:'border-box' }} />
           </div>
           {goalErr && <div style={{ fontSize: 11, color: '#ef4444', marginTop: 6, fontWeight: 600 }}>⚠ {goalErr}</div>}
-          {!goalErr && <div style={{ fontSize: 10, color: '#4a5568', marginTop: 6 }}>Máximo ${MAX_SALE.toLocaleString('es-MX')}. Deja vacío para no asignar meta.</div>}
+          {!goalErr && <div style={{ fontSize: 10, color: '#94a3b8', marginTop: 6 }}>Máximo ${MAX_SALE.toLocaleString('es-MX')}. Deja vacío para no asignar meta.</div>}
         </div>
-        <div style={{ borderTop: '1px solid #1e2a45', paddingTop: 12, marginBottom: 14 }}>
-          <div style={{ fontSize: 10, fontWeight: 600, color: '#4a5568', textTransform: 'uppercase', letterSpacing: '.5px', marginBottom: 10 }}>Comportamiento</div>
-          <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, cursor: 'pointer', color: '#f1f5f9' }}>
+        <div style={{ borderTop: '1px solid #e2e8f0', paddingTop: 12, marginBottom: 14 }}>
+          <div style={{ fontSize: 10, fontWeight: 600, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '.5px', marginBottom: 10 }}>Comportamiento</div>
+          <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, cursor: 'pointer', color: '#0f172a' }}>
             <input type='checkbox' checked={isVendor} onChange={e => upd('skip_sales', !e.target.checked)} />
             Vendedor — pedir monto de ventas al hacer Check Out
           </label>
-          <div style={{ fontSize: 10, color: '#4a5568', marginTop: 4, marginLeft: 20 }}>Desmarca si es bodega, admin u otro rol sin ventas directas</div>
-          <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, cursor: 'pointer', color: '#f1f5f9', marginTop: 10 }}>
+          <div style={{ fontSize: 10, color: '#94a3b8', marginTop: 4, marginLeft: 20 }}>Desmarca si es bodega, admin u otro rol sin ventas directas</div>
+          <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, cursor: 'pointer', color: '#0f172a', marginTop: 10 }}>
             <input type='checkbox' checked={!f.skip_photo} onChange={e => upd('skip_photo', !e.target.checked)} />
             Pedir foto al hacer Check In y Check Out
           </label>
-          <div style={{ fontSize: 10, color: '#4a5568', marginTop: 4, marginLeft: 20 }}>Desmarca si no quieres solicitar foto a este empleado</div>
+          <div style={{ fontSize: 10, color: '#94a3b8', marginTop: 4, marginLeft: 20 }}>Desmarca si no quieres solicitar foto a este empleado</div>
         </div>
         <div style={{ display: 'flex', gap: 8 }}>
-          <button disabled={!valid} onClick={handleSave} style={{ flex:1,padding:'10px 16px',borderRadius:7,border:'none',background:valid?'#3b82f6':'#1e2a45',color:'#fff',fontSize:12,fontWeight:600,cursor:valid?'pointer':'not-allowed',fontFamily:'inherit' }}>Guardar</button>
-          <button onClick={onClose} style={{ padding:'10px 16px',borderRadius:7,border:'1px solid #1e2a45',background:'transparent',color:'#8892a8',fontSize:12,cursor:'pointer',fontFamily:'inherit' }}>Cancelar</button>
+          <button disabled={!valid} onClick={handleSave} style={{ flex:1,padding:'10px 16px',borderRadius:7,border:'none',background:valid?'#3b82f6':'#e2e8f0',color:'#fff',fontSize:12,fontWeight:600,cursor:valid?'pointer':'not-allowed',fontFamily:'inherit' }}>Guardar</button>
+          <button onClick={onClose} style={{ padding:'10px 16px',borderRadius:7,border:'1px solid #e2e8f0',background:'transparent',color:'#64748b',fontSize:12,cursor:'pointer',fontFamily:'inherit' }}>Cancelar</button>
         </div>
       </div>
     </div>
@@ -1041,27 +1041,27 @@ function SiteModal({ data, onSave, onClose }) {
   }
   return (
     <div onClick={onClose} style={{ position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', background: 'rgba(0,0,0,.7)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 200 }}>
-      <div onClick={e => e.stopPropagation()} style={{ background: '#1a2035', border: '1px solid #1e2a45', borderRadius: 12, padding: 22, width: '100%', maxWidth: 520, maxHeight: '92vh', overflow: 'auto' }}>
+      <div onClick={e => e.stopPropagation()} style={{ background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: 12, padding: 22, width: '100%', maxWidth: 520, maxHeight: '92vh', overflow: 'auto' }}>
         <h3 style={{ fontSize: 15, fontWeight: 700, marginBottom: 14 }}>{isNew ? 'Nuevo Sitio' : 'Editar Sitio'}</h3>
-        <div style={{ marginBottom: 10 }}><label style={{ fontSize: 10, fontWeight: 600, color: '#8892a8', display: 'block', marginBottom: 4 }}>Nombre del sitio</label><input value={f.name||''} onChange={e => upd('name', e.target.value)} style={{ width:'100%',background:'#0d1220',border:'1px solid #1e2a45',color:'#f1f5f9',fontSize:12,padding:'8px 10px',borderRadius:6,outline:'none',fontFamily:'inherit' }} placeholder='Ej: Plaza Américas Cancún' /></div>
-        <div style={{ marginBottom: 6 }}><label style={{ fontSize: 10, fontWeight: 600, color: '#8892a8', display: 'block', marginBottom: 4 }}>Buscar ubicación</label>
+        <div style={{ marginBottom: 10 }}><label style={{ fontSize: 10, fontWeight: 600, color: '#64748b', display: 'block', marginBottom: 4 }}>Nombre del sitio</label><input value={f.name||''} onChange={e => upd('name', e.target.value)} style={{ width:'100%',background:'#ffffff',border:'1px solid #e2e8f0',color:'#0f172a',fontSize:12,padding:'8px 10px',borderRadius:6,outline:'none',fontFamily:'inherit' }} placeholder='Ej: Plaza Américas Cancún' /></div>
+        <div style={{ marginBottom: 6 }}><label style={{ fontSize: 10, fontWeight: 600, color: '#64748b', display: 'block', marginBottom: 4 }}>Buscar ubicación</label>
           <div style={{ display: 'flex', gap: 6 }}>
-            <input value={searchQuery} onChange={e => setSearchQuery(e.target.value)} onKeyDown={e => e.key === 'Enter' && searchLocation()} placeholder='Ej: Plaza Américas Cancún, Quintana Roo' style={{ flex:1,background:'#0d1220',border:'1px solid #1e2a45',color:'#f1f5f9',fontSize:12,padding:'8px 10px',borderRadius:6,outline:'none',fontFamily:'inherit' }} />
+            <input value={searchQuery} onChange={e => setSearchQuery(e.target.value)} onKeyDown={e => e.key === 'Enter' && searchLocation()} placeholder='Ej: Plaza Américas Cancún, Quintana Roo' style={{ flex:1,background:'#ffffff',border:'1px solid #e2e8f0',color:'#0f172a',fontSize:12,padding:'8px 10px',borderRadius:6,outline:'none',fontFamily:'inherit' }} />
             <button onClick={searchLocation} disabled={searching} style={{ padding:'8px 14px',borderRadius:6,border:'none',background:'#3b82f6',color:'#fff',fontSize:12,fontWeight:600,cursor:searching?'wait':'pointer',fontFamily:'inherit',whiteSpace:'nowrap' }}>{searching ? '...' : '🔍 Buscar'}</button>
           </div>
           {searchErr && <div style={{ fontSize: 11, color: '#f59e0b', marginTop: 4 }}>⚠ {searchErr}</div>}
         </div>
-        <div style={{ marginBottom: 10, borderRadius: 8, overflow: 'hidden', border: '1px solid #1e2a45' }}><div ref={mapRef} style={{ height: 220, width: '100%', background: '#0d1220' }} /></div>
-        <div style={{ fontSize: 10, color: '#4a5568', marginBottom: 12 }}>{hasGps ? `📍 ${f.lat}, ${f.lng} — arrastra el marcador para ajustar` : '⚠️ Sin coordenadas — busca la ubicación o arrastra el marcador'}</div>
-        <div style={{ marginBottom: 10 }}><label style={{ fontSize: 10, fontWeight: 600, color: '#8892a8', display: 'block', marginBottom: 4 }}>Dirección (texto)</label><input value={f.address||''} onChange={e => upd('address', e.target.value)} style={{ width:'100%',background:'#0d1220',border:'1px solid #1e2a45',color:'#f1f5f9',fontSize:12,padding:'8px 10px',borderRadius:6,outline:'none',fontFamily:'inherit' }} /></div>
+        <div style={{ marginBottom: 10, borderRadius: 8, overflow: 'hidden', border: '1px solid #e2e8f0' }}><div ref={mapRef} style={{ height: 220, width: '100%', background: '#ffffff' }} /></div>
+        <div style={{ fontSize: 10, color: '#94a3b8', marginBottom: 12 }}>{hasGps ? `📍 ${f.lat}, ${f.lng} — arrastra el marcador para ajustar` : '⚠️ Sin coordenadas — busca la ubicación o arrastra el marcador'}</div>
+        <div style={{ marginBottom: 10 }}><label style={{ fontSize: 10, fontWeight: 600, color: '#64748b', display: 'block', marginBottom: 4 }}>Dirección (texto)</label><input value={f.address||''} onChange={e => upd('address', e.target.value)} style={{ width:'100%',background:'#ffffff',border:'1px solid #e2e8f0',color:'#0f172a',fontSize:12,padding:'8px 10px',borderRadius:6,outline:'none',fontFamily:'inherit' }} /></div>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 10 }}>
-          <div><label style={{ fontSize: 10, fontWeight: 600, color: '#8892a8', display: 'block', marginBottom: 4 }}>Radio GPS (metros)</label><input type='number' value={f.radius_m??150} onChange={e => upd('radius_m', parseInt(e.target.value)||150)} style={{ width:'100%',background:'#0d1220',border:'1px solid #1e2a45',color:'#f1f5f9',fontSize:12,padding:'8px 10px',borderRadius:6,outline:'none',fontFamily:'inherit' }} /></div>
-          <div><label style={{ fontSize: 10, fontWeight: 600, color: '#8892a8', display: 'block', marginBottom: 4 }}>Tolerancia (minutos)</label><input type='number' value={f.grace_mins||0} onChange={e => upd('grace_mins', parseInt(e.target.value)||0)} style={{ width:'100%',background:'#0d1220',border:'1px solid #1e2a45',color:'#f1f5f9',fontSize:12,padding:'8px 10px',borderRadius:6,outline:'none',fontFamily:'inherit' }} /></div>
+          <div><label style={{ fontSize: 10, fontWeight: 600, color: '#64748b', display: 'block', marginBottom: 4 }}>Radio GPS (metros)</label><input type='number' value={f.radius_m??150} onChange={e => upd('radius_m', parseInt(e.target.value)||150)} style={{ width:'100%',background:'#ffffff',border:'1px solid #e2e8f0',color:'#0f172a',fontSize:12,padding:'8px 10px',borderRadius:6,outline:'none',fontFamily:'inherit' }} /></div>
+          <div><label style={{ fontSize: 10, fontWeight: 600, color: '#64748b', display: 'block', marginBottom: 4 }}>Tolerancia (minutos)</label><input type='number' value={f.grace_mins||0} onChange={e => upd('grace_mins', parseInt(e.target.value)||0)} style={{ width:'100%',background:'#ffffff',border:'1px solid #e2e8f0',color:'#0f172a',fontSize:12,padding:'8px 10px',borderRadius:6,outline:'none',fontFamily:'inherit' }} /></div>
         </div>
         <div style={{ marginBottom: 14 }}>
-          <label style={{ fontSize: 10, fontWeight: 600, color: '#8892a8', display: 'block', marginBottom: 4 }}>Zona horaria</label>
+          <label style={{ fontSize: 10, fontWeight: 600, color: '#64748b', display: 'block', marginBottom: 4 }}>Zona horaria</label>
           <select value={f.timezone || 'America/Cancun'} onChange={e => upd('timezone', e.target.value)}
-            style={{ width:'100%',background:'#0d1220',border:'1px solid #1e2a45',color:'#f1f5f9',fontSize:12,padding:'8px 10px',borderRadius:6,outline:'none',fontFamily:'inherit' }}>
+            style={{ width:'100%',background:'#ffffff',border:'1px solid #e2e8f0',color:'#0f172a',fontSize:12,padding:'8px 10px',borderRadius:6,outline:'none',fontFamily:'inherit' }}>
             <option value='America/Cancun'>Cancún / Q. Roo (UTC-5, sin horario de verano)</option>
             <option value='America/Mexico_City'>CDMX / Monterrey / Guadalajara (UTC-6/-5 con verano)</option>
             <option value='America/Merida'>Mérida / Yucatán (UTC-6/-5 con verano)</option>
@@ -1072,11 +1072,11 @@ function SiteModal({ data, onSave, onClose }) {
             <option value='America/Tijuana'>Tijuana / Baja California (UTC-8/-7 con verano)</option>
           </select>
         </div>
-        {isNew && <div style={{ background: 'rgba(59,130,246,.06)', border: '1px solid rgba(59,130,246,.15)', borderRadius: 8, padding: '10px 14px', marginBottom: 14 }}><div style={{ fontSize: 10, color: '#3b82f6', fontWeight: 600, marginBottom: 2 }}>Código QR</div><div style={{ fontSize: 11, color: '#4a5568' }}>Se generará automáticamente al guardar.</div></div>}
-        {!isNew && <div style={{ marginBottom: 14 }}><label style={{ fontSize: 10, fontWeight: 600, color: '#8892a8', display: 'block', marginBottom: 4 }}>Código QR</label><input value={f.code||''} onChange={e => upd('code', e.target.value.toUpperCase())} style={{ width:'100%',background:'#0d1220',border:'1px solid #1e2a45',color:'#f1f5f9',fontSize:12,padding:'8px 10px',borderRadius:6,outline:'none',fontFamily:"'JetBrains Mono'" }} /></div>}
+        {isNew && <div style={{ background: 'rgba(59,130,246,.06)', border: '1px solid rgba(59,130,246,.15)', borderRadius: 8, padding: '10px 14px', marginBottom: 14 }}><div style={{ fontSize: 10, color: '#3b82f6', fontWeight: 600, marginBottom: 2 }}>Código QR</div><div style={{ fontSize: 11, color: '#94a3b8' }}>Se generará automáticamente al guardar.</div></div>}
+        {!isNew && <div style={{ marginBottom: 14 }}><label style={{ fontSize: 10, fontWeight: 600, color: '#64748b', display: 'block', marginBottom: 4 }}>Código QR</label><input value={f.code||''} onChange={e => upd('code', e.target.value.toUpperCase())} style={{ width:'100%',background:'#ffffff',border:'1px solid #e2e8f0',color:'#0f172a',fontSize:12,padding:'8px 10px',borderRadius:6,outline:'none',fontFamily:"'JetBrains Mono'" }} /></div>}
         <div style={{ display: 'flex', gap: 8 }}>
-          <button disabled={!valid} onClick={() => onSave(f)} style={{ flex:1,padding:'10px 16px',borderRadius:7,border:'none',background:valid?'#3b82f6':'#1e2a45',color:'#fff',fontSize:12,fontWeight:600,cursor:valid?'pointer':'not-allowed',fontFamily:'inherit' }}>Guardar</button>
-          <button onClick={onClose} style={{ padding:'10px 16px',borderRadius:7,border:'1px solid #1e2a45',background:'transparent',color:'#8892a8',fontSize:12,cursor:'pointer',fontFamily:'inherit' }}>Cancelar</button>
+          <button disabled={!valid} onClick={() => onSave(f)} style={{ flex:1,padding:'10px 16px',borderRadius:7,border:'none',background:valid?'#3b82f6':'#e2e8f0',color:'#fff',fontSize:12,fontWeight:600,cursor:valid?'pointer':'not-allowed',fontFamily:'inherit' }}>Guardar</button>
+          <button onClick={onClose} style={{ padding:'10px 16px',borderRadius:7,border:'1px solid #e2e8f0',background:'transparent',color:'#64748b',fontSize:12,cursor:'pointer',fontFamily:'inherit' }}>Cancelar</button>
         </div>
       </div>
     </div>
@@ -1092,16 +1092,16 @@ function QrModal({ site, url, onClose }) {
   }
   return (
     <div onClick={onClose} style={{ position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', background: 'rgba(0,0,0,.7)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 200, backdropFilter: 'blur(4px)' }}>
-      <div onClick={e => e.stopPropagation()} style={{ background: '#1a2035', border: '1px solid #1e2a45', borderRadius: 14, padding: 24, width: '100%', maxWidth: 380, textAlign: 'center' }}>
+      <div onClick={e => e.stopPropagation()} style={{ background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: 14, padding: 24, width: '100%', maxWidth: 380, textAlign: 'center' }}>
         <h3 style={{ fontSize: 16, fontWeight: 700, marginBottom: 4 }}>{site.name}</h3>
-        <p style={{ fontSize: 12, color: '#8892a8', marginBottom: 16 }}>{site.address}</p>
+        <p style={{ fontSize: 12, color: '#64748b', marginBottom: 16 }}>{site.address}</p>
         <div style={{ background: '#fff', borderRadius: 12, padding: 20, display: 'inline-block', marginBottom: 16 }}><img src={qrImgUrl} alt='QR Code' style={{ width: 220, height: 220, display: 'block' }} /></div>
         <div style={{ fontFamily: "'JetBrains Mono'", fontSize: 18, fontWeight: 700, letterSpacing: 3, marginBottom: 4 }}>{site.code}</div>
-        <div style={{ fontSize: 11, color: '#4a5568', marginBottom: 16, wordBreak: 'break-all' }}>{url}</div>
+        <div style={{ fontSize: 11, color: '#94a3b8', marginBottom: 16, wordBreak: 'break-all' }}>{url}</div>
         <div style={{ display: 'flex', gap: 8, justifyContent: 'center' }}>
           <button onClick={printQR} style={{ padding:'10px 20px',borderRadius:7,border:'none',background:'#3b82f6',color:'#fff',fontSize:12,fontWeight:600,cursor:'pointer',fontFamily:'inherit' }}>Imprimir QR</button>
-          <button onClick={() => navigator.clipboard.writeText(url)} style={{ padding:'10px 20px',borderRadius:7,border:'1px solid #1e2a45',background:'transparent',color:'#8892a8',fontSize:12,cursor:'pointer',fontFamily:'inherit' }}>Copiar URL</button>
-          <button onClick={onClose} style={{ padding:'10px 20px',borderRadius:7,border:'1px solid #1e2a45',background:'transparent',color:'#8892a8',fontSize:12,cursor:'pointer',fontFamily:'inherit' }}>Cerrar</button>
+          <button onClick={() => navigator.clipboard.writeText(url)} style={{ padding:'10px 20px',borderRadius:7,border:'1px solid #e2e8f0',background:'transparent',color:'#64748b',fontSize:12,cursor:'pointer',fontFamily:'inherit' }}>Copiar URL</button>
+          <button onClick={onClose} style={{ padding:'10px 20px',borderRadius:7,border:'1px solid #e2e8f0',background:'transparent',color:'#64748b',fontSize:12,cursor:'pointer',fontFamily:'inherit' }}>Cerrar</button>
         </div>
       </div>
     </div>
@@ -1157,56 +1157,56 @@ function ScheduleModal({ emp, sites, schedules, onSave, onClose }) {
   }
   const weekLabel = (() => { const s = weekDates[0].d; const e = weekDates[6].d; return `${s.getDate()} ${s.toLocaleDateString('es-MX',{month:'short'})} – ${e.getDate()} ${e.toLocaleDateString('es-MX',{month:'short',year:'numeric'})}` })()
   // FIX BUG 3: estilos para cada campo de horario — cada uno en su propia línea en móvil
-  const fieldStyle = { background:'#0d1220',border:'1px solid #1e2a45',color:'#f1f5f9',fontSize:11,padding:'6px 8px',borderRadius:5,outline:'none',fontFamily:'inherit',width:'100%' }
+  const fieldStyle = { background:'#ffffff',border:'1px solid #e2e8f0',color:'#0f172a',fontSize:11,padding:'6px 8px',borderRadius:5,outline:'none',fontFamily:'inherit',width:'100%' }
   return (
     <div onClick={onClose} style={{ position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', background: 'rgba(0,0,0,.7)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 200, backdropFilter: 'blur(4px)' }}>
-      <div onClick={e => e.stopPropagation()} style={{ background: '#1a2035', border: '1px solid #1e2a45', borderRadius: 12, padding: 22, width: '100%', maxWidth: 480, maxHeight: '92vh', overflow: 'auto' }}>
+      <div onClick={e => e.stopPropagation()} style={{ background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: 12, padding: 22, width: '100%', maxWidth: 480, maxHeight: '92vh', overflow: 'auto' }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4, flexWrap: 'wrap', gap: 8 }}>
           <h3 style={{ fontSize: 15, fontWeight: 700 }}>Horarios — {emp.name}</h3>
           <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
             {/* Toggle semana fija */}
             <button
               onClick={() => setFixedWeek(v => !v)}
-              style={{ fontSize:10, fontWeight:600, padding:'4px 10px', borderRadius:5, cursor:'pointer', fontFamily:'inherit', border:'1px solid '+(fixedWeek?'rgba(245,158,11,.5)':'#1e2a45'), background:fixedWeek?'rgba(245,158,11,.15)':'transparent', color:fixedWeek?'#f59e0b':'#4a5568', transition:'all .15s' }}
+              style={{ fontSize:10, fontWeight:600, padding:'4px 10px', borderRadius:5, cursor:'pointer', fontFamily:'inherit', border:'1px solid '+(fixedWeek?'rgba(245,158,11,.5)':'#e2e8f0'), background:fixedWeek?'rgba(245,158,11,.15)':'transparent', color:fixedWeek?'#f59e0b':'#94a3b8', transition:'all .15s' }}
             >
               {fixedWeek ? '📌 Semana fija ON' : 'Semana fija OFF'}
             </button>
             {/* Selector de semana (solo si NO es semana fija) */}
             {!fixedWeek && (
-              <div style={{ display: 'flex', alignItems: 'center', gap: 6, background: '#0d1220', border: '1px solid #1e2a45', borderRadius: 8, padding: '4px 6px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6, background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: 8, padding: '4px 6px' }}>
                 <button onClick={() => setWeekStart(d => addDays(d,-7))} style={{ background:'rgba(59,130,246,.15)',border:'none',borderRadius:5,color:'#3b82f6',padding:'5px 12px',cursor:'pointer',fontFamily:'inherit',fontSize:15,fontWeight:700,lineHeight:1 }}>‹</button>
-                <span style={{ fontSize:11,color:'#f1f5f9',fontWeight:600,minWidth:140,textAlign:'center' }}>{weekLabel}</span>
+                <span style={{ fontSize:11,color:'#0f172a',fontWeight:600,minWidth:140,textAlign:'center' }}>{weekLabel}</span>
                 <button onClick={() => setWeekStart(d => addDays(d,7))} style={{ background:'rgba(59,130,246,.15)',border:'none',borderRadius:5,color:'#3b82f6',padding:'5px 12px',cursor:'pointer',fontFamily:'inherit',fontSize:15,fontWeight:700,lineHeight:1 }}>›</button>
               </div>
             )}
           </div>
         </div>
-        <p style={{ fontSize: 11, color: '#8892a8', marginBottom: 16 }}>Activa los días que trabaja. Cada día puede tener diferente sucursal y horario.</p>
+        <p style={{ fontSize: 11, color: '#64748b', marginBottom: 16 }}>Activa los días que trabaja. Cada día puede tener diferente sucursal y horario.</p>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
           {weekDates.map(({ date, label }) => {
             const day = week[date] || {}; const isOn = day.on; const isPast = date < todayDate; const isBlocked = day.blocked
             return (
-              <div key={date} style={{ background: isBlocked ? 'rgba(245,158,11,.05)' : isOn ? '#0d1220' : 'transparent', border: '1px solid ' + (isBlocked ? 'rgba(245,158,11,.3)' : isOn ? '#1e2a45' : 'rgba(30,42,69,.3)'), borderRadius: 8, padding: '10px 12px', opacity: isPast && !isBlocked ? 0.55 : 1 }}>
+              <div key={date} style={{ background: isBlocked ? 'rgba(245,158,11,.05)' : isOn ? '#ffffff' : 'transparent', border: '1px solid ' + (isBlocked ? 'rgba(245,158,11,.3)' : isOn ? '#e2e8f0' : 'rgba(226,232,240,.3)'), borderRadius: 8, padding: '10px 12px', opacity: isPast && !isBlocked ? 0.55 : 1 }}>
                 {/* Fila superior: toggle + nombre día + fecha */}
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: isOn && !isBlocked ? 10 : 0 }}>
-                  <button onClick={() => toggle(date)} disabled={isBlocked} style={{ width:22,height:22,borderRadius:6,flexShrink:0,cursor:isBlocked?'not-allowed':'pointer',border:'2px solid '+(isBlocked?'#f59e0b':isOn?'#10b981':'#4a5568'),background:isBlocked?'rgba(245,158,11,.15)':isOn?'#10b981':'transparent',display:'flex',alignItems:'center',justifyContent:'center',color:isBlocked?'#f59e0b':'#fff',fontSize:12,fontWeight:700 }}>{isBlocked?'🔒':isOn?'✓':''}</button>
-                  <span style={{ fontSize:12,fontWeight:700,color:date===todayDate?'#3b82f6':'#f1f5f9' }}>{label}</span>
-                  {!fixedWeek && <span style={{ fontSize:10,color:'#4a5568',fontFamily:"'JetBrains Mono'" }}>{date.slice(5).replace('-','/')}</span>}
+                  <button onClick={() => toggle(date)} disabled={isBlocked} style={{ width:22,height:22,borderRadius:6,flexShrink:0,cursor:isBlocked?'not-allowed':'pointer',border:'2px solid '+(isBlocked?'#f59e0b':isOn?'#10b981':'#94a3b8'),background:isBlocked?'rgba(245,158,11,.15)':isOn?'#10b981':'transparent',display:'flex',alignItems:'center',justifyContent:'center',color:isBlocked?'#f59e0b':'#fff',fontSize:12,fontWeight:700 }}>{isBlocked?'🔒':isOn?'✓':''}</button>
+                  <span style={{ fontSize:12,fontWeight:700,color:date===todayDate?'#3b82f6':'#0f172a' }}>{label}</span>
+                  {!fixedWeek && <span style={{ fontSize:10,color:'#94a3b8',fontFamily:"'JetBrains Mono'" }}>{date.slice(5).replace('-','/')}</span>}
                   {isBlocked && <span style={{ fontSize:11,color:'#f59e0b',fontWeight:600,marginLeft:4 }}>Ocupado — otra sucursal</span>}
-                  {!isOn && !isBlocked && <span style={{ fontSize:11,color:'#4a5568',marginLeft:4 }}>Descansa</span>}
+                  {!isOn && !isBlocked && <span style={{ fontSize:11,color:'#94a3b8',marginLeft:4 }}>Descansa</span>}
                 </div>
                 {/* FIX BUG 3: Campos en columna vertical para móvil */}
                 {isBlocked && (
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 4, paddingLeft: 30 }}>
-                    <span style={{ fontSize: 10, color: '#4a5568', fontFamily: "'JetBrains Mono'" }}>{day.start_time?.slice(0,5)} – {day.end_time?.slice(0,5)}</span>
-                    <span style={{ fontSize: 9, color: '#4a5568', background: 'rgba(245,158,11,.1)', border: '1px solid rgba(245,158,11,.2)', borderRadius: 4, padding: '1px 7px' }}>No editable</span>
+                    <span style={{ fontSize: 10, color: '#94a3b8', fontFamily: "'JetBrains Mono'" }}>{day.start_time?.slice(0,5)} – {day.end_time?.slice(0,5)}</span>
+                    <span style={{ fontSize: 9, color: '#94a3b8', background: 'rgba(245,158,11,.1)', border: '1px solid rgba(245,158,11,.2)', borderRadius: 4, padding: '1px 7px' }}>No editable</span>
                   </div>
                 )}
                 {isOn && !isBlocked && (
                   <div style={{ paddingLeft: 30, display: 'flex', flexDirection: 'column', gap: 8 }}>
                     {/* Sucursal — fila completa */}
                     <div>
-                      <div style={{ fontSize: 9, color: '#4a5568', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '.5px', marginBottom: 3 }}>Sucursal</div>
+                      <div style={{ fontSize: 9, color: '#94a3b8', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '.5px', marginBottom: 3 }}>Sucursal</div>
                       <select value={day.site_id||''} onChange={e => upd(date,'site_id',e.target.value)} style={fieldStyle}>
                         {sites.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
                       </select>
@@ -1214,26 +1214,26 @@ function ScheduleModal({ emp, sites, schedules, onSave, onClose }) {
                     {/* Horario — entrada y salida en fila */}
                     <div style={{ display: 'flex', gap: 8, alignItems: 'flex-end' }}>
                       <div style={{ flex: 1 }}>
-                        <div style={{ fontSize: 9, color: '#4a5568', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '.5px', marginBottom: 3 }}>Entrada</div>
+                        <div style={{ fontSize: 9, color: '#94a3b8', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '.5px', marginBottom: 3 }}>Entrada</div>
                         <select value={day.start_time||'10:00'} onChange={e => upd(date,'start_time',e.target.value)} style={{ ...fieldStyle, fontFamily:"'JetBrains Mono', monospace" }}>
                           {Array.from({length:24},(_,h)=>['00','30'].map(m=>`${String(h).padStart(2,'0')}:${m}`)).flat().map(t=><option key={t} value={t}>{t}</option>)}
                         </select>
                       </div>
                       <div style={{ flex: 1 }}>
-                        <div style={{ fontSize: 9, color: '#4a5568', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '.5px', marginBottom: 3 }}>Salida</div>
+                        <div style={{ fontSize: 9, color: '#94a3b8', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '.5px', marginBottom: 3 }}>Salida</div>
                         <select value={day.end_time||'19:00'} onChange={e => upd(date,'end_time',e.target.value)} style={{ ...fieldStyle, fontFamily:"'JetBrains Mono', monospace" }}>
                           {Array.from({length:24},(_,h)=>['00','30'].map(m=>`${String(h).padStart(2,'0')}:${m}`)).flat().map(t=><option key={t} value={t}>{t}</option>)}
                         </select>
                       </div>
                       <div style={{ flex: 1 }}>
-                        <div style={{ fontSize: 9, color: '#4a5568', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '.5px', marginBottom: 3 }}>Comida</div>
+                        <div style={{ fontSize: 9, color: '#94a3b8', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '.5px', marginBottom: 3 }}>Comida</div>
                         <select value={day.lunch_mins??60} onChange={e => upd(date,'lunch_mins',parseInt(e.target.value))} style={fieldStyle}>
                           <option value={0}>Sin comida</option><option value={30}>30m</option><option value={45}>45m</option><option value={60}>60m</option><option value={90}>90m</option>
                         </select>
                       </div>
                     </div>
                     {/* Copiar a todos */}
-                    <button onClick={() => copyToAll(date)} style={{ background:'none',border:'1px solid #1e2a45',borderRadius:4,color:'#8892a8',fontSize:10,padding:'4px 10px',cursor:'pointer',fontFamily:'inherit',alignSelf:'flex-start' }}>Copiar a todos los días activos</button>
+                    <button onClick={() => copyToAll(date)} style={{ background:'none',border:'1px solid #e2e8f0',borderRadius:4,color:'#64748b',fontSize:10,padding:'4px 10px',cursor:'pointer',fontFamily:'inherit',alignSelf:'flex-start' }}>Copiar a todos los días activos</button>
                   </div>
                 )}
               </div>
@@ -1242,7 +1242,7 @@ function ScheduleModal({ emp, sites, schedules, onSave, onClose }) {
         </div>
         <div style={{ display: 'flex', gap: 8, marginTop: 16 }}>
           <button disabled={saving} onClick={save} style={{ flex:1,padding:'11px 16px',borderRadius:7,border:'none',background:'#3b82f6',color:'#fff',fontSize:13,fontWeight:600,cursor:saving?'wait':'pointer',fontFamily:'inherit' }}>{saving?'Guardando...':'Guardar Semana'}</button>
-          <button onClick={onClose} style={{ padding:'11px 16px',borderRadius:7,border:'1px solid #1e2a45',background:'transparent',color:'#8892a8',fontSize:12,cursor:'pointer',fontFamily:'inherit' }}>Cancelar</button>
+          <button onClick={onClose} style={{ padding:'11px 16px',borderRadius:7,border:'1px solid #e2e8f0',background:'transparent',color:'#64748b',fontSize:12,cursor:'pointer',fontFamily:'inherit' }}>Cancelar</button>
         </div>
       </div>
     </div>
@@ -1293,26 +1293,26 @@ function AdminUserModal({ data, sites, companies, isSuperAdmin, isCompanyAdmin, 
     setTimeout(() => setCopied(false), 2500)
   }
 
-  const iS = { width:'100%',background:'#0d1220',border:'1px solid #1e2a45',color:'#f1f5f9',fontSize:12,padding:'8px 10px',borderRadius:6,outline:'none',fontFamily:'inherit' }
+  const iS = { width:'100%',background:'#ffffff',border:'1px solid #e2e8f0',color:'#0f172a',fontSize:12,padding:'8px 10px',borderRadius:6,outline:'none',fontFamily:'inherit' }
   return (
     <div onClick={createdPwd ? undefined : onClose} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.7)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 200 }}>
-      <div onClick={e => e.stopPropagation()} style={{ background: '#1a2035', border: '1px solid #1e2a45', borderRadius: 12, padding: 22, width: '100%', maxWidth: 460, maxHeight: '85vh', overflow: 'auto' }}>
+      <div onClick={e => e.stopPropagation()} style={{ background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: 12, padding: 22, width: '100%', maxWidth: 460, maxHeight: '85vh', overflow: 'auto' }}>
         <h3 style={{ fontSize: 15, fontWeight: 700, marginBottom: 14 }}>{data ? 'Editar Usuario' : 'Nuevo Usuario Admin'}</h3>
         {createdPwd ? (
           <div>
             <div style={{ background: 'rgba(16,185,129,.08)', border: '1px solid rgba(16,185,129,.2)', borderRadius: 10, padding: '16px 18px', marginBottom: 16 }}>
               <div style={{ fontSize: 13, fontWeight: 700, color: '#10b981', marginBottom: 8 }}>✅ Usuario creado</div>
-              <div style={{ fontSize: 11, color: '#8892a8', marginBottom: 14 }}>Manda estos datos a <strong style={{ color: '#f1f5f9' }}>{name}</strong> por WhatsApp. Puede cambiar su contraseña después.</div>
-              <div style={{ background: '#0d1220', border: '1px solid #1e2a45', borderRadius: 8, padding: '14px 16px', marginBottom: 14 }}>
-                <div style={{ fontSize: 10, color: '#4a5568', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '.5px', marginBottom: 8 }}>Credenciales de acceso</div>
-                <div style={{ fontSize: 12, color: '#8892a8', marginBottom: 4 }}>Email: <span style={{ color: '#f1f5f9', fontFamily: "'JetBrains Mono'" }}>{email.trim().toLowerCase()}</span></div>
-                <div style={{ fontSize: 12, color: '#8892a8' }}>Contraseña: <span style={{ color: '#3b82f6', fontFamily: "'JetBrains Mono'", fontWeight: 700, fontSize: 15 }}>{createdPwd}</span></div>
+              <div style={{ fontSize: 11, color: '#64748b', marginBottom: 14 }}>Manda estos datos a <strong style={{ color: '#0f172a' }}>{name}</strong> por WhatsApp. Puede cambiar su contraseña después.</div>
+              <div style={{ background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: 8, padding: '14px 16px', marginBottom: 14 }}>
+                <div style={{ fontSize: 10, color: '#94a3b8', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '.5px', marginBottom: 8 }}>Credenciales de acceso</div>
+                <div style={{ fontSize: 12, color: '#64748b', marginBottom: 4 }}>Email: <span style={{ color: '#0f172a', fontFamily: "'JetBrains Mono'" }}>{email.trim().toLowerCase()}</span></div>
+                <div style={{ fontSize: 12, color: '#64748b' }}>Contraseña: <span style={{ color: '#3b82f6', fontFamily: "'JetBrains Mono'", fontWeight: 700, fontSize: 15 }}>{createdPwd}</span></div>
               </div>
               <button onClick={copyCredentials} style={{ width: '100%', padding: '11px 16px', borderRadius: 7, border: 'none', background: copied ? '#10b981' : '#3b82f6', color: '#fff', fontSize: 13, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', transition: 'background .2s' }}>
                 {copied ? '¡Copiado! ✓' : '📋 Copiar para WhatsApp'}
               </button>
             </div>
-            <button onClick={onSave} style={{ width: '100%', padding: '10px 16px', borderRadius: 7, border: '1px solid #1e2a45', background: 'transparent', color: '#8892a8', fontSize: 12, cursor: 'pointer', fontFamily: 'inherit' }}>
+            <button onClick={onSave} style={{ width: '100%', padding: '10px 16px', borderRadius: 7, border: '1px solid #e2e8f0', background: 'transparent', color: '#64748b', fontSize: 12, cursor: 'pointer', fontFamily: 'inherit' }}>
               Listo, cerrar
             </button>
           </div>
@@ -1320,18 +1320,18 @@ function AdminUserModal({ data, sites, companies, isSuperAdmin, isCompanyAdmin, 
           <>
             {err && <div style={{ background:'rgba(239,68,68,.1)',border:'1px solid rgba(239,68,68,.25)',borderRadius:7,padding:'10px 14px',fontSize:12,color:'#ef4444',marginBottom:14 }}>{err}</div>}
             <div style={{ marginBottom: 10 }}>
-              <label style={{ fontSize:10,fontWeight:600,color:'#8892a8',display:'block',marginBottom:4 }}>Nombre</label>
+              <label style={{ fontSize:10,fontWeight:600,color:'#64748b',display:'block',marginBottom:4 }}>Nombre</label>
               <input value={name} onChange={e => setName(e.target.value)} style={iS} />
             </div>
             {!data && (
               <div style={{ marginBottom: 10 }}>
-                <label style={{ fontSize:10,fontWeight:600,color:'#8892a8',display:'block',marginBottom:4 }}>Email</label>
+                <label style={{ fontSize:10,fontWeight:600,color:'#64748b',display:'block',marginBottom:4 }}>Email</label>
                 <input type='email' value={email} onChange={e => setEmail(e.target.value)} style={iS} />
-                <div style={{ fontSize:10,color:'#4a5568',marginTop:4 }}>Se generará una contraseña temporal para mandar por WhatsApp</div>
+                <div style={{ fontSize:10,color:'#94a3b8',marginTop:4 }}>Se generará una contraseña temporal para mandar por WhatsApp</div>
               </div>
             )}
             <div style={{ marginBottom: 10 }}>
-              <label style={{ fontSize:10,fontWeight:600,color:'#8892a8',display:'block',marginBottom:4 }}>Rol</label>
+              <label style={{ fontSize:10,fontWeight:600,color:'#64748b',display:'block',marginBottom:4 }}>Rol</label>
               <select value={role} onChange={e => setRole(e.target.value)} style={iS}>
                 <option value='manager'>Gerente</option>
                 {isSuperAdmin && <option value='company_admin'>Admin Empresa</option>}
@@ -1340,7 +1340,7 @@ function AdminUserModal({ data, sites, companies, isSuperAdmin, isCompanyAdmin, 
             </div>
             {role !== 'superadmin' && isSuperAdmin && companies.length > 0 && (
               <div style={{ marginBottom: 10 }}>
-                <label style={{ fontSize:10,fontWeight:600,color:'#8892a8',display:'block',marginBottom:4 }}>Empresa</label>
+                <label style={{ fontSize:10,fontWeight:600,color:'#64748b',display:'block',marginBottom:4 }}>Empresa</label>
                 <select value={companyId} onChange={e => { setCompanyId(e.target.value); setSelSites([]) }} style={iS}>
                   {companies.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
                 </select>
@@ -1348,13 +1348,13 @@ function AdminUserModal({ data, sites, companies, isSuperAdmin, isCompanyAdmin, 
             )}
             {role === 'manager' && (
               <div style={{ marginBottom: 16 }}>
-                <div style={{ fontSize:10,fontWeight:600,color:'#8892a8',textTransform:'uppercase',letterSpacing:'.5px',marginBottom:8 }}>Sucursales que puede ver</div>
+                <div style={{ fontSize:10,fontWeight:600,color:'#64748b',textTransform:'uppercase',letterSpacing:'.5px',marginBottom:8 }}>Sucursales que puede ver</div>
                 {companySites.length === 0 ? (
-                  <div style={{ fontSize:11,color:'#4a5568',padding:'8px 10px',background:'#0d1220',borderRadius:6 }}>No hay sucursales en esta empresa</div>
+                  <div style={{ fontSize:11,color:'#94a3b8',padding:'8px 10px',background:'#ffffff',borderRadius:6 }}>No hay sucursales en esta empresa</div>
                 ) : (
                   <div style={{ display:'flex',flexDirection:'column',gap:6 }}>
                     {companySites.map(s => (
-                      <label key={s.id} style={{ display:'flex',alignItems:'center',gap:8,fontSize:12,cursor:'pointer',color:'#f1f5f9',padding:'6px 10px',borderRadius:6,background:selSites.includes(s.id)?'rgba(59,130,246,.1)':'transparent',border:'1px solid '+(selSites.includes(s.id)?'rgba(59,130,246,.3)':'#1e2a45') }}>
+                      <label key={s.id} style={{ display:'flex',alignItems:'center',gap:8,fontSize:12,cursor:'pointer',color:'#0f172a',padding:'6px 10px',borderRadius:6,background:selSites.includes(s.id)?'rgba(59,130,246,.1)':'transparent',border:'1px solid '+(selSites.includes(s.id)?'rgba(59,130,246,.3)':'#e2e8f0') }}>
                         <input type='checkbox' checked={selSites.includes(s.id)} onChange={() => setSelSites(p => p.includes(s.id)?p.filter(x=>x!==s.id):[...p,s.id])} style={{ accentColor:'#3b82f6' }} />
                         {s.name}
                       </label>
@@ -1364,13 +1364,13 @@ function AdminUserModal({ data, sites, companies, isSuperAdmin, isCompanyAdmin, 
               </div>
             )}
             <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-              <button disabled={!valid||saving} onClick={handleSave} style={{ flex:1,padding:'10px 16px',borderRadius:7,border:'none',background:valid&&!saving?'#3b82f6':'#1e2a45',color:'#fff',fontSize:12,fontWeight:600,cursor:valid&&!saving?'pointer':'not-allowed',fontFamily:'inherit' }}>
+              <button disabled={!valid||saving} onClick={handleSave} style={{ flex:1,padding:'10px 16px',borderRadius:7,border:'none',background:valid&&!saving?'#3b82f6':'#e2e8f0',color:'#fff',fontSize:12,fontWeight:600,cursor:valid&&!saving?'pointer':'not-allowed',fontFamily:'inherit' }}>
                 {saving ? 'Guardando...' : data ? 'Guardar' : 'Crear usuario'}
               </button>
               {data && onResetPwd && (
                 <button onClick={() => { onClose(); onResetPwd(data) }} style={{ padding:'10px 14px',borderRadius:7,border:'1px solid rgba(245,158,11,.4)',background:'rgba(245,158,11,.1)',color:'#f59e0b',fontSize:12,fontWeight:600,cursor:'pointer',fontFamily:'inherit',whiteSpace:'nowrap' }}>🔑 Reset pwd</button>
               )}
-              <button onClick={onClose} style={{ padding:'10px 16px',borderRadius:7,border:'1px solid #1e2a45',background:'transparent',color:'#8892a8',fontSize:12,cursor:'pointer',fontFamily:'inherit' }}>Cancelar</button>
+              <button onClick={onClose} style={{ padding:'10px 16px',borderRadius:7,border:'1px solid #e2e8f0',background:'transparent',color:'#64748b',fontSize:12,cursor:'pointer',fontFamily:'inherit' }}>Cancelar</button>
             </div>
           </>
         )}
@@ -1455,19 +1455,19 @@ function UnifiedDashboard({ sites, allEmps, att, todayAtt, schedules, todaySched
         </div>
         <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
           {/* Sales period selector */}
-          <div style={{ display: 'flex', background: '#0d1220', border: '1px solid #1e2a45', borderRadius: 8, overflow: 'hidden' }}>
+          <div style={{ display: 'flex', background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: 8, overflow: 'hidden' }}>
             {['today', 'week', 'month'].map(p => (
               <button key={p} onClick={() => setSalesPeriod(p)}
-                style={{ padding: '6px 12px', border: 'none', cursor: 'pointer', fontSize: 11, fontWeight: 600, fontFamily: 'inherit', background: salesPeriod === p ? '#3b82f6' : 'transparent', color: salesPeriod === p ? '#fff' : '#8892a8', transition: 'all .15s' }}>
+                style={{ padding: '6px 12px', border: 'none', cursor: 'pointer', fontSize: 11, fontWeight: 600, fontFamily: 'inherit', background: salesPeriod === p ? '#3b82f6' : 'transparent', color: salesPeriod === p ? '#fff' : '#64748b', transition: 'all .15s' }}>
                 {periodLabel[p]}
               </button>
             ))}
           </div>
           {/* View mode toggle */}
-          <div style={{ display: 'flex', background: '#0d1220', border: '1px solid #1e2a45', borderRadius: 8, overflow: 'hidden' }}>
+          <div style={{ display: 'flex', background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: 8, overflow: 'hidden' }}>
             {[['list', '☰ Lista'], ['grid', '⊞ Cuadrícula']].map(([m, lb]) => (
               <button key={m} onClick={() => setViewMode(m)}
-                style={{ padding: '6px 12px', border: 'none', cursor: 'pointer', fontSize: 11, fontWeight: 600, fontFamily: 'inherit', background: viewMode === m ? '#1e2a45' : 'transparent', color: viewMode === m ? '#f1f5f9' : '#8892a8', transition: 'all .15s' }}>
+                style={{ padding: '6px 12px', border: 'none', cursor: 'pointer', fontSize: 11, fontWeight: 600, fontFamily: 'inherit', background: viewMode === m ? '#e2e8f0' : 'transparent', color: viewMode === m ? '#0f172a' : '#64748b', transition: 'all .15s' }}>
                 {lb}
               </button>
             ))}
@@ -1489,39 +1489,39 @@ function UnifiedDashboard({ sites, allEmps, att, todayAtt, schedules, todaySched
               const sitePct = (salesPeriod === 'week' && sitePrevWeek > 0) ? ((siteSales - sitePrevWeek) / sitePrevWeek * 100).toFixed(0) : null
               const tz = site.timezone || 'America/Cancun'
               return (
-                <div key={site.id} style={{ background: '#1a2035', border: `2px solid ${open ? 'rgba(16,185,129,.4)' : late ? 'rgba(245,158,11,.35)' : '#1e2a45'}`, borderRadius: 12, overflow: 'hidden' }}>
-                  <div style={{ padding: '12px 16px', borderBottom: '1px solid rgba(30,42,69,.6)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <div key={site.id} style={{ background: '#ffffff', border: `2px solid ${open ? 'rgba(16,185,129,.4)' : late ? 'rgba(245,158,11,.35)' : '#e2e8f0'}`, borderRadius: 12, overflow: 'hidden' }}>
+                  <div style={{ padding: '12px 16px', borderBottom: '1px solid rgba(226,232,240,.6)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                     <div>
                       <div style={{ fontSize: 13, fontWeight: 700 }}>{site.name}</div>
-                      {site.address && <div style={{ fontSize: 10, color: '#4a5568', marginTop: 1 }}>{site.address}</div>}
+                      {site.address && <div style={{ fontSize: 10, color: '#94a3b8', marginTop: 1 }}>{site.address}</div>}
                     </div>
                     {open && <span style={{ fontSize: 10, fontWeight: 700, color: '#10b981', background: 'rgba(16,185,129,.12)', border: '1px solid rgba(16,185,129,.3)', borderRadius: 5, padding: '2px 8px', display: 'flex', alignItems: 'center', gap: 4 }}>
                       <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#10b981', display: 'inline-block', animation: 'pulse 2s infinite' }} />ABIERTA
                     </span>}
                     {!open && late && <span style={{ fontSize: 10, fontWeight: 700, color: '#f59e0b', background: 'rgba(245,158,11,.12)', border: '1px solid rgba(245,158,11,.35)', borderRadius: 5, padding: '2px 8px' }}>⚠ Sin check-in</span>}
-                    {!open && !late && <span style={{ fontSize: 10, fontWeight: 700, color: '#4a5568', background: 'rgba(74,85,104,.1)', border: '1px solid #1e2a45', borderRadius: 5, padding: '2px 8px' }}>Inactiva</span>}
+                    {!open && !late && <span style={{ fontSize: 10, fontWeight: 700, color: '#94a3b8', background: 'rgba(74,85,104,.1)', border: '1px solid #e2e8f0', borderRadius: 5, padding: '2px 8px' }}>Inactiva</span>}
                   </div>
                   <div style={{ padding: '10px 16px', display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8 }}>
                     <div style={{ textAlign: 'center' }}>
-                      <div style={{ fontSize: 9, color: '#4a5568', textTransform: 'uppercase', letterSpacing: '.5px' }}>Activos</div>
+                      <div style={{ fontSize: 9, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '.5px' }}>Activos</div>
                       <div style={{ fontSize: 20, fontWeight: 700, fontFamily: "'JetBrains Mono'", color: '#10b981' }}>{activeNow}</div>
                       {activeRecords.slice(0, 3).map(r => {
                         const emp = allEmps.find(e => e.id === r.employee_id)
                         return emp ? <div key={r.id} style={{ fontSize: 9, color: '#10b981', lineHeight: 1.4, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{emp.name.split(' ')[0]}</div> : null
                       })}
-                      {activeRecords.length > 3 && <div style={{ fontSize: 9, color: '#4a5568' }}>+{activeRecords.length - 3}</div>}
+                      {activeRecords.length > 3 && <div style={{ fontSize: 9, color: '#94a3b8' }}>+{activeRecords.length - 3}</div>}
                     </div>
-                    {[['Completaron', completedToday, '#3b82f6'], ['Esperados', totalExpected, '#8892a8']].map(([l, v, c]) => (
+                    {[['Completaron', completedToday, '#3b82f6'], ['Esperados', totalExpected, '#64748b']].map(([l, v, c]) => (
                       <div key={l} style={{ textAlign: 'center' }}>
-                        <div style={{ fontSize: 9, color: '#4a5568', textTransform: 'uppercase', letterSpacing: '.5px' }}>{l}</div>
+                        <div style={{ fontSize: 9, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '.5px' }}>{l}</div>
                         <div style={{ fontSize: 20, fontWeight: 700, fontFamily: "'JetBrains Mono'", color: c }}>{v}</div>
                       </div>
                     ))}
                   </div>
-                  <div style={{ padding: '8px 16px', borderTop: '1px solid #1e2a45', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 6 }}>
-                    {firstIn ? <span style={{ fontSize: 10, color: '#8892a8' }}>1ra entrada: <span style={{ fontFamily: "'JetBrains Mono'", color: '#f1f5f9' }}>{new Date(firstIn.check_in).toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: tz })}</span></span> : <span />}
+                  <div style={{ padding: '8px 16px', borderTop: '1px solid #e2e8f0', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 6 }}>
+                    {firstIn ? <span style={{ fontSize: 10, color: '#64748b' }}>1ra entrada: <span style={{ fontFamily: "'JetBrains Mono'", color: '#0f172a' }}>{new Date(firstIn.check_in).toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: tz })}</span></span> : <span />}
                     <div style={{ textAlign: 'right' }}>
-                      <div style={{ fontSize: 11, fontWeight: 700, color: siteSales > 0 ? '#8b5cf6' : '#4a5568' }}>
+                      <div style={{ fontSize: 11, fontWeight: 700, color: siteSales > 0 ? '#8b5cf6' : '#94a3b8' }}>
                         {siteSales > 0 ? `💰 $${Number(siteSales).toLocaleString('es-MX')}` : 'Sin ventas'}
                       </div>
                       {sitePct !== null && <div style={{ fontSize: 9, color: Number(sitePct) >= 0 ? '#10b981' : '#ef4444', fontWeight: 600 }}>{Number(sitePct) >= 0 ? '↑' : '↓'} {Math.abs(Number(sitePct))}% vs ant.</div>}
@@ -1544,32 +1544,32 @@ function UnifiedDashboard({ sites, allEmps, att, todayAtt, schedules, todaySched
             const totalCount = siteRows.length + siteUnscheduled.length
             const siteSales = getSiteSales(site.id)
             return (
-              <div key={site.id} style={{ background: '#1a2035', border: '1px solid #1e2a45', borderRadius: 10, overflow: 'hidden', marginBottom: 14 }}>
-                <div style={{ padding: '10px 16px', borderBottom: '1px solid #1e2a45', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 6 }}>
+              <div key={site.id} style={{ background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: 10, overflow: 'hidden', marginBottom: 14 }}>
+                <div style={{ padding: '10px 16px', borderBottom: '1px solid #e2e8f0', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 6 }}>
                   <div style={{ fontWeight: 600, fontSize: 13 }}>{site.name}</div>
                   <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
                     {siteSales > 0 && <span style={{ fontSize: 11, fontWeight: 700, color: '#8b5cf6' }}>💰 ${Number(siteSales).toLocaleString('es-MX')}</span>}
-                    <span style={{ fontSize: 10, color: '#4a5568' }}>{totalCount} empleado{totalCount !== 1 ? 's' : ''} hoy</span>
+                    <span style={{ fontSize: 10, color: '#94a3b8' }}>{totalCount} empleado{totalCount !== 1 ? 's' : ''} hoy</span>
                   </div>
                 </div>
                 <div style={{ overflowX: 'auto' }}>
                 <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 520 }}>
                   <thead><tr>{['Empleado','Horario','Entrada','Salida','Ventas','Estado'].map(h => (
-                    <th key={h} style={{ textAlign: 'left', fontSize: 9, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '.6px', color: '#4a5568', padding: '8px 16px', borderBottom: '1px solid #1e2a45' }}>{h}</th>
+                    <th key={h} style={{ textAlign: 'left', fontSize: 9, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '.6px', color: '#94a3b8', padding: '8px 16px', borderBottom: '1px solid #e2e8f0' }}>{h}</th>
                   ))}</tr></thead>
                   <tbody>
                     {siteRows.map(({ sc, emp, record, color, bg, statusLabel }) => (
-                      <tr key={sc.id} style={{ borderBottom: '1px solid rgba(30,42,69,.3)' }}>
+                      <tr key={sc.id} style={{ borderBottom: '1px solid rgba(226,232,240,.3)' }}>
                         <td style={{ padding: '10px 16px' }}>
                           <button onClick={() => setEmpPage(emp)} style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', textAlign: 'left', fontFamily: 'inherit' }}>
                             <div style={{ fontSize: 12, fontWeight: 600, color: '#3b82f6', textDecoration: 'underline', textDecorationColor: 'rgba(59,130,246,.3)' }}>{emp?.name || '?'}</div>
-                            <div style={{ fontSize: 10, color: '#4a5568' }}>{emp?.role}</div>
+                            <div style={{ fontSize: 10, color: '#94a3b8' }}>{emp?.role}</div>
                           </button>
                         </td>
-                        <td style={{ padding: '10px 16px', fontSize: 11, fontFamily: "'JetBrains Mono'", color: '#8892a8' }}>{sc.start_time?.slice(0,5)} – {sc.end_time?.slice(0,5)}</td>
+                        <td style={{ padding: '10px 16px', fontSize: 11, fontFamily: "'JetBrains Mono'", color: '#64748b' }}>{sc.start_time?.slice(0,5)} – {sc.end_time?.slice(0,5)}</td>
                         <td style={{ padding: '10px 16px', fontSize: 11, fontFamily: "'JetBrains Mono'" }}>{record?.check_in ? fmtTime(record.check_in, site.timezone) : '–'}</td>
                         <td style={{ padding: '10px 16px', fontSize: 11, fontFamily: "'JetBrains Mono'" }}>{record?.check_out ? fmtTime(record.check_out, site.timezone) : '–'}</td>
-                        <td style={{ padding: '10px 16px', fontSize: 11, fontFamily: "'JetBrains Mono'", color: record?.sales_amount > 0 ? '#10b981' : '#4a5568' }}>{record?.sales_amount > 0 ? '$'+Number(record.sales_amount).toLocaleString('es-MX') : '–'}</td>
+                        <td style={{ padding: '10px 16px', fontSize: 11, fontFamily: "'JetBrains Mono'", color: record?.sales_amount > 0 ? '#10b981' : '#94a3b8' }}>{record?.sales_amount > 0 ? '$'+Number(record.sales_amount).toLocaleString('es-MX') : '–'}</td>
                         <td style={{ padding: '10px 16px' }}><span style={{ padding: '3px 10px', borderRadius: 5, fontSize: 10, fontWeight: 600, color, background: bg }}>{statusLabel}</span></td>
                       </tr>
                     ))}
@@ -1579,17 +1579,17 @@ function UnifiedDashboard({ sites, allEmps, att, todayAtt, schedules, todaySched
                       const bg = r.check_out ? 'rgba(59,130,246,.12)' : (r.lunch_start && !r.lunch_end) ? 'rgba(245,158,11,.12)' : (r.break_start && !r.break_end) ? 'rgba(59,130,246,.12)' : 'rgba(16,185,129,.12)'
                       const label = r.check_out ? 'Completó turno' : (r.lunch_start && !r.lunch_end) ? 'En comida' : (r.break_start && !r.break_end) ? 'En descanso' : 'Activo'
                       return (
-                        <tr key={r.id} style={{ borderBottom: '1px solid rgba(30,42,69,.3)', background: 'rgba(16,185,129,.03)' }}>
+                        <tr key={r.id} style={{ borderBottom: '1px solid rgba(226,232,240,.3)', background: 'rgba(16,185,129,.03)' }}>
                           <td style={{ padding: '10px 16px' }}>
                             <button onClick={() => setEmpPage(emp)} style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', textAlign: 'left', fontFamily: 'inherit' }}>
                               <div style={{ fontSize: 12, fontWeight: 600, color: '#3b82f6', textDecoration: 'underline', textDecorationColor: 'rgba(59,130,246,.3)' }}>{emp?.name || '?'}</div>
-                              <div style={{ fontSize: 10, color: '#4a5568' }}>{emp?.role}</div>
+                              <div style={{ fontSize: 10, color: '#94a3b8' }}>{emp?.role}</div>
                             </button>
                           </td>
-                          <td style={{ padding: '10px 16px', fontSize: 10, color: '#4a5568', fontStyle: 'italic' }}>Sin horario</td>
+                          <td style={{ padding: '10px 16px', fontSize: 10, color: '#94a3b8', fontStyle: 'italic' }}>Sin horario</td>
                           <td style={{ padding: '10px 16px', fontSize: 11, fontFamily: "'JetBrains Mono'" }}>{fmtTime(r.check_in, site.timezone)}</td>
                           <td style={{ padding: '10px 16px', fontSize: 11, fontFamily: "'JetBrains Mono'" }}>{r.check_out ? fmtTime(r.check_out, site.timezone) : '–'}</td>
-                          <td style={{ padding: '10px 16px', fontSize: 11, fontFamily: "'JetBrains Mono'", color: r.sales_amount > 0 ? '#10b981' : '#4a5568' }}>{r.sales_amount > 0 ? '$'+Number(r.sales_amount).toLocaleString('es-MX') : '–'}</td>
+                          <td style={{ padding: '10px 16px', fontSize: 11, fontFamily: "'JetBrains Mono'", color: r.sales_amount > 0 ? '#10b981' : '#94a3b8' }}>{r.sales_amount > 0 ? '$'+Number(r.sales_amount).toLocaleString('es-MX') : '–'}</td>
                           <td style={{ padding: '10px 16px' }}><span style={{ padding: '3px 10px', borderRadius: 5, fontSize: 10, fontWeight: 600, color, background: bg }}>{label}</span></td>
                         </tr>
                       )
@@ -1601,7 +1601,7 @@ function UnifiedDashboard({ sites, allEmps, att, todayAtt, schedules, todaySched
             )
           })}
           {dashRows.length === 0 && unscheduledAtt.length === 0 && (
-            <div style={{ padding: 32, textAlign: 'center', color: '#4a5568', fontSize: 13, background: '#1a2035', borderRadius: 10, border: '1px solid #1e2a45' }}>No hay actividad registrada para hoy.</div>
+            <div style={{ padding: 32, textAlign: 'center', color: '#94a3b8', fontSize: 13, background: '#ffffff', borderRadius: 10, border: '1px solid #e2e8f0' }}>No hay actividad registrada para hoy.</div>
           )}
         </div>
       )}
@@ -1769,27 +1769,27 @@ function ScheduleBoard({ sites, allEmps, schedules, employeeSiteAssignments, sit
     canvas.height = PAD * 2 + HEAD_H + DAY_H + ROW_H * (filteredEmps.length || 1) + 20
     const ctx = canvas.getContext('2d')
     // Background
-    ctx.fillStyle = '#0a0e1a'; ctx.fillRect(0, 0, canvas.width, canvas.height)
+    ctx.fillStyle = '#f8fafc'; ctx.fillRect(0, 0, canvas.width, canvas.height)
     // Header
-    ctx.fillStyle = '#f1f5f9'; ctx.font = 'bold 17px sans-serif'
+    ctx.fillStyle = '#0f172a'; ctx.font = 'bold 17px sans-serif'
     ctx.fillText(siteName, PAD, PAD + 20)
-    ctx.fillStyle = '#8892a8'; ctx.font = '11px sans-serif'
+    ctx.fillStyle = '#64748b'; ctx.font = '11px sans-serif'
     ctx.fillText(weekLabel, PAD, PAD + 40)
     // Day headers
     weekDates.forEach(({ date, label, isToday }, i) => {
       const x = PAD + EMP_W + i * COL_W
-      ctx.fillStyle = isToday ? 'rgba(59,130,246,.18)' : 'rgba(30,42,69,.5)'
+      ctx.fillStyle = isToday ? 'rgba(59,130,246,.18)' : 'rgba(226,232,240,.5)'
       ctx.fillRect(x, PAD + HEAD_H, COL_W - 1, DAY_H)
-      ctx.fillStyle = isToday ? '#3b82f6' : '#8892a8'
+      ctx.fillStyle = isToday ? '#3b82f6' : '#64748b'
       ctx.font = 'bold 11px sans-serif'
       ctx.fillText(label, x + 8, PAD + HEAD_H + 14)
-      ctx.fillStyle = '#4a5568'; ctx.font = '10px monospace'
+      ctx.fillStyle = '#94a3b8'; ctx.font = '10px monospace'
       ctx.fillText(date.slice(8), x + 8, PAD + HEAD_H + 27)
     })
     // Employee label header
-    ctx.fillStyle = 'rgba(30,42,69,.5)'
+    ctx.fillStyle = 'rgba(226,232,240,.5)'
     ctx.fillRect(PAD, PAD + HEAD_H, EMP_W - 1, DAY_H)
-    ctx.fillStyle = '#4a5568'; ctx.font = 'bold 9px sans-serif'
+    ctx.fillStyle = '#94a3b8'; ctx.font = 'bold 9px sans-serif'
     ctx.fillText('EMPLEADO', PAD + 8, PAD + HEAD_H + 20)
     // Rows
     filteredEmps.forEach((emp, ei) => {
@@ -1801,13 +1801,13 @@ function ScheduleBoard({ sites, allEmps, schedules, employeeSiteAssignments, sit
       // Dot + name
       ctx.fillStyle = color; ctx.beginPath()
       ctx.arc(PAD + 10, y + ROW_H / 2, 4, 0, Math.PI * 2); ctx.fill()
-      ctx.fillStyle = '#f1f5f9'; ctx.font = '12px sans-serif'
+      ctx.fillStyle = '#0f172a'; ctx.font = '12px sans-serif'
       ctx.fillText(emp.name.length > 16 ? emp.name.slice(0, 15) + '…' : emp.name, PAD + 20, y + ROW_H / 2 + 4)
       // Day cells
       weekDates.forEach(({ date }, ci) => {
         const x = PAD + EMP_W + ci * COL_W
         const s = weekSchedForSite.find(s => s.date === date && s.employee_id === emp.id)
-        ctx.strokeStyle = 'rgba(30,42,69,.6)'; ctx.lineWidth = 1
+        ctx.strokeStyle = 'rgba(226,232,240,.6)'; ctx.lineWidth = 1
         ctx.strokeRect(x, y, COL_W - 1, ROW_H)
         if (s) {
           ctx.fillStyle = color + '28'
@@ -1817,13 +1817,13 @@ function ScheduleBoard({ sites, allEmps, schedules, employeeSiteAssignments, sit
           ctx.fillStyle = color + 'aa'; ctx.font = '9px monospace'
           ctx.fillText(s.end_time?.slice(0,5) || '', x + 6, y + ROW_H / 2 + 11)
         } else {
-          ctx.fillStyle = '#2d3d5a'; ctx.font = '14px sans-serif'
+          ctx.fillStyle = '#cbd5e1'; ctx.font = '14px sans-serif'
           ctx.fillText('–', x + COL_W / 2 - 5, y + ROW_H / 2 + 5)
         }
       })
     })
     if (filteredEmps.length === 0) {
-      ctx.fillStyle = '#4a5568'; ctx.font = '12px sans-serif'
+      ctx.fillStyle = '#94a3b8'; ctx.font = '12px sans-serif'
       ctx.fillText('Sin empleados asignados', PAD + 10, PAD + HEAD_H + DAY_H + 22)
     }
     // Watermark
@@ -1865,7 +1865,7 @@ function ScheduleBoard({ sites, allEmps, schedules, employeeSiteAssignments, sit
   }, [resizing])
 
   if (sites.length === 0) return (
-    <div style={{ padding: 40, textAlign: 'center', color: '#4a5568', fontSize: 13 }}>No hay sucursales configuradas.</div>
+    <div style={{ padding: 40, textAlign: 'center', color: '#94a3b8', fontSize: 13 }}>No hay sucursales configuradas.</div>
   )
 
   const hours = Array.from({ length: SB_END - SB_START }, (_, i) => SB_START + i)
@@ -1875,21 +1875,21 @@ function ScheduleBoard({ sites, allEmps, schedules, employeeSiteAssignments, sit
       {/* Header */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14, flexWrap: 'wrap' }}>
         <select value={selSiteId} onChange={e => setSelSiteId(e.target.value)}
-          style={{ background: '#1a2035', border: '1px solid #1e2a45', color: '#f1f5f9', fontSize: 13, fontWeight: 600, padding: '7px 12px', borderRadius: 8, fontFamily: 'inherit', cursor: 'pointer' }}>
+          style={{ background: '#ffffff', border: '1px solid #e2e8f0', color: '#0f172a', fontSize: 13, fontWeight: 600, padding: '7px 12px', borderRadius: 8, fontFamily: 'inherit', cursor: 'pointer' }}>
           {sites.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
         </select>
         <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-          <button onClick={() => setWeekStart(w => addDays(w, -7))} style={{ background: '#1a2035', border: '1px solid #1e2a45', color: '#8892a8', borderRadius: 7, padding: '6px 10px', cursor: 'pointer', fontSize: 14, fontFamily: 'inherit' }}>‹</button>
-          <span style={{ fontSize: 12, color: '#8892a8', minWidth: 170, textAlign: 'center' }}>{weekLabel}</span>
-          <button onClick={() => setWeekStart(w => addDays(w, 7))} style={{ background: '#1a2035', border: '1px solid #1e2a45', color: '#8892a8', borderRadius: 7, padding: '6px 10px', cursor: 'pointer', fontSize: 14, fontFamily: 'inherit' }}>›</button>
+          <button onClick={() => setWeekStart(w => addDays(w, -7))} style={{ background: '#ffffff', border: '1px solid #e2e8f0', color: '#64748b', borderRadius: 7, padding: '6px 10px', cursor: 'pointer', fontSize: 14, fontFamily: 'inherit' }}>‹</button>
+          <span style={{ fontSize: 12, color: '#64748b', minWidth: 170, textAlign: 'center' }}>{weekLabel}</span>
+          <button onClick={() => setWeekStart(w => addDays(w, 7))} style={{ background: '#ffffff', border: '1px solid #e2e8f0', color: '#64748b', borderRadius: 7, padding: '6px 10px', cursor: 'pointer', fontSize: 14, fontFamily: 'inherit' }}>›</button>
         </div>
         <div style={{ marginLeft: 'auto', display: 'flex', gap: 8 }}>
           <button onClick={exportScheduleImage}
-            style={{ background: '#1a2035', border: '1px solid rgba(139,92,246,.4)', color: '#a78bfa', borderRadius: 7, padding: '7px 14px', cursor: 'pointer', fontSize: 12, fontWeight: 600, fontFamily: 'inherit', display: 'flex', alignItems: 'center', gap: 6 }}>
+            style={{ background: '#ffffff', border: '1px solid rgba(139,92,246,.4)', color: '#a78bfa', borderRadius: 7, padding: '7px 14px', cursor: 'pointer', fontSize: 12, fontWeight: 600, fontFamily: 'inherit', display: 'flex', alignItems: 'center', gap: 6 }}>
             📷 Imagen
           </button>
           <button onClick={() => setShowSiteHours(true)}
-            style={{ background: '#1a2035', border: '1px solid rgba(16,185,129,.4)', color: '#10b981', borderRadius: 7, padding: '7px 14px', cursor: 'pointer', fontSize: 12, fontWeight: 600, fontFamily: 'inherit', display: 'flex', alignItems: 'center', gap: 6 }}>
+            style={{ background: '#ffffff', border: '1px solid rgba(16,185,129,.4)', color: '#10b981', borderRadius: 7, padding: '7px 14px', cursor: 'pointer', fontSize: 12, fontWeight: 600, fontFamily: 'inherit', display: 'flex', alignItems: 'center', gap: 6 }}>
             ⏰ Horario de la tienda
           </button>
         </div>
@@ -1898,21 +1898,21 @@ function ScheduleBoard({ sites, allEmps, schedules, employeeSiteAssignments, sit
       {/* Employee chips */}
       <div style={{ marginBottom: 12 }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
-          <div style={{ fontSize: 9, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '.6px', color: activeEmpId ? '#10b981' : '#4a5568' }}>
+          <div style={{ fontSize: 9, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '.6px', color: activeEmpId ? '#10b981' : '#94a3b8' }}>
             {activeEmpId
               ? <>{`✔ ${filteredEmps.find(e => e.id === activeEmpId)?.name || ''} seleccionado — toca un día para asignar · `}<button onClick={() => setActiveEmpId(null)} style={{ background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer', fontSize: 10, padding: 0, fontFamily: 'inherit' }}>cancelar</button></>
               : 'Toca un nombre y luego un día para asignar · toca un bloque para editar'}
           </div>
           {/* Duration default control */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: 6, background: '#0d1220', border: '1px solid #1e2a45', borderRadius: 8, padding: '4px 8px' }}>
-            <span style={{ fontSize: 9, color: '#4a5568', textTransform: 'uppercase', letterSpacing: '.5px' }}>Turno</span>
-            <button onClick={() => adjDefaultDur(-0.5)} style={{ background: 'none', border: 'none', color: '#8892a8', cursor: 'pointer', fontSize: 14, padding: '0 2px', fontFamily: 'inherit', lineHeight: 1 }}>−</button>
-            <span style={{ fontSize: 12, fontWeight: 700, color: '#f1f5f9', minWidth: 32, textAlign: 'center' }}>{fmtDur(defaultDur)}</span>
-            <button onClick={() => adjDefaultDur(0.5)} style={{ background: 'none', border: 'none', color: '#8892a8', cursor: 'pointer', fontSize: 14, padding: '0 2px', fontFamily: 'inherit', lineHeight: 1 }}>+</button>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6, background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: 8, padding: '4px 8px' }}>
+            <span style={{ fontSize: 9, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '.5px' }}>Turno</span>
+            <button onClick={() => adjDefaultDur(-0.5)} style={{ background: 'none', border: 'none', color: '#64748b', cursor: 'pointer', fontSize: 14, padding: '0 2px', fontFamily: 'inherit', lineHeight: 1 }}>−</button>
+            <span style={{ fontSize: 12, fontWeight: 700, color: '#0f172a', minWidth: 32, textAlign: 'center' }}>{fmtDur(defaultDur)}</span>
+            <button onClick={() => adjDefaultDur(0.5)} style={{ background: 'none', border: 'none', color: '#64748b', cursor: 'pointer', fontSize: 14, padding: '0 2px', fontFamily: 'inherit', lineHeight: 1 }}>+</button>
           </div>
         </div>
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-          {filteredEmps.length === 0 && <div style={{ fontSize: 11, color: '#4a5568' }}>Sin empleados asignados a esta tienda.</div>}
+          {filteredEmps.length === 0 && <div style={{ fontSize: 11, color: '#94a3b8' }}>Sin empleados asignados a esta tienda.</div>}
           {filteredEmps.map(emp => {
             const isActive = activeEmpId === emp.id
             const isOverlap = overlapEmpId === emp.id
@@ -1935,22 +1935,22 @@ function ScheduleBoard({ sites, allEmps, schedules, employeeSiteAssignments, sit
       </div>
 
       {/* Calendar grid */}
-      <div style={{ background: '#111827', border: '1px solid #1e2a45', borderRadius: 10, overflow: 'hidden' }}>
+      <div style={{ background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: 10, overflow: 'hidden' }}>
         {/* Single scrollable container — header + body scroll together horizontally */}
         <div ref={gridRef} style={{ maxHeight: 560, overflowY: 'auto', overflowX: 'auto' }}>
         {/* Day headers — sticky to top of THIS scroll container */}
-        <div style={{ display: 'flex', borderBottom: '2px solid #1e2a45', position: 'sticky', top: 0, zIndex: 5, background: '#111827', minWidth: 620 }}>
+        <div style={{ display: 'flex', borderBottom: '2px solid #e2e8f0', position: 'sticky', top: 0, zIndex: 5, background: '#f8fafc', minWidth: 620 }}>
           <div style={{ width: 40, flexShrink: 0 }} />
           {weekDates.map(({ date, label, isToday, isPast }) => {
             const dh = getDayHours(date)
             return (
-              <div key={date} style={{ flex: 1, minWidth: 80, padding: '7px 6px', borderLeft: '1px solid #1e2a45' }}>
-                <div style={{ fontSize: 11, fontWeight: 700, color: isToday ? '#3b82f6' : isPast ? '#4a5568' : '#f1f5f9' }}>
+              <div key={date} style={{ flex: 1, minWidth: 80, padding: '7px 6px', borderLeft: '1px solid #e2e8f0' }}>
+                <div style={{ fontSize: 11, fontWeight: 700, color: isToday ? '#3b82f6' : isPast ? '#94a3b8' : '#0f172a' }}>
                   {label} <span style={{ fontFamily: "'JetBrains Mono'", fontSize: 10 }}>{date.slice(8)}</span>
                 </div>
                 {dh
                   ? <div style={{ fontSize: 9, color: dh.is_open ? '#10b981' : '#ef4444', marginTop: 1 }}>{dh.is_open ? `${dh.open_time?.slice(0,5)}–${dh.close_time?.slice(0,5)}` : '⛔ Cerrado'}</div>
-                  : <div style={{ fontSize: 9, color: '#2d3d5a', marginTop: 1 }}>
+                  : <div style={{ fontSize: 9, color: '#cbd5e1', marginTop: 1 }}>
                       <button onClick={() => setShowSiteHours(true)} style={{ background: 'none', border: 'none', color: '#3b82f6', cursor: 'pointer', fontSize: 9, padding: 0, fontFamily: 'inherit', textDecoration: 'underline' }}>+ Agregar horario</button>
                     </div>}
               </div>
@@ -1961,10 +1961,10 @@ function ScheduleBoard({ sites, allEmps, schedules, employeeSiteAssignments, sit
         {/* Time body */}
           <div style={{ display: 'flex', minWidth: 620 }}>
             {/* Time axis — sticky to left so it stays visible when scrolling horizontally */}
-            <div style={{ width: 40, flexShrink: 0, background: '#111827', position: 'sticky', left: 0, zIndex: 3 }}>
+            <div style={{ width: 40, flexShrink: 0, background: '#f8fafc', position: 'sticky', left: 0, zIndex: 3 }}>
               {hours.map(h => (
-                <div key={h} style={{ height: SB_HOUR_H, display: 'flex', alignItems: 'flex-start', justifyContent: 'flex-end', paddingRight: 6, paddingTop: 4, boxSizing: 'border-box', borderTop: '1px solid #1e2a45' }}>
-                  <span style={{ fontSize: 9, color: '#4a5568', fontFamily: "'JetBrains Mono'" }}>{String(h).padStart(2,'0')}</span>
+                <div key={h} style={{ height: SB_HOUR_H, display: 'flex', alignItems: 'flex-start', justifyContent: 'flex-end', paddingRight: 6, paddingTop: 4, boxSizing: 'border-box', borderTop: '1px solid #e2e8f0' }}>
+                  <span style={{ fontSize: 9, color: '#94a3b8', fontFamily: "'JetBrains Mono'" }}>{String(h).padStart(2,'0')}</span>
                 </div>
               ))}
             </div>
@@ -1975,7 +1975,7 @@ function ScheduleBoard({ sites, allEmps, schedules, employeeSiteAssignments, sit
                 const dayScheds = weekSchedForSite.filter(s => s.date === date)
                 const isOver = dragOverDate === date
                 return (
-                  <div key={date} style={{ borderLeft: '1px solid #1e2a45' }}>
+                  <div key={date} style={{ borderLeft: '1px solid #e2e8f0' }}>
                     <div
                       ref={el => colRefs.current[date] = el}
                       onDragOver={e => {
@@ -1998,11 +1998,11 @@ function ScheduleBoard({ sites, allEmps, schedules, employeeSiteAssignments, sit
                       style={{ position: 'relative', height: SB_TOTAL, background: activeEmpId ? (isOver ? 'rgba(16,185,129,.06)' : 'rgba(16,185,129,.02)') : isOver ? 'rgba(59,130,246,.04)' : isToday ? 'rgba(59,130,246,.015)' : 'transparent', transition: 'background .1s', cursor: activeEmpId ? 'crosshair' : 'default' }}>
                       {/* Hour lines */}
                       {hours.map(h => (
-                        <div key={h} style={{ position: 'absolute', top: (h - SB_START) * SB_HOUR_H, left: 0, right: 0, borderTop: '1px solid rgba(30,42,69,.7)', pointerEvents: 'none' }} />
+                        <div key={h} style={{ position: 'absolute', top: (h - SB_START) * SB_HOUR_H, left: 0, right: 0, borderTop: '1px solid rgba(226,232,240,.7)', pointerEvents: 'none' }} />
                       ))}
                       {/* Half-hour lines */}
                       {hours.map(h => (
-                        <div key={h + '.5'} style={{ position: 'absolute', top: (h - SB_START) * SB_HOUR_H + SB_HOUR_H / 2, left: 0, right: 0, borderTop: '1px dashed rgba(30,42,69,.4)', pointerEvents: 'none' }} />
+                        <div key={h + '.5'} style={{ position: 'absolute', top: (h - SB_START) * SB_HOUR_H + SB_HOUR_H / 2, left: 0, right: 0, borderTop: '1px dashed rgba(226,232,240,.4)', pointerEvents: 'none' }} />
                       ))}
                       {/* Store open-hours highlight */}
                       {dh?.is_open && dh.open_time && dh.close_time && (
@@ -2011,7 +2011,7 @@ function ScheduleBoard({ sites, allEmps, schedules, employeeSiteAssignments, sit
                       {/* Drop preview line */}
                       {isOver && dragTime && (
                         <div style={{ position: 'absolute', top: sbTimeToY(dragTime), left: 0, right: 0, height: 2, background: '#3b82f6', pointerEvents: 'none', zIndex: 6 }}>
-                          <span style={{ position: 'absolute', left: 3, top: -9, fontSize: 9, color: '#3b82f6', fontFamily: "'JetBrains Mono'", background: '#111827', padding: '0 2px', borderRadius: 2 }}>{dragTime}</span>
+                          <span style={{ position: 'absolute', left: 3, top: -9, fontSize: 9, color: '#3b82f6', fontFamily: "'JetBrains Mono'", background: '#ffffff', border: '1px solid #3b82f6', padding: '0 2px', borderRadius: 2 }}>{dragTime}</span>
                         </div>
                       )}
                       {/* Schedule blocks */}
@@ -2036,7 +2036,7 @@ function ScheduleBoard({ sites, allEmps, schedules, employeeSiteAssignments, sit
                                 <div style={{ fontSize: 10, fontWeight: 700, color, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{emp?.name || '?'}</div>
                                 <div style={{ fontSize: 9, color: color + 'aa', fontFamily: "'JetBrains Mono'" }}>{startT}–{endT}</div>
                               </div>
-                              <button onClick={e => { e.stopPropagation(); removeSchedule(s.id) }} style={{ position: 'absolute', top: 2, right: 2, background: 'none', border: 'none', color: '#4a5568', cursor: 'pointer', fontSize: 11, lineHeight: 1, padding: '1px 3px' }} title='Eliminar'>✕</button>
+                              <button onClick={e => { e.stopPropagation(); removeSchedule(s.id) }} style={{ position: 'absolute', top: 2, right: 2, background: 'none', border: 'none', color: '#94a3b8', cursor: 'pointer', fontSize: 11, lineHeight: 1, padding: '1px 3px' }} title='Eliminar'>✕</button>
                               <div onMouseDown={e => { e.preventDefault(); e.stopPropagation(); setResizing({ schedId: s.id, startTime: startT, origEnd: rawEnd, date }) }}
                                 style={{ position: 'absolute', bottom: 0, left: 0, right: 0, height: 8, cursor: 'ns-resize', background: color + '30', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                                 <div style={{ width: 16, height: 2, background: color + '88', borderRadius: 1 }} />
@@ -2111,32 +2111,32 @@ function QuickShiftModal({ empId, date, startTime: initialStart, siteId, allEmps
   function fmtDur(h) { const hrs = Math.floor(h); const mins = Math.round((h-hrs)*60); return mins === 0 ? `${hrs}h` : `${hrs}h ${mins}m` }
   return (
     <div onClick={onClose} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.75)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 500, padding: '0 16px' }}>
-      <div onClick={e => e.stopPropagation()} style={{ background: '#1a2035', border: '1px solid #1e2a45', borderRadius: 14, padding: 24, width: '100%', maxWidth: 300, fontFamily: "'DM Sans', sans-serif" }}>
-        <div style={{ fontSize: 15, fontWeight: 700, color: '#f1f5f9', marginBottom: 2 }}>Nuevo turno</div>
-        <div style={{ fontSize: 11, color: '#8892a8', marginBottom: 18 }}>{emp?.name} · {date}</div>
+      <div onClick={e => e.stopPropagation()} style={{ background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: 14, padding: 24, width: '100%', maxWidth: 300, fontFamily: "'DM Sans', sans-serif" }}>
+        <div style={{ fontSize: 15, fontWeight: 700, color: '#0f172a', marginBottom: 2 }}>Nuevo turno</div>
+        <div style={{ fontSize: 11, color: '#64748b', marginBottom: 18 }}>{emp?.name} · {date}</div>
         <div style={{ marginBottom: 14 }}>
-          <div style={{ fontSize: 10, color: '#4a5568', marginBottom: 5, textTransform: 'uppercase', letterSpacing: '.5px' }}>Hora de entrada</div>
+          <div style={{ fontSize: 10, color: '#94a3b8', marginBottom: 5, textTransform: 'uppercase', letterSpacing: '.5px' }}>Hora de entrada</div>
           <select value={start} onChange={e => setStart(e.target.value)}
-            style={{ width: '100%', background: '#0d1220', border: '1px solid #1e2a45', color: '#f1f5f9', fontSize: 14, padding: '8px 10px', borderRadius: 8, fontFamily: 'inherit' }}>
+            style={{ width: '100%', background: '#ffffff', border: '1px solid #e2e8f0', color: '#0f172a', fontSize: 14, padding: '8px 10px', borderRadius: 8, fontFamily: 'inherit' }}>
             {timeOpts.map(t => <option key={t} value={t}>{t}</option>)}
           </select>
         </div>
         <div style={{ marginBottom: 20 }}>
-          <div style={{ fontSize: 10, color: '#4a5568', marginBottom: 10, textTransform: 'uppercase', letterSpacing: '.5px' }}>Duración del turno</div>
+          <div style={{ fontSize: 10, color: '#94a3b8', marginBottom: 10, textTransform: 'uppercase', letterSpacing: '.5px' }}>Duración del turno</div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 14, justifyContent: 'center' }}>
             <button onClick={() => adjDur(-0.5)}
-              style={{ width: 40, height: 40, borderRadius: 10, border: '1px solid #1e2a45', background: '#0d1220', color: '#f1f5f9', fontSize: 22, cursor: 'pointer', fontFamily: 'inherit', display: 'flex', alignItems: 'center', justifyContent: 'center', lineHeight: 1 }}>−</button>
+              style={{ width: 40, height: 40, borderRadius: 10, border: '1px solid #e2e8f0', background: '#ffffff', color: '#0f172a', fontSize: 22, cursor: 'pointer', fontFamily: 'inherit', display: 'flex', alignItems: 'center', justifyContent: 'center', lineHeight: 1 }}>−</button>
             <div style={{ textAlign: 'center', minWidth: 90 }}>
-              <div style={{ fontSize: 26, fontWeight: 700, color: '#f1f5f9', lineHeight: 1 }}>{fmtDur(duration)}</div>
-              <div style={{ fontSize: 11, color: '#8892a8', marginTop: 5 }}>Salida: <span style={{ color: '#10b981', fontWeight: 600 }}>{endTime}</span></div>
+              <div style={{ fontSize: 26, fontWeight: 700, color: '#0f172a', lineHeight: 1 }}>{fmtDur(duration)}</div>
+              <div style={{ fontSize: 11, color: '#64748b', marginTop: 5 }}>Salida: <span style={{ color: '#10b981', fontWeight: 600 }}>{endTime}</span></div>
             </div>
             <button onClick={() => adjDur(0.5)}
-              style={{ width: 40, height: 40, borderRadius: 10, border: '1px solid #1e2a45', background: '#0d1220', color: '#f1f5f9', fontSize: 22, cursor: 'pointer', fontFamily: 'inherit', display: 'flex', alignItems: 'center', justifyContent: 'center', lineHeight: 1 }}>+</button>
+              style={{ width: 40, height: 40, borderRadius: 10, border: '1px solid #e2e8f0', background: '#ffffff', color: '#0f172a', fontSize: 22, cursor: 'pointer', fontFamily: 'inherit', display: 'flex', alignItems: 'center', justifyContent: 'center', lineHeight: 1 }}>+</button>
           </div>
         </div>
         <div style={{ display: 'flex', gap: 8 }}>
           <button onClick={onClose}
-            style={{ flex: 1, padding: '10px', borderRadius: 9, border: '1px solid #1e2a45', background: 'transparent', color: '#8892a8', fontSize: 13, cursor: 'pointer', fontFamily: 'inherit' }}>Cancelar</button>
+            style={{ flex: 1, padding: '10px', borderRadius: 9, border: '1px solid #e2e8f0', background: 'transparent', color: '#64748b', fontSize: 13, cursor: 'pointer', fontFamily: 'inherit' }}>Cancelar</button>
           <button onClick={() => onConfirm(empId, date, start, duration)}
             style={{ flex: 2, padding: '10px', borderRadius: 9, border: 'none', background: '#3b82f6', color: '#fff', fontSize: 13, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>Crear → {endTime}</button>
         </div>
@@ -2159,21 +2159,21 @@ function SchedEditModal({ sched, allEmps, onSave, onDelete, onClose }) {
   }
   return (
     <div onClick={onClose} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.7)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 400, padding: '0 16px' }}>
-      <div onClick={e => e.stopPropagation()} style={{ background: '#1a2035', border: '1px solid #1e2a45', borderRadius: 14, padding: 22, width: '100%', maxWidth: 320 }}>
+      <div onClick={e => e.stopPropagation()} style={{ background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: 14, padding: 22, width: '100%', maxWidth: 320 }}>
         <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 2 }}>Editar horario</div>
-        <div style={{ fontSize: 11, color: '#8892a8', marginBottom: 16 }}>{emp?.name} · {sched.date}</div>
+        <div style={{ fontSize: 11, color: '#64748b', marginBottom: 16 }}>{emp?.name} · {sched.date}</div>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: err ? 6 : 16 }}>
           <div>
-            <div style={{ fontSize: 10, color: '#4a5568', marginBottom: 4 }}>Entrada</div>
+            <div style={{ fontSize: 10, color: '#94a3b8', marginBottom: 4 }}>Entrada</div>
             <select value={start} onChange={e => { setStart(e.target.value); setErr('') }}
-              style={{ width: '100%', background: '#0d1220', border: '1px solid #1e2a45', color: '#f1f5f9', fontSize: 13, padding: '7px 8px', borderRadius: 7, fontFamily: 'inherit' }}>
+              style={{ width: '100%', background: '#ffffff', border: '1px solid #e2e8f0', color: '#0f172a', fontSize: 13, padding: '7px 8px', borderRadius: 7, fontFamily: 'inherit' }}>
               {timeOpts.map(t => <option key={t} value={t}>{t}</option>)}
             </select>
           </div>
           <div>
-            <div style={{ fontSize: 10, color: '#4a5568', marginBottom: 4 }}>Salida</div>
+            <div style={{ fontSize: 10, color: '#94a3b8', marginBottom: 4 }}>Salida</div>
             <select value={end} onChange={e => { setEnd(e.target.value); setErr('') }}
-              style={{ width: '100%', background: '#0d1220', border: '1px solid #1e2a45', color: '#f1f5f9', fontSize: 13, padding: '7px 8px', borderRadius: 7, fontFamily: 'inherit' }}>
+              style={{ width: '100%', background: '#ffffff', border: '1px solid #e2e8f0', color: '#0f172a', fontSize: 13, padding: '7px 8px', borderRadius: 7, fontFamily: 'inherit' }}>
               {timeOpts.map(t => <option key={t} value={t}>{t}</option>)}
             </select>
           </div>
@@ -2181,7 +2181,7 @@ function SchedEditModal({ sched, allEmps, onSave, onDelete, onClose }) {
         {err && <div style={{ fontSize: 11, color: '#ef4444', marginBottom: 12 }}>{err}</div>}
         <div style={{ display: 'flex', gap: 8 }}>
           <button onClick={onDelete} style={{ padding: '8px 14px', borderRadius: 8, border: '1px solid rgba(239,68,68,.3)', background: 'rgba(239,68,68,.08)', color: '#ef4444', fontSize: 12, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}>Eliminar</button>
-          <button onClick={onClose} style={{ flex: 1, padding: '8px 14px', borderRadius: 8, border: '1px solid #1e2a45', background: 'transparent', color: '#8892a8', fontSize: 12, cursor: 'pointer', fontFamily: 'inherit' }}>Cancelar</button>
+          <button onClick={onClose} style={{ flex: 1, padding: '8px 14px', borderRadius: 8, border: '1px solid #e2e8f0', background: 'transparent', color: '#64748b', fontSize: 12, cursor: 'pointer', fontFamily: 'inherit' }}>Cancelar</button>
           <button onClick={handleSave} style={{ flex: 1, padding: '8px 14px', borderRadius: 8, border: 'none', background: '#3b82f6', color: '#fff', fontSize: 12, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}>Guardar</button>
         </div>
       </div>
@@ -2201,29 +2201,29 @@ function SiteHoursModal({ siteId, siteName, siteHours, onSave, onClose }) {
   async function handleSave() { setSaving(true); await onSave(rows); setSaving(false) }
   return (
     <div onClick={onClose} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.7)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 300, padding: '0 12px' }}>
-      <div onClick={e => e.stopPropagation()} style={{ background: '#1a2035', border: '1px solid #1e2a45', borderRadius: 14, padding: 22, width: '100%', maxWidth: 420, maxHeight: '90vh', overflowY: 'auto' }}>
+      <div onClick={e => e.stopPropagation()} style={{ background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: 14, padding: 22, width: '100%', maxWidth: 420, maxHeight: '90vh', overflowY: 'auto' }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
           <div>
             <div style={{ fontSize: 14, fontWeight: 700 }}>Horario de la tienda</div>
-            <div style={{ fontSize: 11, color: '#8892a8', marginTop: 2 }}>{siteName}</div>
+            <div style={{ fontSize: 11, color: '#64748b', marginTop: 2 }}>{siteName}</div>
           </div>
-          <button onClick={onClose} style={{ background: 'none', border: '1px solid #1e2a45', borderRadius: 6, color: '#8892a8', fontSize: 18, cursor: 'pointer', padding: '2px 10px', lineHeight: 1 }}>×</button>
+          <button onClick={onClose} style={{ background: 'none', border: '1px solid #e2e8f0', borderRadius: 6, color: '#64748b', fontSize: 18, cursor: 'pointer', padding: '2px 10px', lineHeight: 1 }}>×</button>
         </div>
         {DAY_NAMES.map((day, i) => (
-          <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10, padding: '10px 12px', background: '#0d1220', borderRadius: 8, border: '1px solid #1e2a45' }}>
-            <div style={{ width: 28, fontSize: 12, fontWeight: 600, color: rows[i].isOpen ? '#f1f5f9' : '#4a5568' }}>{day}</div>
+          <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10, padding: '10px 12px', background: '#ffffff', borderRadius: 8, border: '1px solid #e2e8f0' }}>
+            <div style={{ width: 28, fontSize: 12, fontWeight: 600, color: rows[i].isOpen ? '#0f172a' : '#94a3b8' }}>{day}</div>
             <button onClick={() => upd(i, 'isOpen', !rows[i].isOpen)}
               style={{ padding: '3px 10px', borderRadius: 5, border: 'none', background: rows[i].isOpen ? 'rgba(16,185,129,.2)' : 'rgba(239,68,68,.15)', color: rows[i].isOpen ? '#10b981' : '#ef4444', fontSize: 10, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit', flexShrink: 0 }}>
               {rows[i].isOpen ? 'Abierto' : 'Cerrado'}
             </button>
             {rows[i].isOpen && <>
               <select value={rows[i].open} onChange={e => upd(i, 'open', e.target.value)}
-                style={{ flex: 1, background: '#1a2035', border: '1px solid #1e2a45', color: '#f1f5f9', fontSize: 11, padding: '4px 6px', borderRadius: 5, fontFamily: 'inherit' }}>
+                style={{ flex: 1, background: '#ffffff', border: '1px solid #e2e8f0', color: '#0f172a', fontSize: 11, padding: '4px 6px', borderRadius: 5, fontFamily: 'inherit' }}>
                 {timeOpts.map(t => <option key={t} value={t}>{t}</option>)}
               </select>
-              <span style={{ color: '#4a5568', fontSize: 11 }}>–</span>
+              <span style={{ color: '#94a3b8', fontSize: 11 }}>–</span>
               <select value={rows[i].close} onChange={e => upd(i, 'close', e.target.value)}
-                style={{ flex: 1, background: '#1a2035', border: '1px solid #1e2a45', color: '#f1f5f9', fontSize: 11, padding: '4px 6px', borderRadius: 5, fontFamily: 'inherit' }}>
+                style={{ flex: 1, background: '#ffffff', border: '1px solid #e2e8f0', color: '#0f172a', fontSize: 11, padding: '4px 6px', borderRadius: 5, fontFamily: 'inherit' }}>
                 {timeOpts.map(t => <option key={t} value={t}>{t}</option>)}
               </select>
             </>}
@@ -2310,21 +2310,21 @@ function AlertsPanel({ adminUserId, adminEmail }) {
       mail: onMovement, setMail: setOnMovement, push: pushMovement, setPush: setPushMovement },
   ]
 
-  if (loading) return <div style={{ padding: 40, textAlign: 'center', color: '#4a5568', fontSize: 13 }}>Cargando...</div>
+  if (loading) return <div style={{ padding: 40, textAlign: 'center', color: '#94a3b8', fontSize: 13 }}>Cargando...</div>
 
   return (
     <div style={{ maxWidth: 560, margin: '0 auto', padding: '0 0 40px' }}>
       <div style={{ fontSize: 17, fontWeight: 700, marginBottom: 4 }}>🔔 Mis alertas</div>
-      <div style={{ fontSize: 12, color: '#4a5568', marginBottom: 20 }}>Elige cómo recibir cada notificación: por correo, push, o ambas.</div>
+      <div style={{ fontSize: 12, color: '#94a3b8', marginBottom: 20 }}>Elige cómo recibir cada notificación: por correo, push, o ambas.</div>
 
       {/* Push notifications activation */}
-      <div style={{ background: '#1a2035', border: `1px solid ${pushReady ? 'rgba(29,158,117,.3)' : '#1e2a45'}`, borderRadius: 10, padding: '14px 18px', marginBottom: 20 }}>
+      <div style={{ background: '#ffffff', border: `1px solid ${pushReady ? 'rgba(29,158,117,.3)' : '#e2e8f0'}`, borderRadius: 10, padding: '14px 18px', marginBottom: 20 }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
           <div>
-            <div style={{ fontSize: 13, fontWeight: 600, color: '#f1f5f9' }}>
+            <div style={{ fontSize: 13, fontWeight: 600, color: '#0f172a' }}>
               {pushReady ? '✅ Notificaciones push activas' : '🔔 Activar notificaciones push'}
             </div>
-            <div style={{ fontSize: 11, color: '#4a5568', marginTop: 2 }}>
+            <div style={{ fontSize: 11, color: '#94a3b8', marginTop: 2 }}>
               {permState === 'unsupported' && 'Tu navegador no soporta notificaciones push.'}
               {permState === 'blocked' && 'Bloqueadas en el navegador. Ve a Configuración del sitio para permitirlas.'}
               {permState === 'granted' && !subscribed && 'Permiso concedido, suscribiendo...'}
@@ -2345,20 +2345,20 @@ function AlertsPanel({ adminUserId, adminEmail }) {
       </div>
 
       {/* Alert rows with mail + push toggles */}
-      <div style={{ background: '#1a2035', border: '1px solid #1e2a45', borderRadius: 10, marginBottom: 20, overflow: 'hidden' }}>
+      <div style={{ background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: 10, marginBottom: 20, overflow: 'hidden' }}>
         {/* Header */}
-        <div style={{ display: 'flex', alignItems: 'center', padding: '8px 18px', borderBottom: '1px solid #1e2a45', background: '#111827' }}>
-          <div style={{ flex: 1, fontSize: 10, fontWeight: 600, color: '#4a5568', textTransform: 'uppercase', letterSpacing: 1 }}>Evento</div>
+        <div style={{ display: 'flex', alignItems: 'center', padding: '8px 18px', borderBottom: '1px solid #e2e8f0', background: '#ffffff' }}>
+          <div style={{ flex: 1, fontSize: 10, fontWeight: 600, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: 1 }}>Evento</div>
           <div style={{ display: 'flex', gap: 24, paddingRight: 4 }}>
-            <span style={{ fontSize: 10, fontWeight: 600, color: '#4a5568', textTransform: 'uppercase', letterSpacing: 1, width: 40, textAlign: 'center' }}>✉️ Mail</span>
-            <span style={{ fontSize: 10, fontWeight: 600, color: '#4a5568', textTransform: 'uppercase', letterSpacing: 1, width: 40, textAlign: 'center' }}>🔔 Push</span>
+            <span style={{ fontSize: 10, fontWeight: 600, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: 1, width: 40, textAlign: 'center' }}>✉️ Mail</span>
+            <span style={{ fontSize: 10, fontWeight: 600, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: 1, width: 40, textAlign: 'center' }}>🔔 Push</span>
           </div>
         </div>
         {ROWS.map((row, i) => (
-          <div key={i} style={{ display: 'flex', alignItems: 'center', padding: '12px 18px', borderBottom: i < ROWS.length - 1 ? '1px solid #1e2a45' : 'none' }}>
+          <div key={i} style={{ display: 'flex', alignItems: 'center', padding: '12px 18px', borderBottom: i < ROWS.length - 1 ? '1px solid #e2e8f0' : 'none' }}>
             <div style={{ flex: 1 }}>
-              <div style={{ fontSize: 13, color: '#f1f5f9' }}>{row.label}</div>
-              <div style={{ fontSize: 11, color: '#4a5568', marginTop: 2 }}>{row.desc}</div>
+              <div style={{ fontSize: 13, color: '#0f172a' }}>{row.label}</div>
+              <div style={{ fontSize: 11, color: '#94a3b8', marginTop: 2 }}>{row.desc}</div>
             </div>
             <div style={{ display: 'flex', gap: 24, paddingRight: 4 }}>
               <div style={{ width: 40, display: 'flex', justifyContent: 'center' }}>
@@ -2375,13 +2375,13 @@ function AlertsPanel({ adminUserId, adminEmail }) {
 
       {/* Email input */}
       <div style={{ marginBottom: 20 }}>
-        <label style={{ fontSize: 10, fontWeight: 600, color: '#8892a8', display: 'block', marginBottom: 5 }}>CORREO PARA ALERTAS</label>
+        <label style={{ fontSize: 10, fontWeight: 600, color: '#64748b', display: 'block', marginBottom: 5 }}>CORREO PARA ALERTAS</label>
         <input
           type="email"
           value={email}
           onChange={e => setEmail(e.target.value)}
           placeholder="tu@correo.com"
-          style={{ width: '100%', background: '#0d1220', border: '1px solid #1e2a45', color: '#f1f5f9', fontSize: 13, padding: '9px 12px', borderRadius: 7, outline: 'none', fontFamily: 'inherit', boxSizing: 'border-box' }}
+          style={{ width: '100%', background: '#ffffff', border: '1px solid #e2e8f0', color: '#0f172a', fontSize: 13, padding: '9px 12px', borderRadius: 7, outline: 'none', fontFamily: 'inherit', boxSizing: 'border-box' }}
         />
       </div>
 
@@ -2400,9 +2400,9 @@ function Toggle({ checked, onChange, color = '#f59e0b', style: extraStyle = {} }
   return (
     <div
       onClick={() => onChange && onChange(!checked)}
-      style={{ width: 40, height: 22, borderRadius: 11, background: checked ? color : '#1e2a45', cursor: onChange ? 'pointer' : 'not-allowed', position: 'relative', flexShrink: 0, transition: 'background .2s', ...extraStyle }}
+      style={{ width: 40, height: 22, borderRadius: 11, background: checked ? color : '#e2e8f0', cursor: onChange ? 'pointer' : 'not-allowed', position: 'relative', flexShrink: 0, transition: 'background .2s', ...extraStyle }}
     >
-      <div style={{ position: 'absolute', top: 3, left: checked ? 20 : 3, width: 16, height: 16, borderRadius: '50%', background: checked ? '#fff' : '#4a5568', transition: 'left .2s' }} />
+      <div style={{ position: 'absolute', top: 3, left: checked ? 20 : 3, width: 16, height: 16, borderRadius: '50%', background: checked ? '#fff' : '#94a3b8', transition: 'left .2s' }} />
     </div>
   )
 }
@@ -2414,16 +2414,16 @@ function CompanyModal({ data, onSave, onClose }) {
   const valid = name.trim() && slug.trim()
   function handleNameChange(val) { setName(val); if (autoSlug) setSlug(slugify(val)) }
   function handleSave() { const d = { ...(data || {}), name: name.trim(), slug: slug.trim() }; onSave(d) }
-  const iS = { width:'100%',background:'#0d1220',border:'1px solid #1e2a45',color:'#f1f5f9',fontSize:12,padding:'8px 10px',borderRadius:6,outline:'none',fontFamily:'inherit' }
+  const iS = { width:'100%',background:'#ffffff',border:'1px solid #e2e8f0',color:'#0f172a',fontSize:12,padding:'8px 10px',borderRadius:6,outline:'none',fontFamily:'inherit' }
   return (
     <div onClick={onClose} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.7)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 200 }}>
-      <div onClick={e => e.stopPropagation()} style={{ background: '#1a2035', border: '1px solid #1e2a45', borderRadius: 12, padding: 22, width: '100%', maxWidth: 400 }}>
+      <div onClick={e => e.stopPropagation()} style={{ background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: 12, padding: 22, width: '100%', maxWidth: 400 }}>
         <h3 style={{ fontSize: 15, fontWeight: 700, marginBottom: 14 }}>{data ? 'Editar Empresa' : 'Nueva Empresa'}</h3>
-        <div style={{ marginBottom: 10 }}><label style={{ fontSize:10,fontWeight:600,color:'#8892a8',display:'block',marginBottom:4 }}>Nombre de la empresa</label><input value={name} onChange={e => handleNameChange(e.target.value)} style={iS} placeholder='Ej: Mi Empresa SA de CV' /></div>
-        <div style={{ marginBottom: 18 }}><label style={{ fontSize:10,fontWeight:600,color:'#8892a8',display:'block',marginBottom:4 }}>Slug (identificador único)</label><input value={slug} onChange={e => { setSlug(slugify(e.target.value)); setAutoSlug(false) }} style={{ ...iS, fontFamily:"'JetBrains Mono'" }} placeholder='mi-empresa' /><div style={{ fontSize:10,color:'#4a5568',marginTop:4 }}>Solo letras, números y guiones.</div></div>
+        <div style={{ marginBottom: 10 }}><label style={{ fontSize:10,fontWeight:600,color:'#64748b',display:'block',marginBottom:4 }}>Nombre de la empresa</label><input value={name} onChange={e => handleNameChange(e.target.value)} style={iS} placeholder='Ej: Mi Empresa SA de CV' /></div>
+        <div style={{ marginBottom: 18 }}><label style={{ fontSize:10,fontWeight:600,color:'#64748b',display:'block',marginBottom:4 }}>Slug (identificador único)</label><input value={slug} onChange={e => { setSlug(slugify(e.target.value)); setAutoSlug(false) }} style={{ ...iS, fontFamily:"'JetBrains Mono'" }} placeholder='mi-empresa' /><div style={{ fontSize:10,color:'#94a3b8',marginTop:4 }}>Solo letras, números y guiones.</div></div>
         <div style={{ display: 'flex', gap: 8 }}>
-          <button disabled={!valid} onClick={handleSave} style={{ flex:1,padding:'10px 16px',borderRadius:7,border:'none',background:valid?'#3b82f6':'#1e2a45',color:'#fff',fontSize:12,fontWeight:600,cursor:valid?'pointer':'not-allowed',fontFamily:'inherit' }}>Guardar</button>
-          <button onClick={onClose} style={{ padding:'10px 16px',borderRadius:7,border:'1px solid #1e2a45',background:'transparent',color:'#8892a8',fontSize:12,cursor:'pointer',fontFamily:'inherit' }}>Cancelar</button>
+          <button disabled={!valid} onClick={handleSave} style={{ flex:1,padding:'10px 16px',borderRadius:7,border:'none',background:valid?'#3b82f6':'#e2e8f0',color:'#fff',fontSize:12,fontWeight:600,cursor:valid?'pointer':'not-allowed',fontFamily:'inherit' }}>Guardar</button>
+          <button onClick={onClose} style={{ padding:'10px 16px',borderRadius:7,border:'1px solid #e2e8f0',background:'transparent',color:'#64748b',fontSize:12,cursor:'pointer',fontFamily:'inherit' }}>Cancelar</button>
         </div>
       </div>
     </div>
@@ -2502,13 +2502,13 @@ function SalesImportModal({ sites, allEmps, onClose, onDone, setToast }) {
 
   return (
     <div onClick={onClose} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.65)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 400, padding: 16 }}>
-      <div onClick={e => e.stopPropagation()} style={{ background: '#1a2035', border: '1px solid #1e2a45', borderRadius: 14, padding: 24, width: '100%', maxWidth: 520 }}>
+      <div onClick={e => e.stopPropagation()} style={{ background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: 14, padding: 24, width: '100%', maxWidth: 520 }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
           <div style={{ fontSize: 15, fontWeight: 700 }}>⬆ Importar ventas</div>
-          <button onClick={onClose} style={{ background: 'none', border: 'none', color: '#8892a8', fontSize: 20, cursor: 'pointer' }}>×</button>
+          <button onClick={onClose} style={{ background: 'none', border: 'none', color: '#64748b', fontSize: 20, cursor: 'pointer' }}>×</button>
         </div>
-        <div style={{ fontSize: 11, color: '#8892a8', marginBottom: 14, lineHeight: 1.6 }}>
-          Sube un CSV con columnas: <strong style={{ color: '#f1f5f9' }}>Fecha</strong> (YYYY-MM-DD o DD/MM/YYYY), <strong style={{ color: '#f1f5f9' }}>Empleado</strong> (email o nombre), <strong style={{ color: '#f1f5f9' }}>Ventas</strong> (monto).<br />
+        <div style={{ fontSize: 11, color: '#64748b', marginBottom: 14, lineHeight: 1.6 }}>
+          Sube un CSV con columnas: <strong style={{ color: '#0f172a' }}>Fecha</strong> (YYYY-MM-DD o DD/MM/YYYY), <strong style={{ color: '#0f172a' }}>Empleado</strong> (email o nombre), <strong style={{ color: '#0f172a' }}>Ventas</strong> (monto).<br />
           Solo actualiza registros que ya existen en asistencia.
         </div>
         <input ref={fileRef} type='file' accept='.csv,.txt' style={{ display: 'none' }} onChange={handleFile} />
@@ -2523,13 +2523,13 @@ function SalesImportModal({ sites, allEmps, onClose, onDone, setToast }) {
               <span style={{ color: '#10b981' }}>✓ {validCount} válidos</span>
               {invalidCount > 0 && <span style={{ color: '#ef4444' }}>✗ {invalidCount} no encontrados</span>}
             </div>
-            <div style={{ background: '#0d1220', borderRadius: 8, overflow: 'hidden', marginBottom: 14, maxHeight: 200, overflowY: 'auto' }}>
+            <div style={{ background: '#ffffff', borderRadius: 8, overflow: 'hidden', marginBottom: 14, maxHeight: 200, overflowY: 'auto' }}>
               <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11 }}>
-                <thead><tr>{['Fecha','Empleado','Ventas','Estado'].map(h => <th key={h} style={{ textAlign: 'left', padding: '6px 10px', color: '#4a5568', fontWeight: 600, borderBottom: '1px solid #1e2a45' }}>{h}</th>)}</tr></thead>
+                <thead><tr>{['Fecha','Empleado','Ventas','Estado'].map(h => <th key={h} style={{ textAlign: 'left', padding: '6px 10px', color: '#94a3b8', fontWeight: 600, borderBottom: '1px solid #e2e8f0' }}>{h}</th>)}</tr></thead>
                 <tbody>{preview.map((r, i) => (
-                  <tr key={i} style={{ borderBottom: '1px solid rgba(30,42,69,.3)' }}>
-                    <td style={{ padding: '5px 10px', color: '#8892a8' }}>{r.date}</td>
-                    <td style={{ padding: '5px 10px', color: r.emp ? '#f1f5f9' : '#ef4444' }}>{r.emp ? r.emp.name : `¿${r.empQuery}?`}</td>
+                  <tr key={i} style={{ borderBottom: '1px solid rgba(226,232,240,.3)' }}>
+                    <td style={{ padding: '5px 10px', color: '#64748b' }}>{r.date}</td>
+                    <td style={{ padding: '5px 10px', color: r.emp ? '#0f172a' : '#ef4444' }}>{r.emp ? r.emp.name : `¿${r.empQuery}?`}</td>
                     <td style={{ padding: '5px 10px', color: '#10b981', fontFamily: "'JetBrains Mono'" }}>${Number(r.amount).toLocaleString('es-MX')}</td>
                     <td style={{ padding: '5px 10px' }}>{r.valid ? <span style={{ color: '#10b981' }}>✓</span> : <span style={{ color: '#ef4444' }}>✗</span>}</td>
                   </tr>
@@ -2537,7 +2537,7 @@ function SalesImportModal({ sites, allEmps, onClose, onDone, setToast }) {
               </table>
             </div>
             <button onClick={handleSave} disabled={validCount === 0 || saving}
-              style={{ width: '100%', padding: '11px', borderRadius: 9, border: 'none', background: validCount > 0 && !saving ? '#a78bfa' : '#1e2a45', color: validCount > 0 && !saving ? '#fff' : '#4a5568', fontSize: 13, fontWeight: 700, cursor: validCount > 0 && !saving ? 'pointer' : 'not-allowed', fontFamily: 'inherit' }}>
+              style={{ width: '100%', padding: '11px', borderRadius: 9, border: 'none', background: validCount > 0 && !saving ? '#a78bfa' : '#e2e8f0', color: validCount > 0 && !saving ? '#fff' : '#94a3b8', fontSize: 13, fontWeight: 700, cursor: validCount > 0 && !saving ? 'pointer' : 'not-allowed', fontFamily: 'inherit' }}>
               {saving ? 'Guardando...' : `Actualizar ${validCount} registros`}
             </button>
           </>
@@ -2596,29 +2596,29 @@ function FeedbackButton({ open, onClose, adminUser }) {
   if (!open) return null
   return (
     <div onClick={close} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.65)', display: 'flex', alignItems: 'flex-end', justifyContent: 'center', zIndex: 1000, padding: '0 0 24px' }}>
-      <div onClick={e => e.stopPropagation()} style={{ background: '#1a2035', border: '1px solid #1e2a45', borderRadius: 16, padding: '24px 20px', width: '100%', maxWidth: 440 }}>
+      <div onClick={e => e.stopPropagation()} style={{ background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: 16, padding: '24px 20px', width: '100%', maxWidth: 440 }}>
         {status === 'done' ? (
           <div style={{ textAlign: 'center', padding: '20px 0' }}>
             <div style={{ fontSize: 40, marginBottom: 10 }}>🙌</div>
             <div style={{ fontSize: 16, fontWeight: 700, color: '#10b981', marginBottom: 6 }}>¡Gracias!</div>
-            <div style={{ fontSize: 13, color: '#8892a8', marginBottom: 20 }}>Tu mensaje nos ayuda a mejorar Worktic.</div>
+            <div style={{ fontSize: 13, color: '#64748b', marginBottom: 20 }}>Tu mensaje nos ayuda a mejorar Worktic.</div>
             <button onClick={close} style={{ padding: '10px 28px', borderRadius: 9, border: 'none', background: '#10b981', color: '#fff', fontSize: 13, fontWeight: 700, cursor: 'pointer' }}>Cerrar</button>
           </div>
         ) : (
           <>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
               <div>
-                <div style={{ fontSize: 15, fontWeight: 700, color: '#f1f5f9' }}>💬 Cuéntanos</div>
-                <div style={{ fontSize: 11, color: '#8892a8', marginTop: 2 }}>Tu opinión hace que Worktic mejore</div>
+                <div style={{ fontSize: 15, fontWeight: 700, color: '#0f172a' }}>💬 Cuéntanos</div>
+                <div style={{ fontSize: 11, color: '#64748b', marginTop: 2 }}>Tu opinión hace que Worktic mejore</div>
               </div>
-              <button onClick={close} style={{ background: 'none', border: '1px solid #1e2a45', borderRadius: 6, color: '#8892a8', fontSize: 18, cursor: 'pointer', padding: '2px 10px', lineHeight: 1 }}>×</button>
+              <button onClick={close} style={{ background: 'none', border: '1px solid #e2e8f0', borderRadius: 6, color: '#64748b', fontSize: 18, cursor: 'pointer', padding: '2px 10px', lineHeight: 1 }}>×</button>
             </div>
 
             {/* Type selector */}
             <div style={{ display: 'flex', gap: 8, marginBottom: 14 }}>
               {types.map(t => (
                 <button key={t.id} onClick={() => setType(t.id)}
-                  style={{ flex: 1, padding: '9px 6px', borderRadius: 9, border: `1.5px solid ${type === t.id ? '#10b981' : '#1e2a45'}`, background: type === t.id ? 'rgba(16,185,129,.1)' : '#0d1220', color: type === t.id ? '#10b981' : '#8892a8', fontSize: 11, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit', textAlign: 'center', lineHeight: 1.4 }}>
+                  style={{ flex: 1, padding: '9px 6px', borderRadius: 9, border: `1.5px solid ${type === t.id ? '#10b981' : '#e2e8f0'}`, background: type === t.id ? 'rgba(16,185,129,.1)' : '#ffffff', color: type === t.id ? '#10b981' : '#64748b', fontSize: 11, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit', textAlign: 'center', lineHeight: 1.4 }}>
                   <div style={{ fontSize: 18 }}>{t.emoji}</div>
                   <div>{t.label}</div>
                 </button>
@@ -2629,21 +2629,21 @@ function FeedbackButton({ open, onClose, adminUser }) {
               value={msg} onChange={e => setMsg(e.target.value)}
               placeholder={type === 'error' ? '¿Qué pasó? ¿Qué esperabas que pasara?' : type === 'idea' ? '¿Qué te gustaría que tuviera Worktic?' : '¿Algo que quieras decirnos?'}
               rows={4}
-              style={{ width: '100%', background: '#0d1220', border: '1px solid #1e2a45', borderRadius: 9, color: '#f1f5f9', fontSize: 13, padding: '11px 13px', resize: 'none', fontFamily: 'inherit', outline: 'none', boxSizing: 'border-box', marginBottom: 10 }}
+              style={{ width: '100%', background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: 9, color: '#0f172a', fontSize: 13, padding: '11px 13px', resize: 'none', fontFamily: 'inherit', outline: 'none', boxSizing: 'border-box', marginBottom: 10 }}
             />
 
             {/* Screenshot attachment */}
             <input ref={fileRef} type='file' accept='image/*' style={{ display: 'none' }} onChange={handleFile} />
             {screenshot ? (
               <div style={{ marginBottom: 12, position: 'relative' }}>
-                <img src={screenshot.preview} alt='captura' style={{ width: '100%', maxHeight: 160, objectFit: 'cover', borderRadius: 8, border: '1px solid #1e2a45' }} />
+                <img src={screenshot.preview} alt='captura' style={{ width: '100%', maxHeight: 160, objectFit: 'cover', borderRadius: 8, border: '1px solid #e2e8f0' }} />
                 <button onClick={() => { setScreenshot(null); if (fileRef.current) fileRef.current.value = '' }}
                   style={{ position: 'absolute', top: 6, right: 6, background: 'rgba(0,0,0,.7)', border: 'none', borderRadius: '50%', color: '#fff', width: 24, height: 24, fontSize: 14, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', lineHeight: 1 }}>×</button>
-                <div style={{ fontSize: 10, color: '#4a5568', marginTop: 4 }}>{screenshot.name}</div>
+                <div style={{ fontSize: 10, color: '#94a3b8', marginTop: 4 }}>{screenshot.name}</div>
               </div>
             ) : (
               <button onClick={() => fileRef.current?.click()}
-                style={{ width: '100%', marginBottom: 10, padding: '8px', borderRadius: 8, border: '1px dashed #1e2a45', background: 'transparent', color: '#4a5568', fontSize: 12, cursor: 'pointer', fontFamily: 'inherit', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
+                style={{ width: '100%', marginBottom: 10, padding: '8px', borderRadius: 8, border: '1px dashed #e2e8f0', background: 'transparent', color: '#94a3b8', fontSize: 12, cursor: 'pointer', fontFamily: 'inherit', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
                 📎 Adjuntar captura de pantalla
               </button>
             )}
@@ -2651,7 +2651,7 @@ function FeedbackButton({ open, onClose, adminUser }) {
             {status === 'error' && <div style={{ fontSize: 11, color: '#ef4444', marginBottom: 8 }}>Error al enviar. Intenta de nuevo.</div>}
 
             <button onClick={send} disabled={!msg.trim() || status === 'loading'}
-              style={{ width: '100%', padding: '12px', borderRadius: 9, border: 'none', background: !msg.trim() || status === 'loading' ? '#1e2a45' : '#10b981', color: !msg.trim() || status === 'loading' ? '#4a5568' : '#fff', fontSize: 13, fontWeight: 700, cursor: !msg.trim() || status === 'loading' ? 'not-allowed' : 'pointer', fontFamily: 'inherit', transition: 'background .2s' }}>
+              style={{ width: '100%', padding: '12px', borderRadius: 9, border: 'none', background: !msg.trim() || status === 'loading' ? '#e2e8f0' : '#10b981', color: !msg.trim() || status === 'loading' ? '#94a3b8' : '#fff', fontSize: 13, fontWeight: 700, cursor: !msg.trim() || status === 'loading' ? 'not-allowed' : 'pointer', fontFamily: 'inherit', transition: 'background .2s' }}>
               {status === 'loading' ? 'Enviando...' : 'Enviar →'}
             </button>
           </>
@@ -2708,7 +2708,7 @@ function CompetitionsPanel({ competitions, compSites, sites, allEmps, att, admin
   const rankIcon = r => r === 1 ? '🥇' : r === 2 ? '🥈' : r === 3 ? '🥉' : `#${r}`
 
   if (competitions.length === 0) return (
-    <div style={{ padding: 40, textAlign: 'center', color: '#4a5568', fontSize: 13, background: '#1a2035', borderRadius: 10, border: '1px solid #1e2a45' }}>
+    <div style={{ padding: 40, textAlign: 'center', color: '#94a3b8', fontSize: 13, background: '#ffffff', borderRadius: 10, border: '1px solid #e2e8f0' }}>
       No hay competencias. Crea una con el botón de arriba.
     </div>
   )
@@ -2723,17 +2723,17 @@ function CompetitionsPanel({ competitions, compSites, sites, allEmps, att, admin
           return (
             <div key={comp.id}
               onClick={() => setSelComp(selComp?.id === comp.id ? null : comp)}
-              style={{ background: '#1a2035', border: `2px solid ${selComp?.id === comp.id ? '#f59e0b' : isActive ? 'rgba(245,158,11,.3)' : '#1e2a45'}`, borderRadius: 12, padding: 16, cursor: 'pointer', transition: 'border-color .2s' }}>
+              style={{ background: '#ffffff', border: `2px solid ${selComp?.id === comp.id ? '#f59e0b' : isActive ? 'rgba(245,158,11,.3)' : '#e2e8f0'}`, borderRadius: 12, padding: 16, cursor: 'pointer', transition: 'border-color .2s' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 10 }}>
                 <div>
-                  <div style={{ fontSize: 14, fontWeight: 700, color: '#f1f5f9' }}>{comp.name}</div>
-                  <div style={{ fontSize: 10, color: '#8892a8', marginTop: 2 }}>{typeLabel[comp.type] || comp.type}</div>
+                  <div style={{ fontSize: 14, fontWeight: 700, color: '#0f172a' }}>{comp.name}</div>
+                  <div style={{ fontSize: 10, color: '#64748b', marginTop: 2 }}>{typeLabel[comp.type] || comp.type}</div>
                 </div>
                 <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
                   {isActive && <span style={{ fontSize: 9, fontWeight: 700, color: '#10b981', background: 'rgba(16,185,129,.12)', border: '1px solid rgba(16,185,129,.3)', borderRadius: 4, padding: '2px 7px' }}>ACTIVA</span>}
-                  {!comp.active && <span style={{ fontSize: 9, color: '#4a5568', background: 'rgba(74,85,104,.1)', border: '1px solid #1e2a45', borderRadius: 4, padding: '2px 7px' }}>PAUSADA</span>}
+                  {!comp.active && <span style={{ fontSize: 9, color: '#94a3b8', background: 'rgba(74,85,104,.1)', border: '1px solid #e2e8f0', borderRadius: 4, padding: '2px 7px' }}>PAUSADA</span>}
                   <button onClick={e => { e.stopPropagation(); onEdit(comp) }}
-                    style={{ background: 'none', border: '1px solid #1e2a45', borderRadius: 5, color: '#8892a8', fontSize: 10, padding: '2px 8px', cursor: 'pointer', fontFamily: 'inherit' }}>Editar</button>
+                    style={{ background: 'none', border: '1px solid #e2e8f0', borderRadius: 5, color: '#64748b', fontSize: 10, padding: '2px 8px', cursor: 'pointer', fontFamily: 'inherit' }}>Editar</button>
                 </div>
               </div>
               <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 8 }}>
@@ -2741,7 +2741,7 @@ function CompetitionsPanel({ competitions, compSites, sites, allEmps, att, admin
                 {cSites.map(s => <span key={s.id} style={{ fontSize: 10, color: '#3b82f6', background: 'rgba(59,130,246,.1)', borderRadius: 4, padding: '2px 7px' }}>{s.name}</span>)}
               </div>
               {comp.type === 'custom' && comp.start_date && (
-                <div style={{ fontSize: 10, color: '#4a5568' }}>{comp.start_date} → {comp.end_date || 'sin fin'}</div>
+                <div style={{ fontSize: 10, color: '#94a3b8' }}>{comp.start_date} → {comp.end_date || 'sin fin'}</div>
               )}
               {comp.prize_text && <div style={{ fontSize: 10, color: '#f59e0b', marginTop: 4 }}>🎁 {comp.prize_text}</div>}
             </div>
@@ -2752,26 +2752,26 @@ function CompetitionsPanel({ competitions, compSites, sites, allEmps, att, admin
       {selComp && (() => {
         const ranking = computeRanking(selComp)
         return (
-          <div style={{ background: '#1a2035', border: '1px solid rgba(245,158,11,.3)', borderRadius: 12, padding: 20 }}>
+          <div style={{ background: '#ffffff', border: '1px solid rgba(245,158,11,.3)', borderRadius: 12, padding: 20 }}>
             <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 4 }}>🏆 Ranking — {selComp.name}</div>
-            <div style={{ fontSize: 11, color: '#8892a8', marginBottom: 16 }}>{metricLabel[selComp.metric]} · {getDateRange(selComp).start} → {getDateRange(selComp).end}</div>
+            <div style={{ fontSize: 11, color: '#64748b', marginBottom: 16 }}>{metricLabel[selComp.metric]} · {getDateRange(selComp).start} → {getDateRange(selComp).end}</div>
             {ranking.length === 0 ? (
-              <div style={{ fontSize: 12, color: '#4a5568', padding: '20px 0', textAlign: 'center' }}>Sin datos aún para este período.</div>
+              <div style={{ fontSize: 12, color: '#94a3b8', padding: '20px 0', textAlign: 'center' }}>Sin datos aún para este período.</div>
             ) : (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                 {ranking.slice(0, 20).map(({ rank, emp, score }) => {
                   const maxScore = ranking[0]?.score || 1
                   const pct = Math.round(score / maxScore * 100)
                   return (
-                    <div key={emp.id} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 14px', background: rank <= 3 ? 'rgba(245,158,11,.06)' : 'rgba(30,42,69,.3)', borderRadius: 8, border: rank === 1 ? '1px solid rgba(245,158,11,.3)' : '1px solid transparent' }}>
-                      <div style={{ fontSize: rank <= 3 ? 20 : 13, fontWeight: 700, minWidth: 28, textAlign: 'center', color: '#f1f5f9' }}>{rankIcon(rank)}</div>
+                    <div key={emp.id} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 14px', background: rank <= 3 ? 'rgba(245,158,11,.06)' : 'rgba(226,232,240,.3)', borderRadius: 8, border: rank === 1 ? '1px solid rgba(245,158,11,.3)' : '1px solid transparent' }}>
+                      <div style={{ fontSize: rank <= 3 ? 20 : 13, fontWeight: 700, minWidth: 28, textAlign: 'center', color: '#0f172a' }}>{rankIcon(rank)}</div>
                       <div style={{ flex: 1, minWidth: 0 }}>
-                        <div style={{ fontSize: 12, fontWeight: 600, color: '#f1f5f9', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{emp.name}</div>
-                        <div style={{ marginTop: 4, height: 3, background: 'rgba(30,42,69,.8)', borderRadius: 2, overflow: 'hidden' }}>
+                        <div style={{ fontSize: 12, fontWeight: 600, color: '#0f172a', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{emp.name}</div>
+                        <div style={{ marginTop: 4, height: 3, background: 'rgba(226,232,240,.8)', borderRadius: 2, overflow: 'hidden' }}>
                           <div style={{ height: '100%', width: pct + '%', background: rank === 1 ? '#f59e0b' : '#3b82f6', borderRadius: 2 }} />
                         </div>
                       </div>
-                      <div style={{ fontSize: 13, fontWeight: 700, fontFamily: "'JetBrains Mono'", color: rank === 1 ? '#f59e0b' : '#f1f5f9' }}>{metricFmt(selComp.metric, score)}</div>
+                      <div style={{ fontSize: 13, fontWeight: 700, fontFamily: "'JetBrains Mono'", color: rank === 1 ? '#f59e0b' : '#0f172a' }}>{metricFmt(selComp.metric, score)}</div>
                     </div>
                   )
                 })}
@@ -2819,27 +2819,27 @@ function CompetitionModal({ data, sites, allEmps, adminUser, permittedSiteIds, o
 
   return (
     <div onClick={onClose} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.75)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 400, padding: '0 16px' }}>
-      <div onClick={e => e.stopPropagation()} style={{ background: '#1a2035', border: '1px solid #1e2a45', borderRadius: 14, padding: 24, width: '100%', maxWidth: 460, maxHeight: '90vh', overflowY: 'auto', fontFamily: "'DM Sans', sans-serif" }}>
+      <div onClick={e => e.stopPropagation()} style={{ background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: 14, padding: 24, width: '100%', maxWidth: 460, maxHeight: '90vh', overflowY: 'auto', fontFamily: "'DM Sans', sans-serif" }}>
         <div style={{ fontSize: 15, fontWeight: 700, marginBottom: 18 }}>{isNew ? 'Nueva Competencia' : 'Editar Competencia'}</div>
 
         <div style={{ marginBottom: 14 }}>
-          <div style={{ fontSize: 10, color: '#4a5568', marginBottom: 5, textTransform: 'uppercase', letterSpacing: '.5px' }}>Nombre</div>
+          <div style={{ fontSize: 10, color: '#94a3b8', marginBottom: 5, textTransform: 'uppercase', letterSpacing: '.5px' }}>Nombre</div>
           <input value={name} onChange={e => { setName(e.target.value); setErr('') }}
-            placeholder='Ej: Vendedor del Mes Marzo' style={{ width: '100%', background: '#0d1220', border: '1px solid #1e2a45', color: '#f1f5f9', fontSize: 13, padding: '9px 12px', borderRadius: 8, fontFamily: 'inherit', boxSizing: 'border-box' }} />
+            placeholder='Ej: Vendedor del Mes Marzo' style={{ width: '100%', background: '#ffffff', border: '1px solid #e2e8f0', color: '#0f172a', fontSize: 13, padding: '9px 12px', borderRadius: 8, fontFamily: 'inherit', boxSizing: 'border-box' }} />
         </div>
 
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 14 }}>
           <div>
-            <div style={{ fontSize: 10, color: '#4a5568', marginBottom: 5, textTransform: 'uppercase', letterSpacing: '.5px' }}>Tipo</div>
-            <select value={type} onChange={e => setType(e.target.value)} style={{ width: '100%', background: '#0d1220', border: '1px solid #1e2a45', color: '#f1f5f9', fontSize: 13, padding: '9px 8px', borderRadius: 8, fontFamily: 'inherit' }}>
+            <div style={{ fontSize: 10, color: '#94a3b8', marginBottom: 5, textTransform: 'uppercase', letterSpacing: '.5px' }}>Tipo</div>
+            <select value={type} onChange={e => setType(e.target.value)} style={{ width: '100%', background: '#ffffff', border: '1px solid #e2e8f0', color: '#0f172a', fontSize: 13, padding: '9px 8px', borderRadius: 8, fontFamily: 'inherit' }}>
               <option value='auto_week'>Semana (auto-reset)</option>
               <option value='auto_month'>Mes (auto-reset)</option>
               <option value='custom'>Personalizada (fechas)</option>
             </select>
           </div>
           <div>
-            <div style={{ fontSize: 10, color: '#4a5568', marginBottom: 5, textTransform: 'uppercase', letterSpacing: '.5px' }}>Métrica</div>
-            <select value={metric} onChange={e => setMetric(e.target.value)} style={{ width: '100%', background: '#0d1220', border: '1px solid #1e2a45', color: '#f1f5f9', fontSize: 13, padding: '9px 8px', borderRadius: 8, fontFamily: 'inherit' }}>
+            <div style={{ fontSize: 10, color: '#94a3b8', marginBottom: 5, textTransform: 'uppercase', letterSpacing: '.5px' }}>Métrica</div>
+            <select value={metric} onChange={e => setMetric(e.target.value)} style={{ width: '100%', background: '#ffffff', border: '1px solid #e2e8f0', color: '#0f172a', fontSize: 13, padding: '9px 8px', borderRadius: 8, fontFamily: 'inherit' }}>
               <option value='sales'>Ventas totales</option>
               <option value='attendance'>Días trabajados</option>
               <option value='punctuality'>Días puntuales</option>
@@ -2851,19 +2851,19 @@ function CompetitionModal({ data, sites, allEmps, adminUser, permittedSiteIds, o
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 14 }}>
             {[['Inicio', startDate, setStartDate], ['Fin (opcional)', endDate, setEndDate]].map(([lbl, val, set]) => (
               <div key={lbl}>
-                <div style={{ fontSize: 10, color: '#4a5568', marginBottom: 5, textTransform: 'uppercase', letterSpacing: '.5px' }}>{lbl}</div>
-                <input type='date' value={val} onChange={e => set(e.target.value)} style={{ width: '100%', background: '#0d1220', border: '1px solid #1e2a45', color: '#f1f5f9', fontSize: 13, padding: '9px 8px', borderRadius: 8, fontFamily: 'inherit', boxSizing: 'border-box' }} />
+                <div style={{ fontSize: 10, color: '#94a3b8', marginBottom: 5, textTransform: 'uppercase', letterSpacing: '.5px' }}>{lbl}</div>
+                <input type='date' value={val} onChange={e => set(e.target.value)} style={{ width: '100%', background: '#ffffff', border: '1px solid #e2e8f0', color: '#0f172a', fontSize: 13, padding: '9px 8px', borderRadius: 8, fontFamily: 'inherit', boxSizing: 'border-box' }} />
               </div>
             ))}
           </div>
         )}
 
         <div style={{ marginBottom: 14 }}>
-          <div style={{ fontSize: 10, color: '#4a5568', marginBottom: 8, textTransform: 'uppercase', letterSpacing: '.5px' }}>Sucursales participantes</div>
+          <div style={{ fontSize: 10, color: '#94a3b8', marginBottom: 8, textTransform: 'uppercase', letterSpacing: '.5px' }}>Sucursales participantes</div>
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
             {allowedSites.map(s => (
               <button key={s.id} onClick={() => toggleSite(s.id)}
-                style={{ padding: '5px 12px', borderRadius: 7, border: `1px solid ${selSiteIds.includes(s.id) ? '#f59e0b' : '#1e2a45'}`, background: selSiteIds.includes(s.id) ? 'rgba(245,158,11,.15)' : 'transparent', color: selSiteIds.includes(s.id) ? '#f59e0b' : '#8892a8', fontSize: 12, cursor: 'pointer', fontFamily: 'inherit', fontWeight: selSiteIds.includes(s.id) ? 600 : 400, transition: 'all .15s' }}>
+                style={{ padding: '5px 12px', borderRadius: 7, border: `1px solid ${selSiteIds.includes(s.id) ? '#f59e0b' : '#e2e8f0'}`, background: selSiteIds.includes(s.id) ? 'rgba(245,158,11,.15)' : 'transparent', color: selSiteIds.includes(s.id) ? '#f59e0b' : '#64748b', fontSize: 12, cursor: 'pointer', fontFamily: 'inherit', fontWeight: selSiteIds.includes(s.id) ? 600 : 400, transition: 'all .15s' }}>
                 {s.name}
               </button>
             ))}
@@ -2871,24 +2871,24 @@ function CompetitionModal({ data, sites, allEmps, adminUser, permittedSiteIds, o
         </div>
 
         <div style={{ marginBottom: 14 }}>
-          <div style={{ fontSize: 10, color: '#4a5568', marginBottom: 5, textTransform: 'uppercase', letterSpacing: '.5px' }}>Premio (opcional)</div>
+          <div style={{ fontSize: 10, color: '#94a3b8', marginBottom: 5, textTransform: 'uppercase', letterSpacing: '.5px' }}>Premio (opcional)</div>
           <input value={prize} onChange={e => setPrize(e.target.value)}
-            placeholder='Ej: Bono de $500, día libre, trofeo...' style={{ width: '100%', background: '#0d1220', border: '1px solid #1e2a45', color: '#f1f5f9', fontSize: 13, padding: '9px 12px', borderRadius: 8, fontFamily: 'inherit', boxSizing: 'border-box' }} />
+            placeholder='Ej: Bono de $500, día libre, trofeo...' style={{ width: '100%', background: '#ffffff', border: '1px solid #e2e8f0', color: '#0f172a', fontSize: 13, padding: '9px 12px', borderRadius: 8, fontFamily: 'inherit', boxSizing: 'border-box' }} />
         </div>
 
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 18 }}>
           <button onClick={() => setActive(a => !a)}
-            style={{ width: 36, height: 20, borderRadius: 10, border: 'none', background: active ? '#10b981' : '#1e2a45', cursor: 'pointer', position: 'relative', transition: 'background .2s', flexShrink: 0 }}>
+            style={{ width: 36, height: 20, borderRadius: 10, border: 'none', background: active ? '#10b981' : '#e2e8f0', cursor: 'pointer', position: 'relative', transition: 'background .2s', flexShrink: 0 }}>
             <div style={{ position: 'absolute', top: 2, left: active ? 18 : 2, width: 16, height: 16, borderRadius: '50%', background: '#fff', transition: 'left .2s' }} />
           </button>
-          <span style={{ fontSize: 12, color: '#8892a8' }}>Competencia {active ? 'activa' : 'pausada'}</span>
+          <span style={{ fontSize: 12, color: '#64748b' }}>Competencia {active ? 'activa' : 'pausada'}</span>
         </div>
 
         {err && <div style={{ fontSize: 11, color: '#ef4444', marginBottom: 12, fontWeight: 600 }}>{err}</div>}
 
         <div style={{ display: 'flex', gap: 8 }}>
           {!isNew && <button onClick={() => onDelete(data.id)} style={{ padding: '9px 14px', borderRadius: 8, border: '1px solid rgba(239,68,68,.3)', background: 'rgba(239,68,68,.08)', color: '#ef4444', fontSize: 12, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}>Eliminar</button>}
-          <button onClick={onClose} style={{ flex: 1, padding: '9px', borderRadius: 8, border: '1px solid #1e2a45', background: 'transparent', color: '#8892a8', fontSize: 12, cursor: 'pointer', fontFamily: 'inherit' }}>Cancelar</button>
+          <button onClick={onClose} style={{ flex: 1, padding: '9px', borderRadius: 8, border: '1px solid #e2e8f0', background: 'transparent', color: '#64748b', fontSize: 12, cursor: 'pointer', fontFamily: 'inherit' }}>Cancelar</button>
           <button onClick={handleSave} style={{ flex: 2, padding: '9px', borderRadius: 8, border: 'none', background: '#f59e0b', color: '#fff', fontSize: 12, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>Guardar</button>
         </div>
       </div>
