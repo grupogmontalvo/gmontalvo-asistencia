@@ -1,4 +1,5 @@
 import ContactForm from './components/ContactForm'
+import CopyEmailBtn from './components/CopyEmailBtn'
 
 export const metadata = {
   title: 'Worktic — Sabe quién trabaja, cuándo y dónde',
@@ -1042,88 +1043,119 @@ const css = `
 
   /* ── AUTODEMO ── */
   .autodemo {
-    padding: 80px 24px 60px;
+    padding: 60px 24px 56px;
     display: flex;
     flex-direction: column;
     align-items: center;
     text-align: center;
     background: var(--negro3);
-    border-top: 1px solid rgba(0,0,0,0.06);
-    border-bottom: 1px solid rgba(0,0,0,0.06);
+    border-bottom: 1px solid rgba(255,255,255,0.06);
   }
 
-  .autodemo-sub {
-    font-size: 16px;
+  .autodemo-steps {
+    display: flex;
+    flex-direction: column;
+    gap: 28px;
+    width: 100%;
+    max-width: 380px;
+    margin-top: 32px;
+  }
+
+  .autodemo-step {
+    display: flex;
+    align-items: flex-start;
+    gap: 16px;
+    text-align: left;
+  }
+
+  .autodemo-step-num {
+    width: 32px;
+    height: 32px;
+    min-width: 32px;
+    border-radius: 50%;
+    background: var(--verde);
+    color: #fff;
+    font-size: 14px;
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-top: 2px;
+  }
+
+  .autodemo-step-body {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .autodemo-step-label {
+    font-size: 15px;
     color: var(--gris);
-    max-width: 480px;
-    margin: 0 auto 36px;
-    line-height: 1.6;
+    line-height: 1.4;
   }
 
-  .autodemo-sub strong { color: var(--blanco); }
+  .autodemo-copy-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    background: rgba(255,255,255,0.05);
+    border: 1px solid rgba(255,255,255,0.1);
+    border-radius: 10px;
+    padding: 10px 14px;
+  }
+
+  .autodemo-email {
+    font-family: monospace;
+    font-size: 14px;
+    color: var(--verde);
+    flex: 1;
+    user-select: all;
+  }
+
+  .autodemo-copy-btn {
+    background: var(--verde);
+    color: #fff;
+    border: none;
+    border-radius: 7px;
+    padding: 6px 14px;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: opacity 0.15s;
+  }
+  .autodemo-copy-btn:active { opacity: 0.8; }
 
   .autodemo-qr-wrap {
     display: flex;
     flex-direction: column;
-    align-items: center;
-    gap: 12px;
-    margin-bottom: 24px;
+    align-items: flex-start;
+    gap: 8px;
   }
 
+  .autodemo-qr-link { display: inline-block; }
+
   .autodemo-qr {
-    width: 180px;
-    height: 180px;
-    border-radius: 16px;
+    width: 160px;
+    height: 160px;
+    border-radius: 14px;
     border: 3px solid var(--verde);
     padding: 8px;
     background: #fff;
+    display: block;
   }
 
   .autodemo-qr-label {
-    font-size: 12px;
+    font-size: 11px;
     color: var(--gris-claro);
     font-family: monospace;
     letter-spacing: 0.5px;
-  }
-
-  .autodemo-mobile-cta {
-    display: none;
-    flex-direction: column;
-    align-items: center;
-    gap: 12px;
-    margin-bottom: 20px;
-  }
-
-  .autodemo-arrow {
-    font-size: 13px;
-    color: var(--gris);
-  }
-
-  .autodemo-hint {
-    font-size: 13px;
-    color: var(--gris);
-    margin-top: 8px;
-  }
-
-  .autodemo-hint code {
-    background: var(--verde-fondo);
-    color: var(--verde);
-    padding: 3px 8px;
-    border-radius: 5px;
-    font-size: 13px;
-  }
-
-  .autodemo-touch-hint {
-    font-size: 13px;
-    color: var(--verde);
-    text-decoration: underline;
-    cursor: pointer;
-    margin-bottom: 4px;
+    margin-left: 2px;
   }
 
   @media (max-width: 768px) {
-    .autodemo-mobile-cta { display: none; }
-    .autodemo { padding: 60px 20px 50px; }
+    .autodemo { padding: 48px 20px 44px; }
   }
 
   @media (max-width: 768px) {
@@ -1176,6 +1208,45 @@ export default function Home() {
           </a>
         </div>
       </nav>
+
+      {/* ── AUTODEMO ── */}
+      <section className="autodemo" id="pruebalo">
+        <div className="section-label">Pruébalo ahora — 30 segundos</div>
+        <h2 className="section-title">¿Cómo se siente<br /><em>hacer check-in?</em></h2>
+
+        <div className="autodemo-steps">
+          {/* Paso 1: Copiar email */}
+          <div className="autodemo-step">
+            <div className="autodemo-step-num">1</div>
+            <div className="autodemo-step-body">
+              <div className="autodemo-step-label">Copia este email de prueba</div>
+              <div className="autodemo-copy-row">
+                <span className="autodemo-email">prueba@worktic.app</span>
+                <CopyEmailBtn email="prueba@worktic.app" />
+              </div>
+            </div>
+          </div>
+
+          {/* Paso 2: QR */}
+          <div className="autodemo-step">
+            <div className="autodemo-step-num">2</div>
+            <div className="autodemo-step-body">
+              <div className="autodemo-step-label">Escanea o toca el QR — todo será muy intuitivo</div>
+              <div className="autodemo-qr-wrap">
+                <a href="/checkin/DEMO" className="autodemo-qr-link">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src="https://api.qrserver.com/v1/create-qr-code/?size=160x160&data=https://worktic.app/checkin/DEMO&color=1D9E75&bgcolor=ffffff"
+                    className="autodemo-qr"
+                    alt="QR para demo de Worktic"
+                  />
+                </a>
+                <div className="autodemo-qr-label">worktic.app/checkin/DEMO</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
 
       {/* ── HERO ── */}
       <section className="hero">
@@ -1335,42 +1406,6 @@ export default function Home() {
             </div>
           </div>
 
-        </div>
-      </section>
-
-      {/* ── AUTODEMO ── */}
-      <section className="autodemo" id="pruebalo">
-        <div className="section-label">Pruébalo ahora</div>
-        <h2 className="section-title">¿Quieres ver cómo funciona<br /><em>en 30 segundos?</em></h2>
-        <p className="autodemo-sub">
-          Escanea el QR con tu celular, ingresa con <strong>prueba@worktic.app</strong> y haz tu primer check-in real.
-        </p>
-
-        {/* QR — visible siempre */}
-        <div className="autodemo-qr-wrap">
-          <a href="/checkin/DEMO" className="autodemo-touch-hint">(tócalo 👆 y será como escanearlo)</a>
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            src="https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=https://worktic.app/checkin/DEMO&color=1D9E75&bgcolor=ffffff"
-            className="autodemo-qr"
-            alt="QR para demo de Worktic"
-          />
-          <div className="autodemo-qr-label">worktic.app/checkin/DEMO</div>
-        </div>
-
-        {/* Botón — visible en móvil */}
-        <div className="autodemo-mobile-cta">
-          <span className="autodemo-arrow">Esto es lo que pasaría si escanearan el QR 👇</span>
-          <a href="/checkin/DEMO" className="btn-primary">
-            Toca aquí para probarlo
-            <svg width="15" height="15" viewBox="0 0 16 16" fill="none">
-              <path d="M3 8h10M9 4l4 4-4 4" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
-            </svg>
-          </a>
-        </div>
-
-        <div className="autodemo-hint">
-          Email de prueba: <code>prueba@worktic.app</code>
         </div>
       </section>
 
