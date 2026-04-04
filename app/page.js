@@ -1040,6 +1040,92 @@ const css = `
     .btn-nav-primary { padding: 6px 10px; font-size: 11px; }
   }
 
+  /* ── AUTODEMO ── */
+  .autodemo {
+    padding: 80px 24px 60px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    background: var(--negro3);
+    border-top: 1px solid rgba(0,0,0,0.06);
+    border-bottom: 1px solid rgba(0,0,0,0.06);
+  }
+
+  .autodemo-sub {
+    font-size: 16px;
+    color: var(--gris);
+    max-width: 480px;
+    margin: 0 auto 36px;
+    line-height: 1.6;
+  }
+
+  .autodemo-sub strong { color: var(--blanco); }
+
+  .autodemo-qr-wrap {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 24px;
+  }
+
+  .autodemo-qr {
+    width: 180px;
+    height: 180px;
+    border-radius: 16px;
+    border: 3px solid var(--verde);
+    padding: 8px;
+    background: #fff;
+  }
+
+  .autodemo-qr-label {
+    font-size: 12px;
+    color: var(--gris-claro);
+    font-family: monospace;
+    letter-spacing: 0.5px;
+  }
+
+  .autodemo-mobile-cta {
+    display: none;
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 20px;
+  }
+
+  .autodemo-arrow {
+    font-size: 13px;
+    color: var(--gris);
+  }
+
+  .autodemo-hint {
+    font-size: 13px;
+    color: var(--gris);
+    margin-top: 8px;
+  }
+
+  .autodemo-hint code {
+    background: var(--verde-fondo);
+    color: var(--verde);
+    padding: 3px 8px;
+    border-radius: 5px;
+    font-size: 13px;
+  }
+
+  .autodemo-touch-hint {
+    font-size: 13px;
+    color: var(--verde);
+    text-decoration: underline;
+    cursor: pointer;
+    margin-bottom: 4px;
+  }
+
+  @media (max-width: 768px) {
+    .autodemo-mobile-cta { display: none; }
+    .autodemo { padding: 60px 20px 50px; }
+  }
+
   @media (max-width: 768px) {
 
     .hero { padding: 100px 20px 60px; }
@@ -1249,6 +1335,42 @@ export default function Home() {
             </div>
           </div>
 
+        </div>
+      </section>
+
+      {/* ── AUTODEMO ── */}
+      <section className="autodemo" id="pruebalo">
+        <div className="section-label">Pruébalo ahora</div>
+        <h2 className="section-title">¿Quieres ver cómo funciona<br /><em>en 30 segundos?</em></h2>
+        <p className="autodemo-sub">
+          Escanea el QR con tu celular, ingresa con <strong>prueba@worktic.app</strong> y haz tu primer check-in real.
+        </p>
+
+        {/* QR — visible siempre */}
+        <div className="autodemo-qr-wrap">
+          <a href="/checkin/DEMO" className="autodemo-touch-hint">(tócalo 👆 y será como escanearlo)</a>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src="https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=https://worktic.app/checkin/DEMO&color=1D9E75&bgcolor=ffffff"
+            className="autodemo-qr"
+            alt="QR para demo de Worktic"
+          />
+          <div className="autodemo-qr-label">worktic.app/checkin/DEMO</div>
+        </div>
+
+        {/* Botón — visible en móvil */}
+        <div className="autodemo-mobile-cta">
+          <span className="autodemo-arrow">Esto es lo que pasaría si escanearan el QR 👇</span>
+          <a href="/checkin/DEMO" className="btn-primary">
+            Toca aquí para probarlo
+            <svg width="15" height="15" viewBox="0 0 16 16" fill="none">
+              <path d="M3 8h10M9 4l4 4-4 4" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
+            </svg>
+          </a>
+        </div>
+
+        <div className="autodemo-hint">
+          Email de prueba: <code>prueba@worktic.app</code>
         </div>
       </section>
 
