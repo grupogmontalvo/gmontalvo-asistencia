@@ -80,10 +80,55 @@ function KpiCarousel({ empId, siteId, thisWeekSales, lastWeekSales, weeklyGoal }
       })
     }
 
+    // Birthday card: coworkers at this site with birthday today
+    const { data: siteAssign } = await supabase
+      .from('employee_site_assignments')
+      .select('employee_id, employees(name, birth_date)')
+      .eq('site_id', siteId)
+    const [bdMon, bdDay] = [today.split('-')[1], today.split('-')[2]]
+    const birthdayPeople = (siteAssign || [])
+      .filter(a => a.employees?.birth_date)
+      .filter(a => {
+        const parts = a.employees.birth_date.split('-')
+        return parts[1] === bdMon && parts[2] === bdDay && a.employee_id !== empId
+      })
+    for (const bp of birthdayPeople) {
+      built.push({
+        icon: '🎂', title: '¡Cumpleaños hoy!',
+        value: bp.employees.name.split(' ')[0],
+        sub: '¡Felicítalo cuando lo veas! 🎉',
+        color: '#ec4899', isBirthday: true
+      })
+    }
+
     // Cards: active competitions
     const { data: compSites } = await supabase.from('competition_sites').select('competition_id, competitions(*)').eq('site_id', siteId)
     const activeComps = (compSites || []).map(cs => cs.competitions).filter(c => c && c.active)
     for (const comp of activeComps.slice(0, 3)) {
+      // ── auto_yesterday: broadcast top seller + top site, no personal rank ──
+      if (comp.type === 'auto_yesterday') {
+        const yestStr = (() => { const d = new Date(); d.setDate(d.getDate() - 1); return d.toLocaleDateString('en-CA', { timeZone: 'America/Cancun' }) })()
+        const { data: cSitesY } = await supabase.from('competition_sites').select('site_id').eq('competition_id', comp.id)
+        const siteIdsY = (cSitesY || []).map(cs => cs.site_id)
+        const { data: yAtt } = await supabase.from('attendance').select('employee_id, site_id, sales_amount').in('site_id', siteIdsY).eq('date', yestStr)
+        if (yAtt && yAtt.length > 0) {
+          const minSales = comp.min_sales != null ? parseFloat(comp.min_sales) : 0
+          const empSc = {}, siteSc = {}
+          yAtt.forEach(r => { const s = parseFloat(r.sales_amount)||0; empSc[r.employee_id]=(empSc[r.employee_id]||0)+s; siteSc[r.site_id]=(siteSc[r.site_id]||0)+s })
+          // Apply minimum sales filter for individual employees
+          const qualifiedEmps = Object.entries(empSc).filter(([,v]) => v >= minSales)
+          const topE = qualifiedEmps.sort((a,b)=>b[1]-a[1])[0]
+          const topS = Object.entries(siteSc).sort((a,b)=>b[1]-a[1])[0]
+          let topEName = 'Sin datos'
+          if (topE) { const { data: eu } = await supabase.from('admin_users').select('name').eq('id', topE[0]).maybeSingle(); topEName = eu?.name || 'Empleado' }
+          let topSName = 'Sin datos'
+          if (topS) { const { data: su } = await supabase.from('sites').select('name').eq('id', topS[0]).maybeSingle(); topSName = su?.name || 'Tienda' }
+          built.push({ icon: '🏆', title: comp.name + ' · Mejor vendedor de ayer', value: topEName, sub: '$' + Number(topE?.[1]||0).toLocaleString('es-MX') + ' en ventas', color: '#f59e0b', isComp: true, prize: comp.prize_text })
+          if (topS) built.push({ icon: '🏪', title: comp.name + ' · Mejor tienda de ayer', value: topSName, sub: '$' + Number(topS[1]).toLocaleString('es-MX') + ' en ventas', color: '#10b981', isComp: true })
+        }
+        continue
+      }
+
       let dateStart, dateEnd
       if (comp.type === 'auto_week')  { dateStart = weekStart; dateEnd = weekEnd }
       else if (comp.type === 'auto_month') { dateStart = monthStr + '-01'; dateEnd = today }
@@ -101,7 +146,7 @@ function KpiCarousel({ empId, siteId, thisWeekSales, lastWeekSales, weeklyGoal }
         else if (comp.metric === 'punctuality') scores[r.employee_id] += r.status === 'on_time' ? 1 : 0
         else scores[r.employee_id] += parseFloat(r.sales_amount) || 0
       })
-      const sorted = Object.entries(scores).sort((a, b) => b[1] - a[1])
+      const sorted = Object.entries(scores).filter(([, s]) => s > 0).sort((a, b) => b[1] - a[1])
       const rank = sorted.findIndex(([id]) => id === empId) + 1
       if (rank < 1) continue
       const myScore = scores[empId] || 0
@@ -135,7 +180,7 @@ function KpiCarousel({ empId, siteId, thisWeekSales, lastWeekSales, weeklyGoal }
   const card = cards[idx]
 
   return (
-    <div style={{ background: '#1a2035', border: `1px solid ${card.isComp ? 'rgba(245,158,11,.4)' : '#1e2a45'}`, borderRadius: 14, padding: '18px 20px', textAlign: 'center', cursor: 'pointer', userSelect: 'none', transition: 'border-color .3s' }}
+    <div style={{ background: card.isBirthday ? 'rgba(236,72,153,.06)' : '#1a2035', border: `1px solid ${card.isBirthday ? 'rgba(236,72,153,.4)' : card.isComp ? 'rgba(245,158,11,.4)' : '#1e2a45'}`, borderRadius: 14, padding: '18px 20px', textAlign: 'center', cursor: 'pointer', userSelect: 'none', transition: 'border-color .3s' }}
       onClick={() => setPaused(p => !p)}>
       <div style={{ fontSize: 26, marginBottom: 6 }}>{card.icon}</div>
       <div style={{ fontSize: 9, color: '#4a5568', textTransform: 'uppercase', letterSpacing: '.7px', marginBottom: 4 }}>{card.title}</div>
@@ -357,6 +402,49 @@ function WeekSalesBlock({ thisWeekSales, lastWeekSales, goal, isDone }) {
   )
 }
 
+function BirthdayCelebration({ empName, message, onClose }) {
+  const msg = (message || '¡Feliz cumpleaños, {nombre}! 🎂 Que tengas un día increíble lleno de alegría. ¡De parte de todo el equipo!').replace('{nombre}', empName || '')
+  const confettiColors = ['#f59e0b','#ec4899','#8b5cf6','#10b981','#3b82f6','#ef4444','#f97316']
+  const pieces = Array.from({ length: 28 }, (_, i) => ({
+    left: (i * 37 + 13) % 100,
+    delay: (i * 0.18) % 2.4,
+    dur: 2.2 + (i % 5) * 0.3,
+    color: confettiColors[i % confettiColors.length],
+    size: 7 + (i % 4) * 3,
+    rotate: (i * 47) % 360,
+  }))
+  return (
+    <div style={{ position: 'fixed', inset: 0, zIndex: 500, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'linear-gradient(135deg, #0d1220 0%, #1a0533 50%, #0d1220 100%)', overflow: 'hidden' }}>
+      <style>{`
+        @keyframes confettiFall { 0% { transform: translateY(-60px) rotate(0deg); opacity: 1 } 100% { transform: translateY(110vh) rotate(720deg); opacity: 0 } }
+        @keyframes bdayPop { 0% { transform: scale(.6); opacity: 0 } 70% { transform: scale(1.08) } 100% { transform: scale(1); opacity: 1 } }
+        @keyframes bdayFloat { 0%,100% { transform: translateY(0) } 50% { transform: translateY(-10px) } }
+        @keyframes bdayShine { 0%,100% { opacity: .7 } 50% { opacity: 1 } }
+      `}</style>
+      {/* Confetti */}
+      {pieces.map((p, i) => (
+        <div key={i} style={{ position: 'absolute', top: -20, left: p.left + '%', width: p.size, height: p.size * .6, background: p.color, borderRadius: 2, opacity: 0, animation: `confettiFall ${p.dur}s ${p.delay}s infinite linear`, transform: `rotate(${p.rotate}deg)` }} />
+      ))}
+      {/* Card */}
+      <div style={{ position: 'relative', zIndex: 1, textAlign: 'center', padding: '0 24px', animation: 'bdayPop .6s ease forwards' }}>
+        <div style={{ fontSize: 72, animation: 'bdayFloat 2.5s ease-in-out infinite', display: 'block', marginBottom: 8 }}>🎂</div>
+        <div style={{ fontSize: 13, fontWeight: 700, color: '#f59e0b', textTransform: 'uppercase', letterSpacing: '2px', marginBottom: 6, animation: 'bdayShine 2s ease-in-out infinite' }}>¡Hoy es tu día!</div>
+        <div style={{ fontSize: 28, fontWeight: 800, color: '#ffffff', marginBottom: 16, lineHeight: 1.2 }}>{empName}</div>
+        <div style={{ background: 'rgba(255,255,255,.07)', border: '1px solid rgba(255,255,255,.15)', borderRadius: 16, padding: '18px 22px', maxWidth: 320, margin: '0 auto 28px', backdropFilter: 'blur(8px)' }}>
+          <div style={{ fontSize: 15, color: '#e2e8f0', lineHeight: 1.6, fontWeight: 500 }}>{msg}</div>
+        </div>
+        <div style={{ display: 'flex', justifyContent: 'center', gap: 8, marginBottom: 8 }}>
+          {['🎉','🎊','✨','🥳','🎈'].map(e => <span key={e} style={{ fontSize: 22 }}>{e}</span>)}
+        </div>
+        <button onClick={onClose}
+          style={{ marginTop: 12, padding: '13px 36px', borderRadius: 12, border: 'none', background: 'linear-gradient(135deg, #f59e0b, #ec4899)', color: '#fff', fontFamily: "'DM Sans', sans-serif", fontSize: 15, fontWeight: 700, cursor: 'pointer', boxShadow: '0 4px 20px rgba(245,158,11,.4)' }}>
+          ¡Gracias! 🙏
+        </button>
+      </div>
+    </div>
+  )
+}
+
 export default function CheckinPage({ params }) {
   const siteCode = params.code
   const [site, setSite]               = useState(null)
@@ -394,6 +482,8 @@ export default function CheckinPage({ params }) {
   const [fbStatus, setFbStatus] = useState('idle')
   const [fbScreenshot, setFbScreenshot] = useState(null)
   const fbFileRef = useRef(null)
+  const [showBirthday, setShowBirthday] = useState(false)
+  const [birthdayMsg, setBirthdayMsg] = useState('')
 
   useEffect(() => { const t = setInterval(() => setNow(new Date()), 1000); return () => clearInterval(t) }, [])
 
@@ -429,6 +519,11 @@ export default function CheckinPage({ params }) {
       const { data: siteData } = await supabase.from('sites').select('*').eq('code', siteCode).eq('active', true).single()
       if (!siteData) { setStep('error'); return }
       setSite(siteData)
+      // Load company birthday message
+      if (siteData.company_id) {
+        const { data: co } = await supabase.from('companies').select('birthday_message').eq('id', siteData.company_id).maybeSingle()
+        if (co?.birthday_message) setBirthdayMsg(co.birthday_message)
+      }
       const token = localStorage.getItem('gm-device-token')
       if (token) {
         const { data: device } = await supabase.from('devices').select('*, employees(*)').eq('device_token', token).single()
@@ -590,6 +685,13 @@ export default function CheckinPage({ params }) {
       setTodayRecord(data); setIsIn(true)
       setCiTime(fmtTime(checkIn, tz))
       setEvents(prev => [...prev, { type: 'ci', time: fmtTime(checkIn, tz) }])
+      // Birthday check: compare month+day only
+      if (emp?.birth_date) {
+        const [,bdMon,bdDay] = emp.birth_date.split('-')
+        const todayMon = String(checkIn.toLocaleDateString('en-CA', { timeZone: tz }).split('-')[1])
+        const todayDay = String(checkIn.toLocaleDateString('en-CA', { timeZone: tz }).split('-')[2])
+        if (bdMon === todayMon && bdDay === todayDay) setShowBirthday(true)
+      }
       // Fire alert (non-blocking)
       fetch('/api/alerts/checkin', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ attendance_id: data.id }) }).catch(() => {})
     } else if (error) {
@@ -937,6 +1039,8 @@ export default function CheckinPage({ params }) {
       )}
 
       {showSalesModal && <SalesModal onConfirm={(amt) => finishCheckout(amt, null)} onSkip={() => finishCheckout(null, null)} />}
+
+      {showBirthday && <BirthdayCelebration empName={emp?.name?.split(' ')[0] || emp?.name} message={birthdayMsg} onClose={() => setShowBirthday(false)} />}
 
       {loading && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(5,8,16,0.7)', zIndex: 400, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>

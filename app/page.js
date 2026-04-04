@@ -640,66 +640,126 @@ const css = `
     margin: 0 auto;
   }
 
-  .como-header { max-width: 560px; margin-bottom: 72px; }
+  .como-header { max-width: 560px; margin-bottom: 56px; }
 
-  .steps-grid {
+  .bento-grid {
     display: grid;
-    grid-template-columns: repeat(3, 1fr);
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+  }
+
+  .bento-card {
+    border-radius: 20px;
+    padding: 36px 40px;
+    overflow: hidden;
+  }
+
+  .bento-card-1 {
+    grid-column: 1 / 3;
+    background: #E8FAF3;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
     gap: 32px;
-    position: relative;
+    min-height: 220px;
   }
 
-  .steps-grid::before {
-    content: '';
-    position: absolute;
-    top: 30px;
-    left: calc(16.66% + 20px);
-    right: calc(16.66% + 20px);
-    height: 1px;
-    background: linear-gradient(90deg, var(--verde) 0%, rgba(29,158,117,0.15) 100%);
-    pointer-events: none;
-  }
+  .bento-card-2 { background: #EFF6FF; }
+  .bento-card-3 { background: #FFF7ED; }
 
-  .step {
-    position: relative;
-  }
-
-  .step-number {
-    width: 48px; height: 48px;
+  .bento-num {
+    width: 40px; height: 40px;
     border-radius: 50%;
-    background: rgba(29,158,117,0.1);
-    border: 1.5px solid rgba(29,158,117,0.35);
+    background: #1D9E75;
+    color: white;
     display: flex;
     align-items: center;
     justify-content: center;
-    font-family: 'DM Serif Display', serif;
-    font-size: 18px;
-    color: var(--verde);
-    margin-bottom: 24px;
-    position: relative;
-    z-index: 1;
-  }
-
-  .step-icon {
-    font-size: 22px;
-    margin-bottom: 16px;
-    display: block;
-  }
-
-  .step-title {
     font-size: 17px;
-    font-weight: 600;
-    color: var(--blanco);
-    margin-bottom: 10px;
-    line-height: 1.3;
+    font-weight: 700;
+    margin-bottom: 20px;
+    flex-shrink: 0;
   }
 
-  .step-desc {
-    font-size: 14px;
-    color: rgba(15,23,42,0.5);
-    line-height: 1.65;
-    font-weight: 300;
+  .bento-card-2 .bento-num { background: #3b82f6; }
+  .bento-card-3 .bento-num { background: #f97316; }
+
+  .bento-title {
+    font-size: 20px;
+    font-weight: 700;
+    color: #0f172a;
+    line-height: 1.25;
+    margin-bottom: 12px;
   }
+
+  .bento-card-1 .bento-title { font-size: 22px; }
+
+  .bento-desc {
+    font-size: 14px;
+    color: rgba(15,23,42,0.55);
+    line-height: 1.65;
+  }
+
+  .bento-tags {
+    display: flex;
+    gap: 8px;
+    margin-top: 20px;
+    flex-wrap: wrap;
+  }
+
+  .bento-tag {
+    font-size: 11px;
+    font-weight: 500;
+    color: #1D9E75;
+    background: rgba(29,158,117,0.12);
+    border: 1px solid rgba(29,158,117,0.2);
+    border-radius: 20px;
+    padding: 4px 12px;
+  }
+
+  .bento-card-2 .bento-tag { color: #3b82f6; background: rgba(59,130,246,0.1); border-color: rgba(59,130,246,0.2); }
+  .bento-card-3 .bento-tag { color: #f97316; background: rgba(249,115,22,0.1); border-color: rgba(249,115,22,0.2); }
+
+  .bento-text { flex: 0 0 220px; }
+
+  .bento-illustration {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    max-height: 180px;
+  }
+
+  .bento-illustration svg {
+    width: 100%;
+    height: auto;
+    max-height: 175px;
+  }
+
+  .bento-notifs { display: flex; flex-direction: column; gap: 8px; margin-top: 20px; }
+
+  .bento-notif {
+    background: white;
+    border-radius: 12px;
+    padding: 10px 14px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    box-shadow: 0 1px 6px rgba(0,0,0,0.06);
+  }
+
+  .bento-notif-icon {
+    width: 30px; height: 30px;
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 14px;
+    flex-shrink: 0;
+  }
+
+  .bento-notif-name { font-size: 12px; font-weight: 600; color: #0f172a; }
+  .bento-notif-sub  { font-size: 11px; color: #94a3b8; }
 
   /* ── BENEFICIOS ── */
   .beneficios {
@@ -724,19 +784,16 @@ const css = `
     border: 1px solid rgba(0,0,0,0.05);
     border-radius: 16px;
     padding: 32px;
-    transition: border-color 0.2s, background 0.2s;
+    transition: border-color 0.2s;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
   }
-  .bene-card:hover { border-color: rgba(29,158,117,0.2); background: #141e2f; }
+  .bene-card:hover { border-color: rgba(29,158,117,0.2); }
 
   .bene-card.featured {
-    background: linear-gradient(135deg, rgba(29,158,117,0.12) 0%, rgba(10,14,26,0) 60%);
+    background: linear-gradient(135deg, rgba(29,158,117,0.10) 0%, var(--negro2) 70%);
     border-color: rgba(29,158,117,0.2);
-  }
-
-  .bene-icon {
-    font-size: 28px;
-    margin-bottom: 16px;
-    display: block;
   }
 
   .bene-title {
@@ -763,6 +820,14 @@ const css = `
     font-style: italic;
     font-weight: 400;
   }
+
+  .bene-illus {
+    display: flex;
+    justify-content: center;
+    margin-top: 28px;
+  }
+
+  .bene-illus svg { width: 100%; max-width: 240px; height: auto; }
 
   /* ── CTA BANNER ── */
   .cta-banner {
@@ -985,8 +1050,9 @@ const css = `
     .browser-frame { display: none; }
 
     .como { padding: 80px 20px; }
-    .steps-grid { grid-template-columns: 1fr; gap: 40px; }
-    .steps-grid::before { display: none; }
+    .bento-grid { grid-template-columns: 1fr; }
+    .bento-card-1 { grid-column: 1; flex-direction: column; align-items: flex-start; min-height: auto; }
+    .bento-illustration { width: 100%; max-height: 200px; margin-top: 24px; }
 
     .beneficios { padding: 0 20px 80px; }
     .bene-grid { grid-template-columns: 1fr; }
@@ -1196,31 +1262,166 @@ export default function Home() {
           </p>
         </div>
 
-        <div className="steps-grid">
-          <div className="step">
-            <div className="step-number">1</div>
-            <span className="step-icon">🏪</span>
-            <div className="step-title">Coloca el QR en tu sucursal</div>
-            <div className="step-desc">
-              Imprime o muestra el código QR de cada sitio. Lo pegas en la entrada y listo. No necesitas nada más.
+        <div className="bento-grid">
+
+          {/* Card 1 — QR en sucursal */}
+          <div className="bento-card bento-card-1">
+            <div className="bento-text">
+              <div className="bento-num">1</div>
+              <div className="bento-title">Coloca el QR en<br />tu sucursal</div>
+              <div className="bento-desc">Imprime o muestra el código QR de cada sitio. Lo pegas en la entrada y listo.</div>
+              <div className="bento-tags">
+                <span className="bento-tag">Sin hardware</span>
+                <span className="bento-tag">Gratis para imprimir</span>
+              </div>
+            </div>
+            <div className="bento-illustration">
+              <svg viewBox="0 0 340 175" xmlns="http://www.w3.org/2000/svg">
+                {/* Floor shadow */}
+                <ellipse cx="155" cy="162" rx="125" ry="7" fill="rgba(0,0,0,0.07)"/>
+                {/* Side wall */}
+                <polygon points="42,52 42,152 24,157 24,57" fill="#c8d4d0"/>
+                {/* Main wall */}
+                <rect x="42" y="52" width="190" height="100" fill="#eef2f1"/>
+                {/* Green cenefa */}
+                <rect x="42" y="52" width="190" height="54" fill="#1D9E75"/>
+                <rect x="42" y="96" width="190" height="10" fill="#17876a"/>
+                <text x="137" y="83" fontFamily="Arial,sans-serif" fontSize="20" fontWeight="800" fill="white" textAnchor="middle" letterSpacing="4">TIENDA</text>
+                {/* Window */}
+                <rect x="55" y="116" width="50" height="36" rx="3" fill="#d4e4e0"/>
+                <line x1="80" y1="116" x2="80" y2="152" stroke="rgba(255,255,255,0.6)" strokeWidth="1.5"/>
+                <line x1="55" y1="134" x2="105" y2="134" stroke="rgba(255,255,255,0.6)" strokeWidth="1.5"/>
+                {/* QR panel */}
+                <rect x="118" y="106" width="100" height="46" rx="4" fill="white" stroke="rgba(29,158,117,0.3)" strokeWidth="1.5"/>
+                {/* QR corners */}
+                <rect x="125" y="113" width="16" height="16" rx="1.5" fill="#1D9E75"/>
+                <rect x="127" y="115" width="12" height="12" rx="0.5" fill="white"/>
+                <rect x="129" y="117" width="8" height="8" fill="#1D9E75"/>
+                <rect x="194" y="113" width="16" height="16" rx="1.5" fill="#1D9E75"/>
+                <rect x="196" y="115" width="12" height="12" rx="0.5" fill="white"/>
+                <rect x="198" y="117" width="8" height="8" fill="#1D9E75"/>
+                <rect x="125" y="128" width="16" height="16" rx="1.5" fill="#1D9E75"/>
+                <rect x="127" y="130" width="12" height="12" rx="0.5" fill="white"/>
+                <rect x="129" y="132" width="8" height="8" fill="#1D9E75"/>
+                {/* QR dots */}
+                <rect x="146" y="113" width="3" height="3" fill="#1D9E75"/>
+                <rect x="151" y="113" width="3" height="3" fill="#1D9E75"/>
+                <rect x="157" y="113" width="3" height="3" fill="#1D9E75"/>
+                <rect x="163" y="113" width="3" height="3" fill="#1D9E75"/>
+                <rect x="146" y="118" width="3" height="3" fill="#1D9E75"/>
+                <rect x="157" y="118" width="3" height="3" fill="#1D9E75"/>
+                <rect x="163" y="118" width="3" height="3" fill="#1D9E75"/>
+                <rect x="146" y="123" width="3" height="3" fill="#1D9E75"/>
+                <rect x="151" y="123" width="3" height="3" fill="#1D9E75"/>
+                <rect x="163" y="123" width="3" height="3" fill="#1D9E75"/>
+                <rect x="146" y="128" width="3" height="3" fill="#1D9E75"/>
+                <rect x="151" y="133" width="3" height="3" fill="#1D9E75"/>
+                <rect x="157" y="133" width="3" height="3" fill="#1D9E75"/>
+                <rect x="163" y="128" width="3" height="3" fill="#1D9E75"/>
+                <rect x="175" y="123" width="3" height="3" fill="#1D9E75"/>
+                <rect x="181" y="118" width="3" height="3" fill="#1D9E75"/>
+                <rect x="187" y="123" width="3" height="3" fill="#1D9E75"/>
+                {/* Check circle */}
+                <circle cx="218" cy="106" r="13" fill="#1D9E75"/>
+                <polyline points="212,106 216,110 225,100" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" fill="none"/>
+                {/* Dashed line */}
+                <line x1="264" y1="129" x2="223" y2="129" stroke="#1D9E75" strokeWidth="1.5" strokeDasharray="5,3" opacity="0.6"/>
+                {/* Person */}
+                <circle cx="301" cy="85" r="15" fill="#FDBF7F"/>
+                <ellipse cx="301" cy="73" rx="15" ry="9" fill="#2d3748"/>
+                <rect x="284" y="99" width="34" height="48" rx="9" fill="#1D9E75"/>
+                <rect x="285" y="143" width="11" height="17" rx="4" fill="#374151"/>
+                <rect x="298" y="143" width="11" height="17" rx="4" fill="#374151"/>
+                <ellipse cx="290" cy="159" rx="9" ry="4" fill="#1f2937"/>
+                <ellipse cx="303" cy="159" rx="9" ry="4" fill="#1f2937"/>
+                {/* Arm */}
+                <path d="M284 116 Q275 120 268 126" stroke="#FDBF7F" strokeWidth="9" strokeLinecap="round" fill="none"/>
+                {/* Phone */}
+                <rect x="249" y="114" width="22" height="38" rx="4" fill="#1a202c"/>
+                <rect x="251" y="116" width="18" height="32" rx="3" fill="#1D9E75"/>
+                {/* W logo on screen */}
+                <text x="260" y="130" fontFamily="Georgia,serif" fontSize="14" fontWeight="700" fill="white" textAnchor="middle">W</text>
+                <text x="260" y="140" fontFamily="Arial,sans-serif" fontSize="5" fill="rgba(255,255,255,0.85)" textAnchor="middle">Worktic</text>
+              </svg>
             </div>
           </div>
-          <div className="step">
-            <div className="step-number">2</div>
-            <span className="step-icon">📱</span>
-            <div className="step-title">El empleado escanea al llegar</div>
-            <div className="step-desc">
-              Abre la cámara, escanea, confirma con su email. El sistema valida que esté físicamente en el lugar con GPS.
+
+          {/* Card 2 — Empleado escanea */}
+          <div className="bento-card bento-card-2">
+            <div className="bento-num">2</div>
+            <div className="bento-title">El empleado escanea al llegar</div>
+            <div className="bento-desc">Abre la cámara, escanea el QR, confirma con su email. El sistema valida que esté físicamente en el lugar con GPS.</div>
+            <div className="bento-tags">
+              <span className="bento-tag">Sin app</span>
+              <span className="bento-tag">Validación GPS</span>
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'center', marginTop: 24 }}>
+              <svg viewBox="0 0 160 100" xmlns="http://www.w3.org/2000/svg" style={{ width: 160 }}>
+                <rect x="50" y="5" width="60" height="90" rx="10" fill="#1a202c"/>
+                <rect x="53" y="10" width="54" height="78" rx="7" fill="white"/>
+                <rect x="70" y="10" width="20" height="6" rx="3" fill="#1a202c"/>
+                <rect x="57" y="22" width="46" height="6" rx="3" fill="#e2e8f0"/>
+                <rect x="57" y="32" width="30" height="4" rx="2" fill="#f1f5f9"/>
+                <rect x="60" y="40" width="40" height="30" rx="4" fill="#f8fafc" stroke="#3b82f6" strokeWidth="1.5"/>
+                <path d="M60,47 L60,40 L67,40" stroke="#3b82f6" strokeWidth="2" fill="none" strokeLinecap="round"/>
+                <path d="M93,40 L100,40 L100,47" stroke="#3b82f6" strokeWidth="2" fill="none" strokeLinecap="round"/>
+                <path d="M60,63 L60,70 L67,70" stroke="#3b82f6" strokeWidth="2" fill="none" strokeLinecap="round"/>
+                <path d="M100,63 L100,70 L93,70" stroke="#3b82f6" strokeWidth="2" fill="none" strokeLinecap="round"/>
+                <rect x="65" y="45" width="7" height="7" rx="0.5" fill="#3b82f6"/>
+                <rect x="66" y="46" width="5" height="5" rx="0.5" fill="white"/>
+                <rect x="67" y="47" width="3" height="3" fill="#3b82f6"/>
+                <rect x="88" y="45" width="7" height="7" rx="0.5" fill="#3b82f6"/>
+                <rect x="89" y="46" width="5" height="5" rx="0.5" fill="white"/>
+                <rect x="90" y="47" width="3" height="3" fill="#3b82f6"/>
+                <rect x="65" y="58" width="7" height="7" rx="0.5" fill="#3b82f6"/>
+                <rect x="66" y="59" width="5" height="5" rx="0.5" fill="white"/>
+                <rect x="67" y="60" width="3" height="3" fill="#3b82f6"/>
+                <rect x="76" y="45" width="2" height="2" fill="#3b82f6"/>
+                <rect x="79" y="47" width="2" height="2" fill="#3b82f6"/>
+                <rect x="82" y="45" width="2" height="2" fill="#3b82f6"/>
+                <rect x="76" y="50" width="2" height="2" fill="#3b82f6"/>
+                <rect x="82" y="52" width="2" height="2" fill="#3b82f6"/>
+                <line x1="60" y1="55" x2="100" y2="55" stroke="#3b82f6" strokeWidth="1.5" opacity="0.6"/>
+                <circle cx="80" cy="83" r="6" fill="#10b981"/>
+                <polyline points="76,83 79,86 84,79" stroke="white" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" fill="none"/>
+              </svg>
             </div>
           </div>
-          <div className="step">
-            <div className="step-number">3</div>
-            <span className="step-icon">🔔</span>
-            <div className="step-title">Tú recibes notificación al instante</div>
-            <div className="step-desc">
-              Push o correo: quién llegó, a qué hora, desde dónde. Si no aparece, te avisamos antes de que empieces a preguntar.
+
+          {/* Card 3 — Notificación */}
+          <div className="bento-card bento-card-3">
+            <div className="bento-num">3</div>
+            <div className="bento-title">Tú recibes notificación al instante</div>
+            <div className="bento-desc">Push o correo: quién llegó, a qué hora, desde dónde. Si alguien no aparece, te avisamos antes que nadie.</div>
+            <div className="bento-tags">
+              <span className="bento-tag">Tiempo real</span>
+              <span className="bento-tag">Push + email</span>
+            </div>
+            <div className="bento-notifs">
+              <div className="bento-notif">
+                <div className="bento-notif-icon" style={{ background: '#dcfce7' }}>✅</div>
+                <div>
+                  <div className="bento-notif-name">Juan llegó · 9:02 AM</div>
+                  <div className="bento-notif-sub">Casa Mist · Puntual</div>
+                </div>
+              </div>
+              <div className="bento-notif">
+                <div className="bento-notif-icon" style={{ background: '#fef3c7' }}>⏰</div>
+                <div>
+                  <div className="bento-notif-name">Ana · En tolerancia</div>
+                  <div className="bento-notif-sub">Garden · 5 min tarde</div>
+                </div>
+              </div>
+              <div className="bento-notif">
+                <div className="bento-notif-icon" style={{ background: '#fee2e2' }}>🔴</div>
+                <div>
+                  <div className="bento-notif-name">Luis no llegó</div>
+                  <div className="bento-notif-sub">SB Americas · Falta</div>
+                </div>
+              </div>
             </div>
           </div>
+
         </div>
       </section>
 
@@ -1235,39 +1436,152 @@ export default function Home() {
         </div>
 
         <div className="bene-grid">
+
+          {/* Card 1 — GPS */}
           <div className="bene-card featured">
-            <span className="bene-icon">📍</span>
-            <div className="bene-title">Asistencia verificada con GPS</div>
-            <div className="bene-desc">
-              El sistema solo acepta el check-in si el empleado está físicamente dentro del radio de la sucursal. No hay forma de marcar desde casa.
+            <div>
+              <div className="bene-title">Asistencia verificada con GPS</div>
+              <div className="bene-desc">El sistema solo acepta el check-in si el empleado está físicamente dentro del radio de la sucursal. No hay forma de marcar desde casa.</div>
+              <div className="bene-quote">"Ya no tengo que preguntar si llegaron. Me llega la notificación sola."</div>
             </div>
-            <div className="bene-quote">"Ya no tengo que preguntar si llegaron. Me llega la notificación sola."</div>
+            <div className="bene-illus">
+              <svg viewBox="0 0 220 110" xmlns="http://www.w3.org/2000/svg">
+                <rect x="0" y="0" width="220" height="110" rx="12" fill="rgba(29,158,117,0.06)"/>
+                <line x1="0" y1="36" x2="220" y2="36" stroke="rgba(29,158,117,0.12)" strokeWidth="1"/>
+                <line x1="0" y1="72" x2="220" y2="72" stroke="rgba(29,158,117,0.12)" strokeWidth="1"/>
+                <line x1="55" y1="0" x2="55" y2="110" stroke="rgba(29,158,117,0.12)" strokeWidth="1"/>
+                <line x1="110" y1="0" x2="110" y2="110" stroke="rgba(29,158,117,0.12)" strokeWidth="1"/>
+                <line x1="165" y1="0" x2="165" y2="110" stroke="rgba(29,158,117,0.12)" strokeWidth="1"/>
+                <circle cx="110" cy="55" r="42" fill="rgba(29,158,117,0.1)" stroke="#1D9E75" strokeWidth="1.5" strokeDasharray="5,3"/>
+                <circle cx="110" cy="55" r="26" fill="rgba(29,158,117,0.12)"/>
+                <path d="M110 25 C99 25 90 34 90 44 C90 57 110 72 110 72 C110 72 130 57 130 44 C130 34 121 25 110 25Z" fill="#1D9E75"/>
+                <circle cx="110" cy="44" r="7" fill="white"/>
+                <circle cx="130" cy="65" r="8" fill="#FDBF7F"/>
+                <rect x="124" y="72" width="12" height="14" rx="4" fill="#1D9E75"/>
+                <circle cx="137" cy="60" r="7" fill="#10b981" stroke="white" strokeWidth="1.5"/>
+                <polyline points="133,60 136,63 141,57" stroke="white" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" fill="none"/>
+                <circle cx="178" cy="30" r="7" fill="#cbd5e1"/>
+                <rect x="173" y="36" width="10" height="12" rx="3" fill="#94a3b8"/>
+                <circle cx="185" cy="25" r="6" fill="#ef4444" stroke="white" strokeWidth="1.5"/>
+                <line x1="182" y1="22" x2="188" y2="28" stroke="white" strokeWidth="1.5" strokeLinecap="round"/>
+                <line x1="188" y1="22" x2="182" y2="28" stroke="white" strokeWidth="1.5" strokeLinecap="round"/>
+                <rect x="55" y="88" width="110" height="16" rx="8" fill="rgba(29,158,117,0.15)"/>
+                <text x="110" y="99" fontFamily="Arial,sans-serif" fontSize="8" fill="#1D9E75" textAnchor="middle" fontWeight="600">Radio verificado · 200m</text>
+              </svg>
+            </div>
           </div>
 
+          {/* Card 2 — Alertas */}
           <div className="bene-card">
-            <span className="bene-icon">⏰</span>
-            <div className="bene-title">Alertas de tardanza y ausentismo</div>
-            <div className="bene-desc">
-              Si alguien no llegó a su hora, te enterás antes de que el día se arruine. Configura tolerancia y recibe alertas automáticas por push o correo.
+            <div>
+              <div className="bene-title">Alertas de tardanza y ausentismo</div>
+              <div className="bene-desc">Si alguien no llegó a su hora, te enterás antes de que el día se arruine. Configura tolerancia y recibe alertas automáticas por push o correo.</div>
+            </div>
+            <div className="bene-illus">
+              <svg viewBox="0 0 220 100" xmlns="http://www.w3.org/2000/svg">
+                <circle cx="60" cy="52" r="38" fill="#fef3c7" stroke="#f59e0b" strokeWidth="2"/>
+                <circle cx="60" cy="52" r="30" fill="white"/>
+                <line x1="60" y1="26" x2="60" y2="30" stroke="#d1d5db" strokeWidth="2" strokeLinecap="round"/>
+                <line x1="60" y1="72" x2="60" y2="78" stroke="#d1d5db" strokeWidth="2" strokeLinecap="round"/>
+                <line x1="34" y1="52" x2="30" y2="52" stroke="#d1d5db" strokeWidth="2" strokeLinecap="round"/>
+                <line x1="86" y1="52" x2="90" y2="52" stroke="#d1d5db" strokeWidth="2" strokeLinecap="round"/>
+                <line x1="60" y1="52" x2="60" y2="36" stroke="#1e293b" strokeWidth="2.5" strokeLinecap="round"/>
+                <line x1="60" y1="52" x2="72" y2="58" stroke="#ef4444" strokeWidth="2.5" strokeLinecap="round"/>
+                <circle cx="60" cy="52" r="3" fill="#1e293b"/>
+                <circle cx="88" cy="20" r="12" fill="#ef4444"/>
+                <text x="88" y="25" fontFamily="Arial,sans-serif" fontSize="14" fontWeight="700" fill="white" textAnchor="middle">!</text>
+                <rect x="110" y="15" width="100" height="32" rx="8" fill="white" stroke="rgba(0,0,0,0.08)" strokeWidth="1"/>
+                <rect x="117" y="22" width="18" height="18" rx="5" fill="#fef3c7"/>
+                <text x="126" y="34" fontFamily="Arial,sans-serif" fontSize="12" textAnchor="middle">⏰</text>
+                <rect x="141" y="21" width="62" height="5" rx="2.5" fill="#1e293b" opacity="0.8"/>
+                <rect x="141" y="30" width="42" height="4" rx="2" fill="#94a3b8"/>
+                <rect x="110" y="54" width="100" height="32" rx="8" fill="white" stroke="rgba(0,0,0,0.08)" strokeWidth="1"/>
+                <rect x="117" y="61" width="18" height="18" rx="5" fill="#fee2e2"/>
+                <text x="126" y="73" fontFamily="Arial,sans-serif" fontSize="12" textAnchor="middle">🔴</text>
+                <rect x="141" y="60" width="52" height="5" rx="2.5" fill="#1e293b" opacity="0.8"/>
+                <rect x="141" y="69" width="36" height="4" rx="2" fill="#94a3b8"/>
+              </svg>
             </div>
           </div>
 
+          {/* Card 3 — Menos seguimiento */}
           <div className="bene-card">
-            <span className="bene-icon">📊</span>
-            <div className="bene-title">Menos seguimiento manual</div>
-            <div className="bene-desc">
-              Sin llamadas para saber quién está. Sin hojas de excel. Sin WhatsApp de confirmación. El panel te muestra en tiempo real el estado de cada persona.
+            <div>
+              <div className="bene-title">Menos seguimiento manual</div>
+              <div className="bene-desc">Sin llamadas para saber quién está. Sin hojas de excel. Sin WhatsApp de confirmación. El panel te muestra en tiempo real el estado de cada persona.</div>
+            </div>
+            <div className="bene-illus">
+              <svg viewBox="0 0 220 100" xmlns="http://www.w3.org/2000/svg">
+                <text x="42" y="14" fontFamily="Arial,sans-serif" fontSize="8" fill="#94a3b8" textAnchor="middle" fontWeight="600">ANTES</text>
+                <rect x="15" y="18" width="26" height="26" rx="5" fill="#dcfce7"/>
+                <text x="28" y="35" fontFamily="Arial,sans-serif" fontSize="14" textAnchor="middle">📊</text>
+                <rect x="44" y="18" width="26" height="26" rx="5" fill="#dcfce7"/>
+                <text x="57" y="35" fontFamily="Arial,sans-serif" fontSize="14" textAnchor="middle">💬</text>
+                <rect x="15" y="48" width="26" height="26" rx="5" fill="#fce7f3"/>
+                <text x="28" y="65" fontFamily="Arial,sans-serif" fontSize="14" textAnchor="middle">📞</text>
+                <rect x="44" y="48" width="26" height="26" rx="5" fill="#fce7f3"/>
+                <text x="57" y="65" fontFamily="Arial,sans-serif" fontSize="14" textAnchor="middle">📋</text>
+                <line x1="8" y1="12" x2="76" y2="82" stroke="#ef4444" strokeWidth="3" strokeLinecap="round" opacity="0.75"/>
+                <line x1="76" y1="12" x2="8" y2="82" stroke="#ef4444" strokeWidth="3" strokeLinecap="round" opacity="0.75"/>
+                <line x1="88" y1="47" x2="104" y2="47" stroke="#1D9E75" strokeWidth="2" strokeLinecap="round"/>
+                <polyline points="100,43 104,47 100,51" stroke="#1D9E75" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" fill="none"/>
+                <rect x="108" y="10" width="104" height="80" rx="8" fill="white" stroke="rgba(0,0,0,0.08)" strokeWidth="1"/>
+                <rect x="108" y="10" width="104" height="24" rx="8" fill="#f1f5f9"/>
+                <rect x="108" y="26" width="104" height="8" fill="#f1f5f9"/>
+                <text x="160" y="25" fontFamily="Arial,sans-serif" fontSize="7" fill="#64748b" textAnchor="middle" fontWeight="600">Panel en tiempo real</text>
+                <circle cx="120" cy="43" r="6" fill="#FDBF7F"/>
+                <rect x="130" y="40" width="30" height="4" rx="2" fill="#e2e8f0"/>
+                <rect x="164" y="38" width="36" height="10" rx="5" fill="#dcfce7"/>
+                <text x="182" y="45" fontFamily="Arial,sans-serif" fontSize="6" fill="#16a34a" textAnchor="middle" fontWeight="600">Puntual</text>
+                <circle cx="120" cy="60" r="6" fill="#FDBF7F"/>
+                <rect x="130" y="57" width="28" height="4" rx="2" fill="#e2e8f0"/>
+                <rect x="164" y="55" width="40" height="10" rx="5" fill="#fef3c7"/>
+                <text x="184" y="62" fontFamily="Arial,sans-serif" fontSize="6" fill="#d97706" textAnchor="middle" fontWeight="600">Tolerancia</text>
+                <circle cx="120" cy="77" r="6" fill="#cbd5e1"/>
+                <rect x="130" y="74" width="24" height="4" rx="2" fill="#e2e8f0"/>
+                <rect x="164" y="72" width="30" height="10" rx="5" fill="#fee2e2"/>
+                <text x="179" y="79" fontFamily="Arial,sans-serif" fontSize="6" fill="#dc2626" textAnchor="middle" fontWeight="600">Falta</text>
+              </svg>
             </div>
           </div>
 
+          {/* Card 4 — Equipos de ventas */}
           <div className="bene-card featured">
-            <span className="bene-icon">🏆</span>
-            <div className="bene-title">Diseñado para equipos de ventas</div>
-            <div className="bene-desc">
-              Cada empleado ve su propia historial: días trabajados, puntualidad, racha. La transparencia motiva. Los datos no mienten.
+            <div>
+              <div className="bene-title">Diseñado para equipos de ventas</div>
+              <div className="bene-desc">Cada empleado ve su propio historial: días trabajados, puntualidad, racha. La transparencia motiva. Los datos no mienten.</div>
+              <div className="bene-quote">"Mis vendedores compiten por quién tiene mejor puntualidad."</div>
             </div>
-            <div className="bene-quote">"Mis vendedores compiten por quién tiene mejor puntualidad."</div>
+            <div className="bene-illus">
+              <svg viewBox="0 0 220 110" xmlns="http://www.w3.org/2000/svg">
+                <rect x="38" y="68" width="44" height="42" rx="4" fill="rgba(29,158,117,0.18)"/>
+                <text x="60" y="62" fontFamily="Arial,sans-serif" fontSize="11" textAnchor="middle" fill="#94a3b8">🥈</text>
+                <circle cx="60" cy="48" r="14" fill="#FDBF7F"/>
+                <ellipse cx="60" cy="38" rx="14" ry="8" fill="#374151"/>
+                <rect x="46" y="61" width="28" height="10" rx="3" fill="#475569"/>
+                <rect x="38" y="82" width="44" height="5" rx="2" fill="rgba(29,158,117,0.3)"/>
+                <text x="60" y="99" fontFamily="Arial,sans-serif" fontSize="8" fill="#64748b" textAnchor="middle">Ana</text>
+                <text x="60" y="108" fontFamily="Arial,sans-serif" fontSize="7" fill="#1D9E75" textAnchor="middle" fontWeight="600">98%</text>
+                <rect x="88" y="52" width="44" height="58" rx="4" fill="rgba(29,158,117,0.28)"/>
+                <text x="110" y="44" fontFamily="Arial,sans-serif" fontSize="14" textAnchor="middle">🏆</text>
+                <circle cx="110" cy="30" r="16" fill="#FDBF7F"/>
+                <ellipse cx="110" cy="19" rx="16" ry="9" fill="#2d3748"/>
+                <rect x="95" y="43" width="30" height="12" rx="3" fill="#1D9E75"/>
+                <rect x="88" y="68" width="44" height="5" rx="2" fill="rgba(29,158,117,0.4)"/>
+                <text x="110" y="87" fontFamily="Arial,sans-serif" fontSize="8" fill="#64748b" textAnchor="middle">Juan</text>
+                <text x="110" y="99" fontFamily="Arial,sans-serif" fontSize="8" fill="#1D9E75" textAnchor="middle" fontWeight="700">100% 🔥</text>
+                <rect x="138" y="80" width="44" height="30" rx="4" fill="rgba(29,158,117,0.12)"/>
+                <text x="160" y="74" fontFamily="Arial,sans-serif" fontSize="11" textAnchor="middle" fill="#94a3b8">🥉</text>
+                <circle cx="160" cy="60" r="12" fill="#FDBF7F"/>
+                <ellipse cx="160" cy="51" rx="12" ry="7" fill="#6b7280"/>
+                <rect x="148" y="71" width="24" height="10" rx="3" fill="#6b7280"/>
+                <rect x="138" y="90" width="44" height="4" rx="2" fill="rgba(29,158,117,0.2)"/>
+                <text x="160" y="102" fontFamily="Arial,sans-serif" fontSize="8" fill="#64748b" textAnchor="middle">Luis</text>
+                <text x="160" y="109" fontFamily="Arial,sans-serif" fontSize="7" fill="#1D9E75" textAnchor="middle" fontWeight="600">94%</text>
+              </svg>
+            </div>
           </div>
+
         </div>
       </section>
 

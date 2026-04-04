@@ -68,3 +68,52 @@ export async function POST(request) {
     return NextResponse.json({ error: e.message }, { status: 500 })
   }
 }
+
+// PATCH — reset password for an existing admin user
+export async function PATCH(request) {
+  try {
+    const { user_id } = await request.json()
+    if (!user_id) return NextResponse.json({ error: 'Falta user_id' }, { status: 400 })
+
+    const supabaseAdmin = createClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL,
+      process.env.SUPABASE_SERVICE_ROLE_KEY,
+    )
+    if (!process.env.SUPABASE_SERVICE_ROLE_KEY) {
+      return NextResponse.json({ error: 'Falta SUPABASE_SERVICE_ROLE_KEY' }, { status: 500 })
+    }
+
+    const pwd = tempPassword()
+    const { error } = await supabaseAdmin.auth.admin.updateUserById(user_id, { password: pwd })
+    if (error) return NextResponse.json({ error: error.message }, { status: 400 })
+
+    return NextResponse.json({ ok: true, password: pwd })
+  } catch (e) {
+    return NextResponse.json({ error: e.message }, { status: 500 })
+  }
+}
+
+// DELETE — remove an admin user from auth and admin_users
+export async function DELETE(request) {
+  try {
+    const { searchParams } = new URL(request.url)
+    const userId = searchParams.get('id')
+    if (!userId) return NextResponse.json({ error: 'Falta id' }, { status: 400 })
+
+    const supabaseAdmin = createClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL,
+      process.env.SUPABASE_SERVICE_ROLE_KEY,
+    )
+    if (!process.env.SUPABASE_SERVICE_ROLE_KEY) {
+      return NextResponse.json({ error: 'Falta SUPABASE_SERVICE_ROLE_KEY' }, { status: 500 })
+    }
+
+    await supabaseAdmin.from('admin_site_permissions').delete().eq('admin_user_id', userId)
+    await supabaseAdmin.from('admin_users').delete().eq('id', userId)
+    await supabaseAdmin.auth.admin.deleteUser(userId)
+
+    return NextResponse.json({ ok: true })
+  } catch (e) {
+    return NextResponse.json({ error: e.message }, { status: 500 })
+  }
+}

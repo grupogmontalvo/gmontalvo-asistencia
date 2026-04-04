@@ -83,10 +83,14 @@ export default function AdminPage() {
   const [filterFrom,   setFilterFrom]   = useState('')
   const [filterTo,     setFilterTo]     = useState('')
   const [filterStatus, setFilterStatus] = useState('')
+  const [empSearch,    setEmpSearch]    = useState('')
+  const [showInactive, setShowInactive] = useState(false)
+  const [attEmpSearch, setAttEmpSearch] = useState('')
   const [sidebarOpen, setSidebarOpen] = useState(true)
   const [feedbackLabel] = useState(() => Math.random() > 0.5 ? ['💡', 'Alguna idea?'] : ['💬', 'Te escuchamos'])
   const [feedbackOpen, setFeedbackOpen] = useState(false)
   const [salesImportOpen, setSalesImportOpen] = useState(false)
+  const [exportOpen, setExportOpen] = useState(false)
   const today = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Cancun' })
   useEffect(() => {
     if (typeof window !== 'undefined' && window.innerWidth < 768) setSidebarOpen(false)
@@ -128,7 +132,7 @@ export default function AdminPage() {
       sitesQuery = sitesQuery.eq('company_id', companyId)
     }
     // emps: empleados para gestión (filtrados por sucursal asignada)
-    let empsQuery = supabase.from('employees').select('*').eq('active', true).order('name')
+    let empsQuery = supabase.from('employees').select('*').order('name')
     if (companyId) empsQuery = empsQuery.eq('company_id', companyId)
     if (!isSuperAdmin && !isCompanyAdmin && permSiteIds) {
       const { data: empAssignments } = await supabase
@@ -143,7 +147,7 @@ export default function AdminPage() {
       }
     }
     // FIX BUG 2: allEmpsQuery carga TODOS los empleados de la empresa (para resolver nombres en attendance)
-    let allEmpsQuery = supabase.from('employees').select('id, name, email, role, phone, skip_sales, skip_photo, free_roam, fixed_week').eq('active', true).order('name')
+    let allEmpsQuery = supabase.from('employees').select('id, name, email, role, phone, skip_sales, skip_photo, free_roam, fixed_week, active, birth_date').order('name')
     if (companyId) allEmpsQuery = allEmpsQuery.eq('company_id', companyId)
 
     let attQuery = supabase.from('attendance').select('*').order('date', { ascending: false })
@@ -258,6 +262,10 @@ export default function AdminPage() {
     if (filterFrom   && r.date < filterFrom)            return false
     if (filterTo     && r.date > filterTo)              return false
     if (filterStatus && r.status !== filterStatus)      return false
+    if (attEmpSearch.trim()) {
+      const emp = allEmps.find(e => e.id === r.employee_id)
+      if (!emp || !emp.name.toLowerCase().includes(attEmpSearch.toLowerCase())) return false
+    }
     return true
   })
   function exportAttCSV() {
@@ -327,6 +335,10 @@ export default function AdminPage() {
     setToast('Empresa guardada'); setModal(null); load()
   }
   async function delEmp(id) { await supabase.from('employees').update({ active: false }).eq('id', id); setToast('Empleado eliminado'); setModal(null); load() }
+  async function toggleEmpActive(emp) {
+    await supabase.from('employees').update({ active: !emp.active }).eq('id', emp.id)
+    setToast(emp.active ? 'Empleado desactivado' : 'Empleado reactivado'); load()
+  }
   async function delSite(id) { await supabase.from('sites').update({ active: false }).eq('id', id); setToast('Sitio eliminado'); setModal(null); load() }
   async function resetAdminPwd(au) {
     const res = await fetch('/api/admin/invite', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ user_id: au.id }) })
@@ -447,6 +459,14 @@ export default function AdminPage() {
             setEmpPage={setEmpPage}
           />}
           {tab === 'attendance' && <>
+            {/* Search bar */}
+            <div style={{ marginBottom: 10, position: 'relative' }}>
+              <span style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', fontSize: 13, color: '#94a3b8', pointerEvents: 'none' }}>🔍</span>
+              <input value={attEmpSearch} onChange={e => setAttEmpSearch(e.target.value)}
+                placeholder='Buscar empleado por nombre...'
+                style={{ width: '100%', background: '#ffffff', border: '1px solid #e2e8f0', color: '#0f172a', fontSize: 12, padding: '9px 36px', borderRadius: 8, fontFamily: 'inherit', outline: 'none', boxSizing: 'border-box' }} />
+              {attEmpSearch && <button onClick={() => setAttEmpSearch('')} style={{ position: 'absolute', right: 12, top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', fontSize: 14, color: '#94a3b8', lineHeight: 1 }}>✕</button>}
+            </div>
             <div style={{ background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: 10, padding: '14px 16px', marginBottom: 14, display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: 10 }}>
               {/* FIX BUG 2: usar allEmps para el filtro de empleados */}
               {[['Empleado', filterEmp, setFilterEmp, allEmps.map(e => [e.id, e.name])],['Sucursal', filterSite, setFilterSite, sites.map(s => [s.id, s.name])]].map(([l, val, set, opts]) => (
@@ -475,41 +495,16 @@ export default function AdminPage() {
             <div style={{ marginBottom: 10, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
               <span style={{ fontSize: 11, color: '#64748b' }}>{filteredAtt.length} registro{filteredAtt.length !== 1 ? 's' : ''} encontrado{filteredAtt.length !== 1 ? 's' : ''}</span>
               <div style={{ display: 'flex', gap: 8 }}>
+              <button onClick={() => setExportOpen(true)}
+                style={{ background: 'rgba(16,185,129,.1)', border: '1px solid rgba(16,185,129,.3)', borderRadius: 5, color: '#10b981', fontSize: 10, padding: '4px 12px', cursor: 'pointer', fontFamily: 'inherit', fontWeight: 600 }}>📊 Exportar</button>
               <button onClick={exportAttCSV} disabled={filteredAtt.length === 0}
-                style={{ background: filteredAtt.length > 0 ? 'rgba(16,185,129,.1)' : 'transparent', border: '1px solid ' + (filteredAtt.length > 0 ? 'rgba(16,185,129,.3)' : '#e2e8f0'), borderRadius: 5, color: filteredAtt.length > 0 ? '#10b981' : '#94a3b8', fontSize: 10, padding: '4px 12px', cursor: filteredAtt.length > 0 ? 'pointer' : 'default', fontFamily: 'inherit', fontWeight: 600 }}>⬇ CSV</button>
+                style={{ background: filteredAtt.length > 0 ? 'rgba(16,185,129,.1)' : 'transparent', border: '1px solid ' + (filteredAtt.length > 0 ? 'rgba(16,185,129,.3)' : '#e2e8f0'), borderRadius: 5, color: filteredAtt.length > 0 ? '#10b981' : '#94a3b8', fontSize: 10, padding: '4px 12px', cursor: filteredAtt.length > 0 ? 'pointer' : 'default', fontFamily: 'inherit', fontWeight: 600 }}>⬇ CSV rápido</button>
               <button onClick={() => setSalesImportOpen(true)}
                 style={{ background: 'rgba(139,92,246,.1)', border: '1px solid rgba(139,92,246,.3)', borderRadius: 5, color: '#a78bfa', fontSize: 10, padding: '4px 12px', cursor: 'pointer', fontFamily: 'inherit', fontWeight: 600 }}>⬆ Ventas</button>
-              <button onClick={() => { setFilterEmp(''); setFilterSite(''); setFilterFrom(''); setFilterTo(''); setFilterStatus('') }} style={{ background: (filterEmp||filterSite||filterFrom||filterTo||filterStatus) ? 'rgba(59,130,246,.12)' : 'transparent', border: '1px solid '+((filterEmp||filterSite||filterFrom||filterTo||filterStatus)?'#3b82f6':'#e2e8f0'), borderRadius: 5, color: (filterEmp||filterSite||filterFrom||filterTo||filterStatus)?'#3b82f6':'#94a3b8', fontSize: 10, padding: '4px 12px', cursor: 'pointer', fontFamily: 'inherit', fontWeight: 600 }}>Limpiar filtros</button>
+              <button onClick={() => { setFilterEmp(''); setFilterSite(''); setFilterFrom(''); setFilterTo(''); setFilterStatus(''); setAttEmpSearch('') }} style={{ background: (filterEmp||filterSite||filterFrom||filterTo||filterStatus) ? 'rgba(59,130,246,.12)' : 'transparent', border: '1px solid '+((filterEmp||filterSite||filterFrom||filterTo||filterStatus)?'#3b82f6':'#e2e8f0'), borderRadius: 5, color: (filterEmp||filterSite||filterFrom||filterTo||filterStatus)?'#3b82f6':'#94a3b8', fontSize: 10, padding: '4px 12px', cursor: 'pointer', fontFamily: 'inherit', fontWeight: 600 }}>Limpiar filtros</button>
               </div>
             </div>
-            <div style={{ background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: 10, overflow: 'hidden' }}>
-              <div style={{ overflowX: 'auto' }}>
-              <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 600 }}>
-                <thead><tr>{['Fecha','Empleado','Sucursal','Entrada','Salida','Horas','Ventas','Estado'].map(h => (
-                  <th key={h} style={{ textAlign: 'left', fontSize: 9, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '.6px', color: '#94a3b8', padding: '9px 16px', borderBottom: '1px solid #e2e8f0' }}>{h}</th>
-                ))}</tr></thead>
-                <tbody>
-                  {filteredAtt.slice(0, 300).map(r => {
-                    // FIX BUG 2: buscar en allEmps para que siempre resuelva el nombre
-                    const emp = allEmps.find(e => e.id === r.employee_id); const site = sites.find(s => s.id === r.site_id)
-                    return (
-                      <tr key={r.id} style={{ borderBottom: '1px solid rgba(226,232,240,.3)' }}>
-                        <td style={{ padding: '9px 16px', fontSize: 11, fontFamily: "'JetBrains Mono'" }}>{fmtDate(r.date)}</td>
-                        <td style={{ padding: '9px 16px' }}><button onClick={() => setEmpPage(emp)} style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', textAlign: 'left', fontFamily: 'inherit' }}><span style={{ fontSize: 12, fontWeight: 600, color: '#3b82f6', textDecoration: 'underline', textDecorationColor: 'rgba(59,130,246,.3)' }}>{emp?.name || '?'}</span></button></td>
-                        <td style={{ padding: '9px 16px', fontSize: 11, color: '#64748b' }}>{site?.name || '?'}</td>
-                        <td style={{ padding: '9px 16px', fontSize: 11, fontFamily: "'JetBrains Mono'" }}>{fmtTime(r.check_in, site?.timezone)}</td>
-                        <td style={{ padding: '9px 16px', fontSize: 11, fontFamily: "'JetBrains Mono'" }}>{fmtTime(r.check_out, site?.timezone)}</td>
-                        <td style={{ padding: '9px 16px', fontSize: 11, fontFamily: "'JetBrains Mono'" }}>{fmtHours(r.hours_worked)}</td>
-                        <td style={{ padding: '9px 16px', fontSize: 11, fontFamily: "'JetBrains Mono'", color: r.sales_amount > 0 ? '#10b981' : '#94a3b8' }}>{r.sales_amount > 0 ? '$'+Number(r.sales_amount).toLocaleString('es-MX') : '–'}</td>
-                        <td style={{ padding: '9px 16px' }}><span style={{ padding: '2px 8px', borderRadius: 4, fontSize: 10, fontWeight: 600, color: stClr[r.status]||'#64748b', background: stBg[r.status]||'rgba(136,146,168,.1)' }}>{stLbl[r.status]||r.status||'–'}</span></td>
-                      </tr>
-                    )
-                  })}
-                  {filteredAtt.length === 0 && <tr><td colSpan={8} style={{ padding: 24, textAlign: 'center', color: '#94a3b8', fontSize: 12 }}>Sin registros con los filtros seleccionados</td></tr>}
-                </tbody>
-              </table>
-              </div>
-            </div>
+            <AttendanceTable filteredAtt={filteredAtt} allEmps={allEmps} sites={sites} adminUser={adminUser} adminUsers={adminUsers} onEmpClick={setEmpPage} onRefresh={load} setToast={setToast} />
           </>}
 
           {tab === 'competitions' && <CompetitionsPanel
@@ -520,25 +515,49 @@ export default function AdminPage() {
             onRefresh={load}
           />}
           {tab === 'schedules' && <ScheduleBoard sites={sites} allEmps={allEmps} schedules={schedules} employeeSiteAssignments={employeeSiteAssignments} siteHours={siteHours} isSuperAdmin={isSuperAdmin} adminUser={adminUser} onRefresh={load} setToast={setToast} />}
-          {tab === 'employees' && (
+          {tab === 'employees' && (() => {
+            const filteredEmps = emps.filter(e => {
+              if (!showInactive && !e.active) return false
+              if (empSearch.trim() && !e.name.toLowerCase().includes(empSearch.toLowerCase()) && !(e.email||'').toLowerCase().includes(empSearch.toLowerCase())) return false
+              return true
+            })
+            return (
             <div style={{ background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: 10, overflow: 'hidden' }}>
+              {/* Search bar + inactive toggle */}
+              <div style={{ padding: '12px 16px', borderBottom: '1px solid #e2e8f0', display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+                <div style={{ position: 'relative', flex: 1, minWidth: 200 }}>
+                  <span style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', fontSize: 13, color: '#94a3b8', pointerEvents: 'none' }}>🔍</span>
+                  <input value={empSearch} onChange={e => setEmpSearch(e.target.value)}
+                    placeholder='Buscar por nombre o email...'
+                    style={{ width: '100%', background: '#f8fafc', border: '1px solid #e2e8f0', color: '#0f172a', fontSize: 12, padding: '7px 10px 7px 32px', borderRadius: 7, fontFamily: 'inherit', outline: 'none', boxSizing: 'border-box' }} />
+                  {empSearch && <button onClick={() => setEmpSearch('')} style={{ position: 'absolute', right: 8, top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', fontSize: 13, color: '#94a3b8', lineHeight: 1 }}>✕</button>}
+                </div>
+                <button onClick={() => setShowInactive(v => !v)}
+                  style={{ padding: '7px 14px', borderRadius: 7, border: `1px solid ${showInactive ? '#f59e0b' : '#e2e8f0'}`, background: showInactive ? 'rgba(245,158,11,.1)' : 'transparent', color: showInactive ? '#b45309' : '#64748b', fontSize: 11, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit', whiteSpace: 'nowrap' }}>
+                  {showInactive ? '👁 Ocultando inactivos' : '👁 Mostrar inactivos'}
+                </button>
+                <span style={{ fontSize: 11, color: '#94a3b8' }}>{filteredEmps.filter(e=>e.active).length} activo{filteredEmps.filter(e=>e.active).length!==1?'s':''}{!showInactive ? '' : `, ${filteredEmps.filter(e=>!e.active).length} inactivo${filteredEmps.filter(e=>!e.active).length!==1?'s':''}`}</span>
+              </div>
               <div style={{ overflowX: 'auto' }}>
               <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 700 }}>
                 <thead><tr>{['Empleado','Email','Rol','Sucursales','Meta semanal','Próx. turno',''].map(h => (
                   <th key={h} style={{ textAlign: 'left', fontSize: 9, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '.6px', color: '#94a3b8', padding: '9px 16px', borderBottom: '1px solid #e2e8f0' }}>{h}</th>
                 ))}</tr></thead>
                 <tbody>
-                  {emps.map(emp => {
+                  {filteredEmps.map(emp => {
                     const empScheds = schedules.filter(s => s.employee_id === emp.id && s.date >= today).sort((a,b) => a.date.localeCompare(b.date))
                     const nextSched = empScheds[0]; const nextSite = nextSched ? sites.find(s => s.id === nextSched.site_id) : null
                     const goal = goals.find(g => g.employee_id === emp.id)
                     const empSiteIds = employeeSiteAssignments.filter(a => a.employee_id === emp.id).map(a => a.site_id)
                     const empSiteNames = empSiteIds.map(sid => sites.find(s => s.id === sid)?.name).filter(Boolean)
                     return (
-                      <tr key={emp.id} style={{ borderBottom: '1px solid rgba(226,232,240,.3)' }}>
+                      <tr key={emp.id} style={{ borderBottom: '1px solid rgba(226,232,240,.3)', opacity: emp.active ? 1 : 0.5, background: emp.active ? 'transparent' : 'rgba(226,232,240,.2)' }}>
                         <td style={{ padding: '9px 16px' }}>
-                          <button onClick={() => setEmpPage(emp)} style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', textAlign: 'left', fontFamily: 'inherit' }}>
-                            <div style={{ fontSize: 12, fontWeight: 600, color: '#3b82f6', textDecoration: 'underline', textDecorationColor: 'rgba(59,130,246,.3)' }}>{emp.name}</div>
+                          <button onClick={() => emp.active && setEmpPage(emp)} style={{ background: 'none', border: 'none', padding: 0, cursor: emp.active ? 'pointer' : 'default', textAlign: 'left', fontFamily: 'inherit' }}>
+                            <div style={{ fontSize: 12, fontWeight: 600, color: emp.active ? '#3b82f6' : '#94a3b8', textDecoration: emp.active ? 'underline' : 'none', textDecorationColor: 'rgba(59,130,246,.3)', display: 'flex', alignItems: 'center', gap: 6 }}>
+                              {emp.name}
+                              {!emp.active && <span style={{ fontSize: 9, fontWeight: 700, color: '#94a3b8', background: '#f1f5f9', border: '1px solid #e2e8f0', borderRadius: 3, padding: '1px 5px' }}>INACTIVO</span>}
+                            </div>
                             <div style={{ fontSize: 10, color: '#94a3b8' }}>{emp.phone || ''}</div>
                           </button>
                         </td>
@@ -562,19 +581,22 @@ export default function AdminPage() {
                                 : <span style={{ fontSize: 10, color: '#94a3b8' }}>Sin meta</span>}
                         </td>
                         <td style={{ padding: '9px 16px' }}>
-                          {nextSched ? (
+                          {emp.active ? (nextSched ? (
                             <div>
                               <div style={{ fontSize: 11, color: '#0f172a', fontWeight: 600 }}>{fmtDate(nextSched.date)}{nextSched.date === today ? <span style={{ marginLeft: 6, fontSize: 9, color: '#10b981', fontWeight: 700 }}>HOY</span> : ''}</div>
                               <div style={{ fontSize: 10, color: '#94a3b8', fontFamily: "'JetBrains Mono'" }}>{nextSched.start_time?.slice(0,5)} – {nextSched.end_time?.slice(0,5)} · {nextSite?.name}</div>
                             </div>
-                          ) : <span style={{ fontSize: 10, color: '#f59e0b' }}>Sin turno próximo</span>}
+                          ) : <span style={{ fontSize: 10, color: '#f59e0b' }}>Sin turno próximo</span>) : <span style={{ fontSize: 10, color: '#94a3b8' }}>—</span>}
                         </td>
                         <td style={{ padding: '9px 16px' }}>
                           <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-                            <button onClick={() => setEmpPage(emp)} style={{ padding: '4px 10px', borderRadius: 5, border: '1px solid rgba(16,185,129,.25)', background: 'rgba(16,185,129,.1)', color: '#10b981', fontSize: 10, cursor: 'pointer', fontFamily: 'inherit', fontWeight: 600 }}>Historial</button>
-                            <button onClick={() => setModal({ type: 'schedule', data: emp })} style={{ padding: '4px 10px', borderRadius: 5, border: '1px solid rgba(59,130,246,.25)', background: 'rgba(59,130,246,.12)', color: '#3b82f6', fontSize: 10, cursor: 'pointer', fontFamily: 'inherit', fontWeight: 600 }}>Horarios</button>
-                            <button onClick={() => setModal({ type: 'emp', data: { emp, goal } })} style={{ background: 'none', border: 'none', color: '#64748b', cursor: 'pointer', fontSize: 11, fontFamily: 'inherit' }}>Editar</button>
-                            <button onClick={() => { if (confirm('Eliminar ' + emp.name + '?')) delEmp(emp.id) }} style={{ background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer', fontSize: 11, fontFamily: 'inherit' }}>Eliminar</button>
+                            {emp.active && <button onClick={() => setEmpPage(emp)} style={{ padding: '4px 10px', borderRadius: 5, border: '1px solid rgba(16,185,129,.25)', background: 'rgba(16,185,129,.1)', color: '#10b981', fontSize: 10, cursor: 'pointer', fontFamily: 'inherit', fontWeight: 600 }}>Historial</button>}
+                            {emp.active && <button onClick={() => setModal({ type: 'schedule', data: emp })} style={{ padding: '4px 10px', borderRadius: 5, border: '1px solid rgba(59,130,246,.25)', background: 'rgba(59,130,246,.12)', color: '#3b82f6', fontSize: 10, cursor: 'pointer', fontFamily: 'inherit', fontWeight: 600 }}>Horarios</button>}
+                            {emp.active && <button onClick={() => setModal({ type: 'emp', data: { emp, goal } })} style={{ background: 'none', border: 'none', color: '#64748b', cursor: 'pointer', fontSize: 11, fontFamily: 'inherit' }}>Editar</button>}
+                            <button onClick={() => toggleEmpActive(emp)}
+                              style={{ padding: '4px 10px', borderRadius: 5, border: `1px solid ${emp.active ? 'rgba(239,68,68,.3)' : 'rgba(16,185,129,.3)'}`, background: emp.active ? 'rgba(239,68,68,.08)' : 'rgba(16,185,129,.08)', color: emp.active ? '#ef4444' : '#10b981', fontSize: 10, cursor: 'pointer', fontFamily: 'inherit', fontWeight: 600 }}>
+                              {emp.active ? 'Desactivar' : '✓ Reactivar'}
+                            </button>
                           </div>
                         </td>
                       </tr>
@@ -583,9 +605,10 @@ export default function AdminPage() {
                 </tbody>
               </table>
               </div>
-              {emps.length === 0 && <div style={{ padding: 20, textAlign: 'center', color: '#94a3b8', fontSize: 12 }}>No hay empleados. Agrega el primero.</div>}
+              {filteredEmps.length === 0 && <div style={{ padding: 20, textAlign: 'center', color: '#94a3b8', fontSize: 12 }}>{empSearch ? 'Sin resultados para "' + empSearch + '"' : 'No hay empleados. Agrega el primero.'}</div>}
             </div>
-          )}
+            )
+          })()}
           {tab === 'sites' && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
               {sites.map(site => (
@@ -737,7 +760,8 @@ export default function AdminPage() {
           </div>
         </div>
       )}
-      {salesImportOpen && <SalesImportModal sites={sites} allEmps={allEmps} onClose={() => setSalesImportOpen(false)} onDone={() => { setSalesImportOpen(false); load() }} setToast={setToast} />}
+      {exportOpen && <ExportModal att={att} allEmps={allEmps} sites={sites} schedules={schedules} goals={goals} adminUsers={adminUsers} onClose={() => setExportOpen(false)} setToast={setToast} />}
+      {salesImportOpen && <SalesImportModal sites={sites} allEmps={allEmps} att={att} schedules={schedules} adminUser={adminUser} employeeSiteAssignments={employeeSiteAssignments} onClose={() => setSalesImportOpen(false)} onDone={() => { setSalesImportOpen(false); load() }} setToast={setToast} />}
       <FeedbackButton open={feedbackOpen} onClose={() => setFeedbackOpen(false)} adminUser={adminUser} />
       {toast && <div style={{ position: 'fixed', bottom: 20, right: 20, background: '#ffffff', border: '1px solid rgba(16,185,129,.25)', borderRadius: 8, padding: '10px 16px', fontSize: 12, fontWeight: 500, zIndex: 200, color: '#10b981' }}>{toast}</div>}
     </div>
@@ -905,7 +929,7 @@ function EmpSidePanel({ emp, att, sites, onClose, onRefresh, fullPage }) {
 }
 // ─── Emp Modal ────────────────────────────────────────────────────────────────
 function EmpModal({ data, currentGoal, sites, currentSiteIds, onSave, onClose }) {
-  const [f, setF] = useState(data || { name: '', email: '', phone: '', role: 'Vendedor(a)', skip_sales: false, skip_photo: false })
+  const [f, setF] = useState(data || { name: '', email: '', phone: '', role: 'Vendedor(a)', skip_sales: false, skip_photo: false, birth_date: null })
   const [weeklyGoal, setWeeklyGoal] = useState(currentGoal ? String(currentGoal) : '')
   const [goalErr, setGoalErr] = useState('')
   const [emailErr, setEmailErr] = useState('')
@@ -929,7 +953,7 @@ function EmpModal({ data, currentGoal, sites, currentSiteIds, onSave, onClose })
     <div onClick={onClose} style={{ position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', background: 'rgba(0,0,0,.7)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 200 }}>
       <div onClick={e => e.stopPropagation()} style={{ background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: 12, padding: 22, width: '100%', maxWidth: 440, maxHeight: '85vh', overflow: 'auto' }}>
         <h3 style={{ fontSize: 15, fontWeight: 700, marginBottom: 14 }}>{data ? 'Editar Empleado' : 'Nuevo Empleado'}</h3>
-        {[['Nombre','name','text'],['Email','email','email'],['Teléfono','phone','tel']].map(([l,k,t]) => (
+        {[['Nombre','name','text'],['Email','email','email'],['Teléfono','phone','tel'],['Fecha de nacimiento (opcional)','birth_date','date']].map(([l,k,t]) => (
           <div key={k} style={{ marginBottom: 10 }}>
             <label style={{ fontSize: 10, fontWeight: 600, color: '#64748b', display: 'block', marginBottom: 4 }}>{l}</label>
             <input type={t} value={f[k]||''} onChange={e => upd(k, e.target.value)} style={{ width:'100%',background:'#ffffff',border:`1px solid ${k==='email'&&emailErr?'#ef4444':'#e2e8f0'}`,color:'#0f172a',fontSize:12,padding:'8px 10px',borderRadius:6,outline:'none',fontFamily:'inherit' }} />
@@ -939,7 +963,7 @@ function EmpModal({ data, currentGoal, sites, currentSiteIds, onSave, onClose })
         <div style={{ marginBottom: 10 }}>
           <label style={{ fontSize: 10, fontWeight: 600, color: '#64748b', display: 'block', marginBottom: 4 }}>Rol</label>
           <select value={f.role||'Vendedor(a)'} onChange={e => upd('role', e.target.value)} style={{ width:'100%',background:'#ffffff',border:'1px solid #e2e8f0',color:'#0f172a',fontSize:12,padding:'8px 10px',borderRadius:6,fontFamily:'inherit' }}>
-            <option>Vendedor(a)</option><option>Encargado(a)</option><option>Gerente Regional</option><option>Supervisor(a)</option>
+            <option>Vendedor(a)</option><option>Encargado(a)</option><option>Gerente</option><option>Gerente Regional</option><option>Supervisor(a)</option>
           </select>
         </div>
         {sites.length > 0 && (
@@ -1074,6 +1098,26 @@ function SiteModal({ data, onSave, onClose }) {
         </div>
         {isNew && <div style={{ background: 'rgba(59,130,246,.06)', border: '1px solid rgba(59,130,246,.15)', borderRadius: 8, padding: '10px 14px', marginBottom: 14 }}><div style={{ fontSize: 10, color: '#3b82f6', fontWeight: 600, marginBottom: 2 }}>Código QR</div><div style={{ fontSize: 11, color: '#94a3b8' }}>Se generará automáticamente al guardar.</div></div>}
         {!isNew && <div style={{ marginBottom: 14 }}><label style={{ fontSize: 10, fontWeight: 600, color: '#64748b', display: 'block', marginBottom: 4 }}>Código QR</label><input value={f.code||''} onChange={e => upd('code', e.target.value.toUpperCase())} style={{ width:'100%',background:'#ffffff',border:'1px solid #e2e8f0',color:'#0f172a',fontSize:12,padding:'8px 10px',borderRadius:6,outline:'none',fontFamily:"'JetBrains Mono'" }} /></div>}
+
+        {/* ── Metas de ventas ── */}
+        <div style={{ borderTop: '1px solid #e2e8f0', paddingTop: 14, marginBottom: 14 }}>
+          <div style={{ fontSize: 10, fontWeight: 700, color: '#10b981', textTransform: 'uppercase', letterSpacing: '.5px', marginBottom: 10 }}>🎯 Metas de ventas (opcionales)</div>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8 }}>
+            {[['Diaria', 'goal_daily'], ['Semanal', 'goal_weekly'], ['Mensual', 'goal_monthly']].map(([lbl, key]) => (
+              <div key={key}>
+                <label style={{ fontSize: 10, fontWeight: 600, color: '#64748b', display: 'block', marginBottom: 4 }}>{lbl}</label>
+                <div style={{ position: 'relative' }}>
+                  <span style={{ position: 'absolute', left: 8, top: '50%', transform: 'translateY(-50%)', fontSize: 12, color: '#94a3b8', pointerEvents: 'none' }}>$</span>
+                  <input type='number' min='0' value={f[key] ?? ''} onChange={e => upd(key, e.target.value === '' ? null : parseFloat(e.target.value))}
+                    placeholder='—'
+                    style={{ width: '100%', background: '#ffffff', border: '1px solid #e2e8f0', color: '#0f172a', fontSize: 12, padding: '8px 8px 8px 20px', borderRadius: 6, outline: 'none', fontFamily: 'inherit', boxSizing: 'border-box' }} />
+                </div>
+              </div>
+            ))}
+          </div>
+          <div style={{ fontSize: 10, color: '#94a3b8', marginTop: 6 }}>Aparecerán como barra de progreso en el dashboard al seleccionar el período correspondiente.</div>
+        </div>
+
         <div style={{ display: 'flex', gap: 8 }}>
           <button disabled={!valid} onClick={() => onSave(f)} style={{ flex:1,padding:'10px 16px',borderRadius:7,border:'none',background:valid?'#3b82f6':'#e2e8f0',color:'#fff',fontSize:12,fontWeight:600,cursor:valid?'pointer':'not-allowed',fontFamily:'inherit' }}>Guardar</button>
           <button onClick={onClose} style={{ padding:'10px 16px',borderRadius:7,border:'1px solid #e2e8f0',background:'transparent',color:'#64748b',fontSize:12,cursor:'pointer',fontFamily:'inherit' }}>Cancelar</button>
@@ -1381,11 +1425,13 @@ function AdminUserModal({ data, sites, companies, isSuperAdmin, isCompanyAdmin, 
 function UnifiedDashboard({ sites, allEmps, att, todayAtt, schedules, todaySchedules, siteHours, today, dashRows, unscheduledAtt, sitesWorking, peopleWorking, setEmpPage }) {
   const [viewMode, setViewMode] = useState('list')     // 'list' | 'grid'
   const [salesPeriod, setSalesPeriod] = useState('today') // 'today' | 'week' | 'month'
+  const [salesInfoOpen, setSalesInfoOpen] = useState(false)
 
   const now = new Date()
   const weekStartStr = (() => { const d = new Date(now); const day = d.getDay(); d.setDate(d.getDate() - (day === 0 ? 6 : day - 1)); return d.toLocaleDateString('en-CA', { timeZone: 'America/Cancun' }) })()
   const prevWeekStartStr = (() => { const d = new Date(now); const day = d.getDay(); d.setDate(d.getDate() - (day === 0 ? 6 : day - 1) - 7); return d.toLocaleDateString('en-CA', { timeZone: 'America/Cancun' }) })()
-  const prevWeekEndStr   = (() => { const d = new Date(now); const day = d.getDay(); d.setDate(d.getDate() - (day === 0 ? 6 : day - 1) - 1); return d.toLocaleDateString('en-CA', { timeZone: 'America/Cancun' }) })()
+  const daysElapsed = Math.floor((new Date(today + 'T12:00:00') - new Date(weekStartStr + 'T12:00:00')) / 86400000)
+  const prevWeekEndStr   = (() => { const d = new Date(prevWeekStartStr + 'T12:00:00'); d.setDate(d.getDate() + daysElapsed); return d.toLocaleDateString('en-CA', { timeZone: 'America/Cancun' }) })()
   const monthStr = today.slice(0, 7)
 
   function getSiteSales(siteId) {
@@ -1402,7 +1448,16 @@ function UnifiedDashboard({ sites, allEmps, att, todayAtt, schedules, todaySched
       .reduce((sum, r) => sum + (parseFloat(r.sales_amount) || 0), 0)
   }
 
+  function getSiteGoal(site) {
+    if (salesPeriod === 'today') return parseFloat(site.goal_daily) || 0
+    if (salesPeriod === 'week')  return parseFloat(site.goal_weekly) || 0
+    if (salesPeriod === 'month') return parseFloat(site.goal_monthly) || 0
+    return 0
+  }
+
   const totalSales = sites.reduce((sum, s) => sum + getSiteSales(s.id), 0)
+  const totalGoal  = sites.reduce((sum, s) => sum + getSiteGoal(s), 0)
+  const totalPct   = totalGoal > 0 ? Math.min(100, Math.round(totalSales / totalGoal * 100)) : null
   const totalPrevWeek = salesPeriod === 'week' ? sites.reduce((sum, s) => sum + getPrevWeekSales(s.id), 0) : 0
   const weekPct = (salesPeriod === 'week' && totalPrevWeek > 0) ? ((totalSales - totalPrevWeek) / totalPrevWeek * 100).toFixed(0) : null
   const jsDow = new Date(today + 'T12:00:00').getDay()
@@ -1440,18 +1495,56 @@ function UnifiedDashboard({ sites, allEmps, att, todayAtt, schedules, todaySched
             </div>
           ))}
           {/* Sales card with week comparison */}
-          <div style={{ background: 'rgba(139,92,246,.12)', border: '1px solid rgba(139,92,246,.2)', borderRadius: 10, padding: '12px 16px', display: 'flex', alignItems: 'center', gap: 10, minWidth: 160 }}>
-            <span style={{ fontSize: 22 }}>💰</span>
-            <div>
-              <div style={{ fontSize: 9, color: '#8b5cf6', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '.5px' }}>Ventas ({periodLabel[salesPeriod]})</div>
-              <div style={{ fontSize: 22, fontWeight: 700, fontFamily: "'JetBrains Mono'", color: '#8b5cf6', lineHeight: 1.2 }}>{totalSales > 0 ? '$' + Number(totalSales).toLocaleString('es-MX') : '–'}</div>
-              {weekPct !== null && (
-                <div style={{ fontSize: 10, fontWeight: 600, color: Number(weekPct) >= 0 ? '#10b981' : '#ef4444', marginTop: 2 }}>
-                  {Number(weekPct) >= 0 ? '↑' : '↓'} {Math.abs(Number(weekPct))}% vs sem. ant.
+          {(() => {
+            const fmtD = s => { const [y,m,d] = s.split('-'); return new Date(+y,+m-1,+d).toLocaleDateString('es-MX',{day:'numeric',month:'short'}) }
+            const dayNames = ['lun','mar','mié','jue','vie','sáb','dom']
+            return (
+              <div style={{ position: 'relative' }}>
+                <div onClick={() => setSalesInfoOpen(o => !o)} style={{ background: 'rgba(139,92,246,.12)', border: `1px solid ${salesInfoOpen ? 'rgba(139,92,246,.5)' : 'rgba(139,92,246,.2)'}`, borderRadius: 10, padding: '12px 16px', display: 'flex', alignItems: 'center', gap: 10, minWidth: 160, cursor: 'pointer', userSelect: 'none' }}>
+                  <span style={{ fontSize: 22 }}>💰</span>
+                  <div>
+                    <div style={{ fontSize: 9, color: '#8b5cf6', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '.5px' }}>Ventas ({periodLabel[salesPeriod]}) {salesPeriod === 'week' ? '📅' : ''}</div>
+                    <div style={{ fontSize: 22, fontWeight: 700, fontFamily: "'JetBrains Mono'", color: '#8b5cf6', lineHeight: 1.2 }}>{totalSales > 0 ? '$' + Number(totalSales).toLocaleString('es-MX') : '–'}</div>
+                    {totalPct !== null && (
+                      <>
+                        <div style={{ marginTop: 5, height: 4, background: 'rgba(139,92,246,.15)', borderRadius: 2, overflow: 'hidden', width: 120 }}>
+                          <div style={{ height: '100%', width: totalPct + '%', background: totalPct >= 100 ? '#10b981' : '#8b5cf6', borderRadius: 2, transition: 'width .5s ease' }} />
+                        </div>
+                        <div style={{ fontSize: 10, fontWeight: 600, color: totalPct >= 100 ? '#10b981' : '#8b5cf6', marginTop: 2 }}>{totalPct}% de meta</div>
+                      </>
+                    )}
+                    {weekPct !== null && (
+                      <div style={{ fontSize: 10, fontWeight: 600, color: Number(weekPct) >= 0 ? '#10b981' : '#ef4444', marginTop: 2 }}>
+                        {Number(weekPct) >= 0 ? '↑' : '↓'} {Math.abs(Number(weekPct))}% vs sem. ant.
+                      </div>
+                    )}
+                  </div>
                 </div>
-              )}
-            </div>
-          </div>
+                {salesInfoOpen && (
+                  <div onClick={() => setSalesInfoOpen(false)} style={{ position: 'absolute', top: 'calc(100% + 6px)', left: 0, zIndex: 50, background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: 10, padding: '12px 14px', minWidth: 230, boxShadow: '0 4px 20px rgba(0,0,0,.10)', fontSize: 11, color: '#334155' }}>
+                    {salesPeriod === 'week' ? (
+                      <>
+                        <div style={{ fontWeight: 700, color: '#8b5cf6', marginBottom: 8, fontSize: 10, textTransform: 'uppercase', letterSpacing: '.5px' }}>Período comparado</div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
+                          <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#8b5cf6', flexShrink: 0, display: 'inline-block' }} />
+                          <span><b>Esta semana:</b> {fmtD(weekStartStr)} – {fmtD(today)}</span>
+                        </div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+                          <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#94a3b8', flexShrink: 0, display: 'inline-block' }} />
+                          <span><b>Sem. anterior:</b> {fmtD(prevWeekStartStr)} – {fmtD(prevWeekEndStr)}</span>
+                        </div>
+                        <div style={{ fontSize: 10, color: '#94a3b8', borderTop: '1px solid #f1f5f9', paddingTop: 6 }}>Comparación equitativa: {daysElapsed + 1} día{daysElapsed !== 0 ? 's' : ''} vs mismos días sem. ant.</div>
+                      </>
+                    ) : salesPeriod === 'today' ? (
+                      <div><b>Hoy:</b> {fmtD(today)}</div>
+                    ) : (
+                      <div><b>Mes:</b> {weekStartStr.slice(0,7).replace('-','/')}</div>
+                    )}
+                  </div>
+                )}
+              </div>
+            )
+          })()}
         </div>
         <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
           {/* Sales period selector */}
@@ -1475,6 +1568,50 @@ function UnifiedDashboard({ sites, allEmps, att, todayAtt, schedules, todaySched
         </div>
       </div>
 
+      {/* Upcoming birthdays widget */}
+      {(() => {
+        const tz = 'America/Cancun'
+        const todayDate = new Date(today + 'T12:00:00')
+        const todayMonth = todayDate.getMonth() + 1
+        const todayDay   = todayDate.getDate()
+        const upcomingBdays = (allEmps || [])
+          .filter(e => e.active !== false && e.birth_date)
+          .map(e => {
+            const [,bm,bd] = e.birth_date.split('-')
+            const bMonth = parseInt(bm), bDay = parseInt(bd)
+            let nextBday = new Date(todayDate.getFullYear(), bMonth - 1, bDay)
+            if (nextBday < todayDate) nextBday.setFullYear(nextBday.getFullYear() + 1)
+            const daysUntil = Math.round((nextBday - todayDate) / 86400000)
+            return { ...e, daysUntil, bMonth, bDay }
+          })
+          .filter(e => e.daysUntil <= 30)
+          .sort((a, b) => a.daysUntil - b.daysUntil)
+        if (upcomingBdays.length === 0) return null
+        return (
+          <div style={{ marginBottom: 16 }}>
+            <div style={{ fontSize: 11, fontWeight: 700, color: '#ec4899', textTransform: 'uppercase', letterSpacing: '.5px', marginBottom: 8 }}>🎂 Próximos cumpleaños</div>
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+              {upcomingBdays.map(e => {
+                const isToday = e.daysUntil === 0
+                const months = ['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic']
+                const dateLabel = `${e.bDay} ${months[e.bMonth - 1]}`
+                return (
+                  <div key={e.id} style={{ background: isToday ? 'rgba(236,72,153,.1)' : '#ffffff', border: `1px solid ${isToday ? 'rgba(236,72,153,.4)' : '#e2e8f0'}`, borderRadius: 10, padding: '8px 14px', display: 'flex', alignItems: 'center', gap: 10, minWidth: 160 }}>
+                    <span style={{ fontSize: 20 }}>{isToday ? '🎉' : '🎂'}</span>
+                    <div>
+                      <div style={{ fontSize: 12, fontWeight: 700, color: isToday ? '#ec4899' : '#0f172a' }}>{e.name.split(' ').slice(0, 2).join(' ')}</div>
+                      <div style={{ fontSize: 10, color: isToday ? '#ec4899' : '#94a3b8', fontWeight: 600 }}>
+                        {isToday ? '¡Hoy! 🥳' : e.daysUntil === 1 ? 'Mañana' : `En ${e.daysUntil} días`} · {dateLabel}
+                      </div>
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          </div>
+        )
+      })()}
+
       {/* GRID VIEW */}
       {viewMode === 'grid' && (
         <div>
@@ -1487,6 +1624,8 @@ function UnifiedDashboard({ sites, allEmps, att, todayAtt, schedules, todaySched
               const siteSales = getSiteSales(site.id)
               const sitePrevWeek = getPrevWeekSales(site.id)
               const sitePct = (salesPeriod === 'week' && sitePrevWeek > 0) ? ((siteSales - sitePrevWeek) / sitePrevWeek * 100).toFixed(0) : null
+              const siteGoal = getSiteGoal(site)
+              const siteGoalPct = siteGoal > 0 ? Math.min(100, Math.round(siteSales / siteGoal * 100)) : null
               const tz = site.timezone || 'America/Cancun'
               return (
                 <div key={site.id} style={{ background: '#ffffff', border: `2px solid ${open ? 'rgba(16,185,129,.4)' : late ? 'rgba(245,158,11,.35)' : '#e2e8f0'}`, borderRadius: 12, overflow: 'hidden' }}>
@@ -1520,11 +1659,21 @@ function UnifiedDashboard({ sites, allEmps, att, todayAtt, schedules, todaySched
                   </div>
                   <div style={{ padding: '8px 16px', borderTop: '1px solid #e2e8f0', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 6 }}>
                     {firstIn ? <span style={{ fontSize: 10, color: '#64748b' }}>1ra entrada: <span style={{ fontFamily: "'JetBrains Mono'", color: '#0f172a' }}>{new Date(firstIn.check_in).toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: tz })}</span></span> : <span />}
-                    <div style={{ textAlign: 'right' }}>
+                    <div style={{ textAlign: 'right', flex: 1 }}>
                       <div style={{ fontSize: 11, fontWeight: 700, color: siteSales > 0 ? '#8b5cf6' : '#94a3b8' }}>
                         {siteSales > 0 ? `💰 $${Number(siteSales).toLocaleString('es-MX')}` : 'Sin ventas'}
                       </div>
                       {sitePct !== null && <div style={{ fontSize: 9, color: Number(sitePct) >= 0 ? '#10b981' : '#ef4444', fontWeight: 600 }}>{Number(sitePct) >= 0 ? '↑' : '↓'} {Math.abs(Number(sitePct))}% vs ant.</div>}
+                      {siteGoalPct !== null && (
+                        <div style={{ marginTop: 4 }}>
+                          <div style={{ height: 4, background: 'rgba(139,92,246,.15)', borderRadius: 2, overflow: 'hidden', width: 100, marginLeft: 'auto' }}>
+                            <div style={{ height: '100%', width: siteGoalPct + '%', background: siteGoalPct >= 100 ? '#10b981' : '#8b5cf6', borderRadius: 2 }} />
+                          </div>
+                          <div style={{ fontSize: 9, fontWeight: 600, color: siteGoalPct >= 100 ? '#10b981' : '#8b5cf6', marginTop: 1 }}>
+                            {siteGoalPct}% · meta ${Number(siteGoal).toLocaleString('es-MX')}
+                          </div>
+                        </div>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -1543,12 +1692,26 @@ function UnifiedDashboard({ sites, allEmps, att, todayAtt, schedules, todaySched
             if (siteRows.length === 0 && siteUnscheduled.length === 0) return null
             const totalCount = siteRows.length + siteUnscheduled.length
             const siteSales = getSiteSales(site.id)
+            const siteGoalL = getSiteGoal(site)
+            const siteGoalPctL = siteGoalL > 0 ? Math.min(100, Math.round(siteSales / siteGoalL * 100)) : null
             return (
               <div key={site.id} style={{ background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: 10, overflow: 'hidden', marginBottom: 14 }}>
                 <div style={{ padding: '10px 16px', borderBottom: '1px solid #e2e8f0', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 6 }}>
                   <div style={{ fontWeight: 600, fontSize: 13 }}>{site.name}</div>
                   <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
-                    {siteSales > 0 && <span style={{ fontSize: 11, fontWeight: 700, color: '#8b5cf6' }}>💰 ${Number(siteSales).toLocaleString('es-MX')}</span>}
+                    {siteSales > 0 && (
+                      <div style={{ textAlign: 'right' }}>
+                        <span style={{ fontSize: 11, fontWeight: 700, color: '#8b5cf6' }}>💰 ${Number(siteSales).toLocaleString('es-MX')}</span>
+                        {siteGoalPctL !== null && (
+                          <div style={{ marginTop: 3 }}>
+                            <div style={{ height: 3, background: 'rgba(139,92,246,.15)', borderRadius: 2, overflow: 'hidden', width: 80, marginLeft: 'auto' }}>
+                              <div style={{ height: '100%', width: siteGoalPctL + '%', background: siteGoalPctL >= 100 ? '#10b981' : '#8b5cf6', borderRadius: 2 }} />
+                            </div>
+                            <div style={{ fontSize: 9, fontWeight: 600, color: siteGoalPctL >= 100 ? '#10b981' : '#8b5cf6' }}>{siteGoalPctL}% de meta</div>
+                          </div>
+                        )}
+                      </div>
+                    )}
                     <span style={{ fontSize: 10, color: '#94a3b8' }}>{totalCount} empleado{totalCount !== 1 ? 's' : ''} hoy</span>
                   </div>
                 </div>
@@ -2410,17 +2573,25 @@ function Toggle({ checked, onChange, color = '#f59e0b', style: extraStyle = {} }
 function CompanyModal({ data, onSave, onClose }) {
   const [name, setName]   = useState(data?.name || '')
   const [slug, setSlug]   = useState(data?.slug || '')
+  const [bdayMsg, setBdayMsg] = useState(data?.birthday_message || '')
   const [autoSlug, setAutoSlug] = useState(!data?.slug)
   const valid = name.trim() && slug.trim()
   function handleNameChange(val) { setName(val); if (autoSlug) setSlug(slugify(val)) }
-  function handleSave() { const d = { ...(data || {}), name: name.trim(), slug: slug.trim() }; onSave(d) }
+  function handleSave() { const d = { ...(data || {}), name: name.trim(), slug: slug.trim(), birthday_message: bdayMsg.trim() || null }; onSave(d) }
   const iS = { width:'100%',background:'#ffffff',border:'1px solid #e2e8f0',color:'#0f172a',fontSize:12,padding:'8px 10px',borderRadius:6,outline:'none',fontFamily:'inherit' }
   return (
     <div onClick={onClose} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.7)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 200 }}>
-      <div onClick={e => e.stopPropagation()} style={{ background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: 12, padding: 22, width: '100%', maxWidth: 400 }}>
+      <div onClick={e => e.stopPropagation()} style={{ background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: 12, padding: 22, width: '100%', maxWidth: 420 }}>
         <h3 style={{ fontSize: 15, fontWeight: 700, marginBottom: 14 }}>{data ? 'Editar Empresa' : 'Nueva Empresa'}</h3>
         <div style={{ marginBottom: 10 }}><label style={{ fontSize:10,fontWeight:600,color:'#64748b',display:'block',marginBottom:4 }}>Nombre de la empresa</label><input value={name} onChange={e => handleNameChange(e.target.value)} style={iS} placeholder='Ej: Mi Empresa SA de CV' /></div>
-        <div style={{ marginBottom: 18 }}><label style={{ fontSize:10,fontWeight:600,color:'#64748b',display:'block',marginBottom:4 }}>Slug (identificador único)</label><input value={slug} onChange={e => { setSlug(slugify(e.target.value)); setAutoSlug(false) }} style={{ ...iS, fontFamily:"'JetBrains Mono'" }} placeholder='mi-empresa' /><div style={{ fontSize:10,color:'#94a3b8',marginTop:4 }}>Solo letras, números y guiones.</div></div>
+        <div style={{ marginBottom: 14 }}><label style={{ fontSize:10,fontWeight:600,color:'#64748b',display:'block',marginBottom:4 }}>Slug (identificador único)</label><input value={slug} onChange={e => { setSlug(slugify(e.target.value)); setAutoSlug(false) }} style={{ ...iS, fontFamily:"'JetBrains Mono'" }} placeholder='mi-empresa' /><div style={{ fontSize:10,color:'#94a3b8',marginTop:4 }}>Solo letras, números y guiones.</div></div>
+        <div style={{ marginBottom: 18, borderTop: '1px solid #f1f5f9', paddingTop: 14 }}>
+          <label style={{ fontSize:10,fontWeight:600,color:'#64748b',display:'block',marginBottom:4 }}>🎂 Mensaje de cumpleaños (opcional)</label>
+          <textarea value={bdayMsg} onChange={e => setBdayMsg(e.target.value)} rows={3}
+            placeholder={'¡Feliz cumpleaños, {nombre}! 🎂 Que tengas un día increíble. De parte de todo el equipo.'}
+            style={{ ...iS, resize: 'vertical', lineHeight: 1.5 }} />
+          <div style={{ fontSize:10,color:'#94a3b8',marginTop:4 }}>Usa <code style={{ background:'#f1f5f9',padding:'1px 4px',borderRadius:3 }}>{'{nombre}'}</code> para incluir el nombre del empleado. Si lo dejas vacío se usa un mensaje genérico.</div>
+        </div>
         <div style={{ display: 'flex', gap: 8 }}>
           <button disabled={!valid} onClick={handleSave} style={{ flex:1,padding:'10px 16px',borderRadius:7,border:'none',background:valid?'#3b82f6':'#e2e8f0',color:'#fff',fontSize:12,fontWeight:600,cursor:valid?'pointer':'not-allowed',fontFamily:'inherit' }}>Guardar</button>
           <button onClick={onClose} style={{ padding:'10px 16px',borderRadius:7,border:'1px solid #e2e8f0',background:'transparent',color:'#64748b',fontSize:12,cursor:'pointer',fontFamily:'inherit' }}>Cancelar</button>
@@ -2431,43 +2602,112 @@ function CompanyModal({ data, onSave, onClose }) {
 }
 
 // ─── Sales Import Modal ────────────────────────────────────────────────────────
-function SalesImportModal({ sites, allEmps, onClose, onDone, setToast }) {
+function SalesImportModal({ sites, allEmps, att, schedules, adminUser, employeeSiteAssignments, onClose, onDone, setToast }) {
+  const [step, setStep] = useState('choose') // choose | download | upload | preview
   const [rows, setRows] = useState([])
-  const [preview, setPreview] = useState([])
   const [saving, setSaving] = useState(false)
   const [err, setErr] = useState('')
+  const [dlSite, setDlSite] = useState('')
+  const [dlFrom, setDlFrom] = useState(() => {
+    const d = new Date(); d.setDate(d.getDate() - 7)
+    return d.toLocaleDateString('en-CA', { timeZone: 'America/Cancun' })
+  })
+  const [dlTo, setDlTo] = useState(() => new Date().toLocaleDateString('en-CA', { timeZone: 'America/Cancun' }))
   const fileRef = useRef(null)
+  const sS = { padding: '6px 10px', borderRadius: 6, border: '1px solid #e2e8f0', fontSize: 11, fontFamily: 'inherit', outline: 'none', background: '#fff', color: '#0f172a', width: '100%' }
+  const lblS = { fontSize: 9, fontWeight: 600, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '.5px', marginBottom: 4, display: 'block' }
+
+  function downloadTemplate() {
+    // Build all dates in range
+    const dates = []
+    const from = new Date(dlFrom + 'T12:00:00')
+    const to = new Date(dlTo + 'T12:00:00')
+    for (let d = new Date(from); d <= to; d.setDate(d.getDate() + 1)) {
+      dates.push(d.toLocaleDateString('en-CA'))
+    }
+    // Get relevant employees
+    let relevantEmps = allEmps
+    if (dlSite) {
+      const siteEmpIds = new Set((employeeSiteAssignments || []).filter(a => a.site_id === dlSite).map(a => a.employee_id))
+      relevantEmps = allEmps.filter(e => siteEmpIds.has(e.id))
+    }
+    // Build rows: for each emp × date, check if attendance exists
+    const headers = ['Fecha', 'Empleado', 'Email', 'Sucursal', 'Ventas actuales', 'Ventas corregidas']
+    const csvRows = []
+    for (const emp of relevantEmps) {
+      for (const date of dates) {
+        const record = att.find(r => r.employee_id === emp.id && r.date === date)
+        const siteName = dlSite ? sites.find(s => s.id === dlSite)?.name || '' : (record ? sites.find(s => s.id === record.site_id)?.name || '' : '')
+        const siteId = dlSite || record?.site_id || ''
+        // Find site from assignments if no record
+        const assignedSite = !siteName && !dlSite ? sites.find(s => (employeeSiteAssignments || []).some(a => a.employee_id === emp.id && a.site_id === s.id))?.name || '' : siteName
+        csvRows.push([
+          date,
+          emp.name,
+          emp.email,
+          assignedSite,
+          record?.sales_amount || 0,
+          '', // Leave blank for user to fill
+        ])
+      }
+    }
+    const csv = [headers, ...csvRows].map(r => r.map(v => `"${String(v).replace(/"/g, '""')}"`).join(',')).join('\n')
+    const blob = new Blob(['\ufeff' + csv], { type: 'text/csv;charset=utf-8;' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `plantilla-ventas-${dlFrom}-a-${dlTo}.csv`
+    document.body.appendChild(a); a.click(); document.body.removeChild(a)
+    URL.revokeObjectURL(url)
+    setToast(`Plantilla descargada: ${csvRows.length} filas`)
+  }
 
   function parseCSV(text) {
     const lines = text.trim().split(/\r?\n/)
     if (lines.length < 2) { setErr('El archivo debe tener encabezado y al menos una fila.'); return }
-    const headers = lines[0].split(',').map(h => h.replace(/"/g,'').trim().toLowerCase())
+    const headers = lines[0].split(',').map(h => h.replace(/"/g, '').trim().toLowerCase())
     const dateIdx = headers.findIndex(h => h.includes('fecha') || h.includes('date'))
-    const empIdx  = headers.findIndex(h => h.includes('empleado') || h.includes('email') || h.includes('nombre'))
-    const salesIdx = headers.findIndex(h => h.includes('venta') || h.includes('sale') || h.includes('monto'))
+    const empIdx = headers.findIndex(h => h.includes('email') || h.includes('empleado') || h.includes('nombre'))
+    // Prefer "corregidas" column, fall back to "ventas"
+    let salesIdx = headers.findIndex(h => h.includes('corregida'))
+    if (salesIdx < 0) salesIdx = headers.findIndex(h => h.includes('venta') || h.includes('sale') || h.includes('monto'))
     if (dateIdx < 0 || empIdx < 0 || salesIdx < 0) {
-      setErr('El CSV debe tener columnas: Fecha, Empleado (email o nombre), Ventas')
+      setErr('El CSV debe tener columnas: Fecha, Empleado/Email, Ventas corregidas')
       return
     }
     const parsed = []
     for (let i = 1; i < lines.length; i++) {
-      const cols = lines[i].split(',').map(c => c.replace(/^"|"$/g,'').trim())
+      const cols = lines[i].split(',').map(c => c.replace(/^"|"$/g, '').trim())
       if (!cols[dateIdx] || !cols[empIdx]) continue
-      const rawDate = cols[dateIdx]
-      // Accept YYYY-MM-DD or DD/MM/YYYY
-      let date = rawDate
-      if (/^\d{2}\/\d{2}\/\d{4}$/.test(rawDate)) {
-        const [d,m,y] = rawDate.split('/')
+      const rawSales = cols[salesIdx]
+      if (!rawSales || rawSales === '0' || rawSales === '') continue // Skip empty corrections
+      let date = cols[dateIdx]
+      if (/^\d{2}\/\d{2}\/\d{4}$/.test(date)) {
+        const [d, m, y] = date.split('/')
         date = `${y}-${m}-${d}`
       }
       const empQuery = cols[empIdx].toLowerCase()
       const emp = allEmps.find(e => e.email?.toLowerCase() === empQuery || e.name?.toLowerCase() === empQuery)
-      const amount = parseFloat(cols[salesIdx].replace(/[$,\s]/g,'')) || 0
-      parsed.push({ date, empQuery, emp, amount, valid: !!emp && !!date && amount > 0 })
+      const amount = parseFloat(rawSales.replace(/[$,\s]/g, '')) || 0
+      // Find existing attendance record
+      const existing = emp ? att.find(r => r.employee_id === emp.id && r.date === date) : null
+      // Determine site
+      let siteId = existing?.site_id
+      if (!siteId && emp) {
+        const assignment = (employeeSiteAssignments || []).find(a => a.employee_id === emp.id)
+        siteId = assignment?.site_id
+      }
+      parsed.push({
+        date, empQuery, emp, amount,
+        existing, siteId,
+        action: existing ? 'update' : 'create',
+        valid: !!emp && !!date && amount > 0 && (existing || siteId),
+        reason: !emp ? 'Empleado no encontrado' : !date ? 'Fecha inválida' : amount <= 0 ? 'Monto inválido' : (!existing && !siteId) ? 'Sin sucursal asignada' : '',
+      })
     }
     setRows(parsed)
-    setPreview(parsed.slice(0, 8))
     setErr('')
+    setStep('preview')
   }
 
   function handleFile(e) {
@@ -2482,66 +2722,194 @@ function SalesImportModal({ sites, allEmps, onClose, onDone, setToast }) {
     const valid = rows.filter(r => r.valid)
     if (!valid.length) return
     setSaving(true)
-    let updated = 0, skipped = 0
+    let updated = 0, created = 0, errors = 0
     for (const row of valid) {
-      const { data: existing } = await supabase.from('attendance').select('id, sales_amount').eq('employee_id', row.emp.id).eq('date', row.date).maybeSingle()
-      if (existing) {
-        await supabase.from('attendance').update({ sales_amount: row.amount }).eq('id', existing.id)
-        updated++
-      } else {
-        skipped++
+      if (row.action === 'update' && row.existing) {
+        const originalSales = row.existing.sales_original != null ? row.existing.sales_original : row.existing.sales_amount
+        const { error } = await supabase.from('attendance').update({
+          sales_amount: row.amount,
+          sales_original: originalSales,
+          sales_corrected_by: adminUser?.id,
+          sales_corrected_at: new Date().toISOString(),
+          sales_correction_note: 'Importación CSV',
+        }).eq('id', row.existing.id)
+        if (error) errors++; else updated++
+      } else if (row.action === 'create') {
+        const companyId = sites.find(s => s.id === row.siteId)?.company_id || adminUser?.company_id
+        const { error } = await supabase.from('attendance').insert({
+          employee_id: row.emp.id,
+          site_id: row.siteId,
+          company_id: companyId,
+          date: row.date,
+          status: 'absent',
+          sales_amount: row.amount,
+          sales_corrected_by: adminUser?.id,
+          sales_corrected_at: new Date().toISOString(),
+          sales_correction_note: 'Venta sin asistencia — importación CSV',
+        })
+        if (error) errors++; else created++
       }
     }
     setSaving(false)
-    setToast(`${updated} ventas actualizadas${skipped > 0 ? `, ${skipped} sin registro de asistencia (omitidas)` : ''}`)
+    const parts = []
+    if (updated) parts.push(`${updated} actualizadas`)
+    if (created) parts.push(`${created} nuevas creadas`)
+    if (errors) parts.push(`${errors} errores`)
+    setToast(parts.join(', '))
     onDone()
   }
 
-  const validCount = rows.filter(r => r.valid).length
-  const invalidCount = rows.filter(r => !r.valid).length
+  const validRows = rows.filter(r => r.valid)
+  const invalidRows = rows.filter(r => !r.valid)
+  const updateCount = validRows.filter(r => r.action === 'update').length
+  const createCount = validRows.filter(r => r.action === 'create').length
 
   return (
-    <div onClick={onClose} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.65)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 400, padding: 16 }}>
-      <div onClick={e => e.stopPropagation()} style={{ background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: 14, padding: 24, width: '100%', maxWidth: 520 }}>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
-          <div style={{ fontSize: 15, fontWeight: 700 }}>⬆ Importar ventas</div>
-          <button onClick={onClose} style={{ background: 'none', border: 'none', color: '#64748b', fontSize: 20, cursor: 'pointer' }}>×</button>
+    <div onClick={onClose} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 400, padding: 16 }}>
+      <div onClick={e => e.stopPropagation()} style={{ background: '#ffffff', borderRadius: 14, padding: 0, width: '100%', maxWidth: 580, maxHeight: '90vh', overflow: 'auto' }}>
+        {/* Header */}
+        <div style={{ padding: '18px 24px 14px', borderBottom: '1px solid #e2e8f0', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <div style={{ fontSize: 15, fontWeight: 700 }}>💰 Gestión de ventas</div>
+          <button onClick={onClose} style={{ background: 'none', border: 'none', color: '#94a3b8', fontSize: 18, cursor: 'pointer' }}>✕</button>
         </div>
-        <div style={{ fontSize: 11, color: '#64748b', marginBottom: 14, lineHeight: 1.6 }}>
-          Sube un CSV con columnas: <strong style={{ color: '#0f172a' }}>Fecha</strong> (YYYY-MM-DD o DD/MM/YYYY), <strong style={{ color: '#0f172a' }}>Empleado</strong> (email o nombre), <strong style={{ color: '#0f172a' }}>Ventas</strong> (monto).<br />
-          Solo actualiza registros que ya existen en asistencia.
+
+        <div style={{ padding: '16px 24px 20px' }}>
+
+          {/* Step: Choose */}
+          {step === 'choose' && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+              <div style={{ fontSize: 12, color: '#64748b', marginBottom: 4, lineHeight: 1.6 }}>
+                Descarga una plantilla con los empleados y sus ventas actuales, corrige en Excel, y vuelve a subir.
+                <br /><span style={{ color: '#f59e0b', fontWeight: 600 }}>Si un día no tiene registro de asistencia, se creará automáticamente al importar.</span>
+              </div>
+              <button onClick={() => setStep('download')}
+                style={{ padding: '14px 16px', borderRadius: 10, border: '1.5px solid rgba(16,185,129,.3)', background: 'rgba(16,185,129,.06)', cursor: 'pointer', textAlign: 'left', fontFamily: 'inherit', display: 'flex', alignItems: 'center', gap: 12 }}>
+                <span style={{ fontSize: 22 }}>⬇</span>
+                <div>
+                  <div style={{ fontSize: 13, fontWeight: 700, color: '#10b981' }}>Descargar plantilla</div>
+                  <div style={{ fontSize: 10, color: '#64748b', marginTop: 2 }}>CSV con empleados, fechas y ventas actuales</div>
+                </div>
+              </button>
+              <button onClick={() => setStep('upload')}
+                style={{ padding: '14px 16px', borderRadius: 10, border: '1.5px solid rgba(139,92,246,.3)', background: 'rgba(139,92,246,.06)', cursor: 'pointer', textAlign: 'left', fontFamily: 'inherit', display: 'flex', alignItems: 'center', gap: 12 }}>
+                <span style={{ fontSize: 22 }}>⬆</span>
+                <div>
+                  <div style={{ fontSize: 13, fontWeight: 700, color: '#a78bfa' }}>Subir ventas corregidas</div>
+                  <div style={{ fontSize: 10, color: '#64748b', marginTop: 2 }}>Importar CSV con correcciones o nuevas ventas</div>
+                </div>
+              </button>
+            </div>
+          )}
+
+          {/* Step: Download config */}
+          {step === 'download' && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+              <button onClick={() => setStep('choose')} style={{ alignSelf: 'flex-start', background: 'none', border: 'none', color: '#3b82f6', fontSize: 11, cursor: 'pointer', fontFamily: 'inherit', padding: 0 }}>← Volver</button>
+              <div style={{ fontSize: 12, color: '#64748b', lineHeight: 1.5 }}>
+                Configura el rango de fechas y sucursal para la plantilla. Se incluirán todos los empleados asignados con sus ventas actuales.
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+                <div>
+                  <span style={lblS}>Desde</span>
+                  <input type="date" value={dlFrom} onChange={e => setDlFrom(e.target.value)} style={sS} />
+                </div>
+                <div>
+                  <span style={lblS}>Hasta</span>
+                  <input type="date" value={dlTo} onChange={e => setDlTo(e.target.value)} style={sS} />
+                </div>
+              </div>
+              <div>
+                <span style={lblS}>Sucursal</span>
+                <select value={dlSite} onChange={e => setDlSite(e.target.value)} style={sS}>
+                  <option value="">Todas</option>
+                  {sites.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+                </select>
+              </div>
+              <button onClick={downloadTemplate}
+                style={{ padding: '11px', borderRadius: 9, border: 'none', background: '#10b981', color: '#fff', fontSize: 13, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>
+                ⬇ Descargar plantilla CSV
+              </button>
+              <div style={{ fontSize: 10, color: '#94a3b8', lineHeight: 1.5, background: '#f8fafc', borderRadius: 8, padding: 10 }}>
+                <strong>Instrucciones:</strong><br />
+                1. Abre el CSV en Excel<br />
+                2. La columna "Ventas corregidas" está vacía — llena solo las que quieras cambiar<br />
+                3. Si dejas vacío, no se modifica<br />
+                4. Puedes agregar filas para días sin registro de asistencia<br />
+                5. Guarda como CSV y súbelo con "Subir ventas corregidas"
+              </div>
+            </div>
+          )}
+
+          {/* Step: Upload */}
+          {step === 'upload' && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+              <button onClick={() => setStep('choose')} style={{ alignSelf: 'flex-start', background: 'none', border: 'none', color: '#3b82f6', fontSize: 11, cursor: 'pointer', fontFamily: 'inherit', padding: 0 }}>← Volver</button>
+              <div style={{ fontSize: 11, color: '#64748b', lineHeight: 1.6 }}>
+                Sube un CSV con columnas: <strong style={{ color: '#0f172a' }}>Fecha</strong>, <strong style={{ color: '#0f172a' }}>Email</strong> (o Empleado), <strong style={{ color: '#0f172a' }}>Ventas corregidas</strong>.<br />
+                Solo se procesan filas con monto {'>'} 0 en la columna de corrección.
+              </div>
+              <input ref={fileRef} type="file" accept=".csv,.txt" style={{ display: 'none' }} onChange={handleFile} />
+              <button onClick={() => fileRef.current?.click()}
+                style={{ padding: '16px', borderRadius: 10, border: '1.5px dashed rgba(139,92,246,.4)', background: 'rgba(139,92,246,.04)', color: '#a78bfa', fontSize: 12, cursor: 'pointer', fontFamily: 'inherit', textAlign: 'center' }}>
+                📂 Seleccionar archivo CSV
+              </button>
+              {err && <div style={{ fontSize: 11, color: '#ef4444' }}>{err}</div>}
+            </div>
+          )}
+
+          {/* Step: Preview */}
+          {step === 'preview' && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+              <button onClick={() => { setStep('upload'); setRows([]) }} style={{ alignSelf: 'flex-start', background: 'none', border: 'none', color: '#3b82f6', fontSize: 11, cursor: 'pointer', fontFamily: 'inherit', padding: 0 }}>← Volver</button>
+
+              {/* Summary badges */}
+              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                {updateCount > 0 && <span style={{ fontSize: 10, padding: '3px 10px', borderRadius: 12, background: 'rgba(59,130,246,.1)', color: '#3b82f6', fontWeight: 600 }}>✏️ {updateCount} correcciones</span>}
+                {createCount > 0 && <span style={{ fontSize: 10, padding: '3px 10px', borderRadius: 12, background: 'rgba(16,185,129,.1)', color: '#10b981', fontWeight: 600 }}>+ {createCount} nuevos registros</span>}
+                {invalidRows.length > 0 && <span style={{ fontSize: 10, padding: '3px 10px', borderRadius: 12, background: 'rgba(239,68,68,.1)', color: '#ef4444', fontWeight: 600 }}>✗ {invalidRows.length} con error</span>}
+              </div>
+
+              <div style={{ background: '#fff', borderRadius: 8, overflow: 'hidden', maxHeight: 280, overflowY: 'auto', border: '1px solid #e2e8f0' }}>
+                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 10 }}>
+                  <thead><tr>{['Fecha', 'Empleado', 'Venta', 'Acción', ''].map(h => <th key={h} style={{ textAlign: 'left', padding: '6px 10px', color: '#94a3b8', fontWeight: 600, borderBottom: '1px solid #e2e8f0', whiteSpace: 'nowrap' }}>{h}</th>)}</tr></thead>
+                  <tbody>
+                    {rows.slice(0, 50).map((r, i) => (
+                      <tr key={i} style={{ borderBottom: '1px solid rgba(226,232,240,.3)', background: !r.valid ? 'rgba(239,68,68,.03)' : r.action === 'create' ? 'rgba(16,185,129,.03)' : 'transparent' }}>
+                        <td style={{ padding: '5px 10px', color: '#64748b' }}>{r.date}</td>
+                        <td style={{ padding: '5px 10px', color: r.emp ? '#0f172a' : '#ef4444' }}>{r.emp ? r.emp.name : `¿${r.empQuery}?`}</td>
+                        <td style={{ padding: '5px 10px', color: '#10b981', fontFamily: "'JetBrains Mono'" }}>${Number(r.amount).toLocaleString('es-MX')}</td>
+                        <td style={{ padding: '5px 10px' }}>
+                          {r.valid ? (
+                            r.action === 'update'
+                              ? <span style={{ fontSize: 9, padding: '2px 6px', borderRadius: 4, background: 'rgba(59,130,246,.1)', color: '#3b82f6', fontWeight: 600 }}>Corregir</span>
+                              : <span style={{ fontSize: 9, padding: '2px 6px', borderRadius: 4, background: 'rgba(16,185,129,.1)', color: '#10b981', fontWeight: 600 }}>Crear nuevo</span>
+                          ) : (
+                            <span style={{ fontSize: 9, color: '#ef4444' }}>{r.reason}</span>
+                          )}
+                        </td>
+                        <td style={{ padding: '5px 10px' }}>
+                          {r.valid ? <span style={{ color: '#10b981' }}>✓</span> : <span style={{ color: '#ef4444' }}>✗</span>}
+                        </td>
+                      </tr>
+                    ))}
+                    {rows.length > 50 && <tr><td colSpan={5} style={{ padding: '6px 10px', color: '#94a3b8', fontSize: 10 }}>...y {rows.length - 50} filas más</td></tr>}
+                  </tbody>
+                </table>
+              </div>
+
+              {createCount > 0 && (
+                <div style={{ fontSize: 10, color: '#f59e0b', background: 'rgba(245,158,11,.06)', border: '1px solid rgba(245,158,11,.2)', borderRadius: 8, padding: '8px 12px', lineHeight: 1.5 }}>
+                  ⚠️ Se crearán <strong>{createCount}</strong> registros nuevos de venta sin asistencia. Se marcarán como corregidos por <strong>{adminUser?.name || adminUser?.email}</strong>.
+                </div>
+              )}
+
+              <button onClick={handleSave} disabled={validRows.length === 0 || saving}
+                style={{ padding: '12px', borderRadius: 9, border: 'none', background: validRows.length > 0 && !saving ? '#a78bfa' : '#e2e8f0', color: validRows.length > 0 && !saving ? '#fff' : '#94a3b8', fontSize: 13, fontWeight: 700, cursor: validRows.length > 0 && !saving ? 'pointer' : 'not-allowed', fontFamily: 'inherit' }}>
+                {saving ? 'Procesando...' : `Aplicar ${validRows.length} cambios`}
+              </button>
+            </div>
+          )}
         </div>
-        <input ref={fileRef} type='file' accept='.csv,.txt' style={{ display: 'none' }} onChange={handleFile} />
-        <button onClick={() => fileRef.current?.click()}
-          style={{ width: '100%', padding: '10px', borderRadius: 9, border: '1px dashed rgba(139,92,246,.4)', background: 'rgba(139,92,246,.06)', color: '#a78bfa', fontSize: 12, cursor: 'pointer', fontFamily: 'inherit', marginBottom: 12 }}>
-          📂 Seleccionar archivo CSV
-        </button>
-        {err && <div style={{ fontSize: 11, color: '#ef4444', marginBottom: 10 }}>{err}</div>}
-        {rows.length > 0 && (
-          <>
-            <div style={{ fontSize: 11, marginBottom: 8, display: 'flex', gap: 12 }}>
-              <span style={{ color: '#10b981' }}>✓ {validCount} válidos</span>
-              {invalidCount > 0 && <span style={{ color: '#ef4444' }}>✗ {invalidCount} no encontrados</span>}
-            </div>
-            <div style={{ background: '#ffffff', borderRadius: 8, overflow: 'hidden', marginBottom: 14, maxHeight: 200, overflowY: 'auto' }}>
-              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11 }}>
-                <thead><tr>{['Fecha','Empleado','Ventas','Estado'].map(h => <th key={h} style={{ textAlign: 'left', padding: '6px 10px', color: '#94a3b8', fontWeight: 600, borderBottom: '1px solid #e2e8f0' }}>{h}</th>)}</tr></thead>
-                <tbody>{preview.map((r, i) => (
-                  <tr key={i} style={{ borderBottom: '1px solid rgba(226,232,240,.3)' }}>
-                    <td style={{ padding: '5px 10px', color: '#64748b' }}>{r.date}</td>
-                    <td style={{ padding: '5px 10px', color: r.emp ? '#0f172a' : '#ef4444' }}>{r.emp ? r.emp.name : `¿${r.empQuery}?`}</td>
-                    <td style={{ padding: '5px 10px', color: '#10b981', fontFamily: "'JetBrains Mono'" }}>${Number(r.amount).toLocaleString('es-MX')}</td>
-                    <td style={{ padding: '5px 10px' }}>{r.valid ? <span style={{ color: '#10b981' }}>✓</span> : <span style={{ color: '#ef4444' }}>✗</span>}</td>
-                  </tr>
-                ))}</tbody>
-              </table>
-            </div>
-            <button onClick={handleSave} disabled={validCount === 0 || saving}
-              style={{ width: '100%', padding: '11px', borderRadius: 9, border: 'none', background: validCount > 0 && !saving ? '#a78bfa' : '#e2e8f0', color: validCount > 0 && !saving ? '#fff' : '#94a3b8', fontSize: 13, fontWeight: 700, cursor: validCount > 0 && !saving ? 'pointer' : 'not-allowed', fontFamily: 'inherit' }}>
-              {saving ? 'Guardando...' : `Actualizar ${validCount} registros`}
-            </button>
-          </>
-        )}
       </div>
     </div>
   )
@@ -2694,7 +3062,7 @@ function CompetitionsPanel({ competitions, compSites, sites, allEmps, att, admin
       else if (comp.metric === 'punctuality') scores[r.employee_id] += r.status === 'on_time' ? 1 : 0
       else scores[r.employee_id] += parseFloat(r.sales_amount) || 0
     })
-    return Object.entries(scores).sort((a, b) => b[1] - a[1]).map(([empId, score], i) => ({
+    return Object.entries(scores).filter(([, s]) => s > 0).sort((a, b) => b[1] - a[1]).map(([empId, score], i) => ({
       rank: i + 1, emp: allEmps.find(e => e.id === empId), score
     })).filter(r => r.emp)
   }
@@ -2759,7 +3127,7 @@ function CompetitionsPanel({ competitions, compSites, sites, allEmps, att, admin
               <div style={{ fontSize: 12, color: '#94a3b8', padding: '20px 0', textAlign: 'center' }}>Sin datos aún para este período.</div>
             ) : (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                {ranking.slice(0, 20).map(({ rank, emp, score }) => {
+                {ranking.slice(0, 3).map(({ rank, emp, score }) => {
                   const maxScore = ranking[0]?.score || 1
                   const pct = Math.round(score / maxScore * 100)
                   return (
@@ -2794,6 +3162,7 @@ function CompetitionModal({ data, sites, allEmps, adminUser, permittedSiteIds, o
   const [startDate, setStartDate] = useState(data?.start_date || '')
   const [endDate, setEndDate] = useState(data?.end_date || '')
   const [active, setActive] = useState(data?.active !== false)
+  const [minSales, setMinSales] = useState(data?.min_sales != null ? String(data.min_sales) : '')
   const [selSiteIds, setSelSiteIds] = useState(data ? [] : [])
   const [err, setErr] = useState('')
 
@@ -2811,7 +3180,7 @@ function CompetitionModal({ data, sites, allEmps, adminUser, permittedSiteIds, o
     if (!name.trim()) { setErr('El nombre es obligatorio'); return }
     if (selSiteIds.length === 0) { setErr('Selecciona al menos una sucursal'); return }
     if (type === 'custom' && !startDate) { setErr('Indica la fecha de inicio'); return }
-    const formData = { name: name.trim(), type, metric, prize_text: prize || null, active, ...(data?.id ? { id: data.id } : {}), ...(type === 'custom' ? { start_date: startDate, end_date: endDate || null } : { start_date: null, end_date: null }) }
+    const formData = { name: name.trim(), type, metric, prize_text: prize || null, active, min_sales: (type === 'auto_yesterday' && minSales !== '') ? (parseFloat(minSales) || null) : null, ...(data?.id ? { id: data.id } : {}), ...(type === 'custom' ? { start_date: startDate, end_date: endDate || null } : { start_date: null, end_date: null }) }
     await onSave(formData, selSiteIds)
   }
 
@@ -2834,6 +3203,7 @@ function CompetitionModal({ data, sites, allEmps, adminUser, permittedSiteIds, o
             <select value={type} onChange={e => setType(e.target.value)} style={{ width: '100%', background: '#ffffff', border: '1px solid #e2e8f0', color: '#0f172a', fontSize: 13, padding: '9px 8px', borderRadius: 8, fontFamily: 'inherit' }}>
               <option value='auto_week'>Semana (auto-reset)</option>
               <option value='auto_month'>Mes (auto-reset)</option>
+              <option value='auto_yesterday'>Mejor de ayer</option>
               <option value='custom'>Personalizada (fechas)</option>
             </select>
           </div>
@@ -2846,6 +3216,24 @@ function CompetitionModal({ data, sites, allEmps, adminUser, permittedSiteIds, o
             </select>
           </div>
         </div>
+
+        {type === 'auto_yesterday' && (
+          <div style={{ marginBottom: 14 }}>
+            <div style={{ background: 'rgba(245,158,11,.08)', border: '1px solid rgba(245,158,11,.25)', borderRadius: 8, padding: '10px 12px', marginBottom: 10, fontSize: 11, color: '#92400e' }}>
+              Al hacer check-in, los empleados verán quién fue el <b>mejor vendedor de ayer</b> y la <b>mejor tienda de ayer</b> entre las sucursales participantes.
+            </div>
+            <div style={{ fontSize: 10, color: '#94a3b8', marginBottom: 5, textTransform: 'uppercase', letterSpacing: '.5px' }}>Venta mínima para aparecer (opcional)</div>
+            <div style={{ position: 'relative' }}>
+              <span style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', fontSize: 13, color: '#94a3b8', pointerEvents: 'none' }}>$</span>
+              <input type='number' min='0' value={minSales} onChange={e => setMinSales(e.target.value)}
+                placeholder='Ej: 500 — deja vacío para incluir todos'
+                style={{ width: '100%', background: '#ffffff', border: '1px solid #e2e8f0', color: '#0f172a', fontSize: 13, padding: '9px 12px 9px 22px', borderRadius: 8, fontFamily: 'inherit', boxSizing: 'border-box' }} />
+            </div>
+            {minSales !== '' && parseFloat(minSales) > 0 && (
+              <div style={{ fontSize: 10, color: '#64748b', marginTop: 4 }}>Solo aparecerán vendedores con al menos ${Number(parseFloat(minSales)).toLocaleString('es-MX')} en ventas el día anterior.</div>
+            )}
+          </div>
+        )}
 
         {type === 'custom' && (
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 14 }}>
@@ -2890,6 +3278,535 @@ function CompetitionModal({ data, sites, allEmps, adminUser, permittedSiteIds, o
           {!isNew && <button onClick={() => onDelete(data.id)} style={{ padding: '9px 14px', borderRadius: 8, border: '1px solid rgba(239,68,68,.3)', background: 'rgba(239,68,68,.08)', color: '#ef4444', fontSize: 12, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}>Eliminar</button>}
           <button onClick={onClose} style={{ flex: 1, padding: '9px', borderRadius: 8, border: '1px solid #e2e8f0', background: 'transparent', color: '#64748b', fontSize: 12, cursor: 'pointer', fontFamily: 'inherit' }}>Cancelar</button>
           <button onClick={handleSave} style={{ flex: 2, padding: '9px', borderRadius: 8, border: 'none', background: '#f59e0b', color: '#fff', fontSize: 12, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>Guardar</button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ─── Attendance Table with Sales Correction ─────────────────────────────────────
+function AttendanceTable({ filteredAtt, allEmps, sites, adminUser, adminUsers, onEmpClick, onRefresh, setToast }) {
+  const [editing, setEditing] = useState(null) // { id, sales_amount, note }
+  const [saving, setSaving] = useState(false)
+  const thS = { textAlign: 'left', fontSize: 9, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '.6px', color: '#94a3b8', padding: '9px 12px', borderBottom: '1px solid #e2e8f0', whiteSpace: 'nowrap' }
+  const tdS = { padding: '9px 12px', fontSize: 11, fontFamily: "'JetBrains Mono'" }
+  async function saveCorrection() {
+    if (!editing) return
+    setSaving(true)
+    const row = filteredAtt.find(r => r.id === editing.id)
+    const originalSales = row.sales_original != null ? row.sales_original : row.sales_amount
+    const { error } = await supabase.from('attendance').update({
+      sales_amount: Number(editing.sales_amount) || 0,
+      sales_original: originalSales,
+      sales_corrected_by: adminUser.id,
+      sales_corrected_at: new Date().toISOString(),
+      sales_correction_note: editing.note || null,
+    }).eq('id', editing.id)
+    setSaving(false)
+    if (error) { setToast('Error: ' + error.message); return }
+    setToast('Venta corregida')
+    setEditing(null)
+    onRefresh()
+  }
+  const correctorName = (id) => {
+    if (!id) return null
+    const au = adminUsers?.find(a => a.id === id)
+    return au?.name || au?.email || id.slice(0, 8)
+  }
+  return (
+    <div style={{ background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: 10, overflow: 'hidden' }}>
+      <div style={{ overflowX: 'auto' }}>
+        <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 780 }}>
+          <thead><tr>
+            {['Fecha','Empleado','Sucursal','Entrada','Salida','Horas','Ventas','Estado',''].map(h => (
+              <th key={h} style={thS}>{h}</th>
+            ))}
+          </tr></thead>
+          <tbody>
+            {filteredAtt.slice(0, 300).map(r => {
+              const emp = allEmps.find(e => e.id === r.employee_id)
+              const site = sites.find(s => s.id === r.site_id)
+              const tz = site?.timezone || 'America/Cancun'
+              const isEditing = editing?.id === r.id
+              const wasCorrected = !!r.sales_corrected_by
+              return (
+                <tr key={r.id} style={{ borderBottom: '1px solid rgba(226,232,240,.3)', background: isEditing ? 'rgba(59,130,246,.04)' : 'transparent' }}>
+                  <td style={tdS}>{fmtDate(r.date)}</td>
+                  <td style={{ ...tdS, fontFamily: 'inherit' }}>
+                    <button onClick={() => onEmpClick(emp)} style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', textAlign: 'left', fontFamily: 'inherit' }}>
+                      <span style={{ fontSize: 12, fontWeight: 600, color: '#3b82f6', textDecoration: 'underline', textDecorationColor: 'rgba(59,130,246,.3)' }}>{emp?.name || '?'}</span>
+                    </button>
+                  </td>
+                  <td style={{ ...tdS, fontFamily: 'inherit', color: '#64748b' }}>{site?.name || '?'}</td>
+                  <td style={tdS}>{fmtTime(r.check_in, tz)}</td>
+                  <td style={tdS}>{fmtTime(r.check_out, tz)}</td>
+                  <td style={tdS}>{fmtHours(r.hours_worked)}</td>
+                  <td style={{ ...tdS, padding: '4px 8px', minWidth: 100 }}>
+                    {isEditing ? (
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                        <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
+                          <span style={{ color: '#94a3b8', fontSize: 11 }}>$</span>
+                          <input type="number" value={editing.sales_amount} onChange={e => setEditing({ ...editing, sales_amount: e.target.value })}
+                            style={{ width: 80, padding: '3px 6px', borderRadius: 4, border: '1px solid #3b82f6', fontSize: 11, fontFamily: "'JetBrains Mono'", outline: 'none', background: '#fff' }}
+                            autoFocus />
+                        </div>
+                        <input placeholder="Nota (opcional)" value={editing.note} onChange={e => setEditing({ ...editing, note: e.target.value })}
+                          style={{ width: '100%', padding: '3px 6px', borderRadius: 4, border: '1px solid #e2e8f0', fontSize: 10, outline: 'none', fontFamily: 'inherit' }} />
+                        <div style={{ display: 'flex', gap: 4 }}>
+                          <button onClick={saveCorrection} disabled={saving}
+                            style={{ padding: '2px 8px', borderRadius: 4, border: 'none', background: '#3b82f6', color: '#fff', fontSize: 9, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}>
+                            {saving ? '...' : '✓ Guardar'}
+                          </button>
+                          <button onClick={() => setEditing(null)}
+                            style={{ padding: '2px 8px', borderRadius: 4, border: '1px solid #e2e8f0', background: '#fff', color: '#64748b', fontSize: 9, cursor: 'pointer', fontFamily: 'inherit' }}>
+                            Cancelar
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                        <span style={{ color: r.sales_amount > 0 ? '#10b981' : '#94a3b8', cursor: 'pointer' }}
+                          onClick={() => setEditing({ id: r.id, sales_amount: r.sales_amount || 0, note: r.sales_correction_note || '' })}
+                          title="Click para corregir">
+                          {r.sales_amount > 0 ? '$' + Number(r.sales_amount).toLocaleString('es-MX') : '–'}
+                          {wasCorrected && <span style={{ marginLeft: 4, fontSize: 8, color: '#f59e0b' }} title={'Corregido por ' + correctorName(r.sales_corrected_by) + (r.sales_correction_note ? ': ' + r.sales_correction_note : '')}>✏️</span>}
+                        </span>
+                        {wasCorrected && r.sales_original != null && (
+                          <span style={{ fontSize: 9, color: '#94a3b8' }} title={'Original: $' + Number(r.sales_original).toLocaleString('es-MX')}>
+                            Antes: ${Number(r.sales_original).toLocaleString('es-MX')}
+                          </span>
+                        )}
+                      </div>
+                    )}
+                  </td>
+                  <td style={{ ...tdS, fontFamily: 'inherit' }}>
+                    <span style={{ padding: '2px 8px', borderRadius: 4, fontSize: 10, fontWeight: 600, color: stClr[r.status] || '#64748b', background: stBg[r.status] || 'rgba(136,146,168,.1)' }}>
+                      {stLbl[r.status] || r.status || '–'}
+                    </span>
+                  </td>
+                  <td style={{ ...tdS, fontFamily: 'inherit', padding: '4px 8px' }}>
+                    {!isEditing && (
+                      <button onClick={() => setEditing({ id: r.id, sales_amount: r.sales_amount || 0, note: r.sales_correction_note || '' })}
+                        style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 12, opacity: 0.4, padding: 2 }}
+                        title="Corregir venta">✏️</button>
+                    )}
+                  </td>
+                </tr>
+              )
+            })}
+            {filteredAtt.length === 0 && <tr><td colSpan={9} style={{ padding: 24, textAlign: 'center', color: '#94a3b8', fontSize: 12 }}>Sin registros con los filtros seleccionados</td></tr>}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  )
+}
+
+// ─── Export Modal ────────────────────────────────────────────────────────────────
+const REPORT_TYPES = [
+  { id: 'detail', label: 'Detalle', desc: 'Cada registro individual de asistencia' },
+  { id: 'by_employee', label: 'Por empleado', desc: 'Resumen agrupado por empleado' },
+  { id: 'by_site', label: 'Por sucursal', desc: 'Resumen agrupado por sucursal' },
+  { id: 'by_period', label: 'Por período', desc: 'Resumen por día/semana/mes' },
+  { id: 'payroll', label: 'Nómina', desc: 'Formato listo para nómina' },
+]
+const DETAIL_COLS = [
+  { id: 'date', label: 'Fecha', default: true },
+  { id: 'employee', label: 'Empleado', default: true },
+  { id: 'email', label: 'Email', default: false },
+  { id: 'role', label: 'Rol/Puesto', default: false },
+  { id: 'site', label: 'Sucursal', default: true },
+  { id: 'check_in', label: 'Entrada', default: true },
+  { id: 'check_out', label: 'Salida', default: true },
+  { id: 'hours', label: 'Horas trabajadas', default: true },
+  { id: 'lunch', label: 'Comida (inicio/fin)', default: false },
+  { id: 'break_time', label: 'Descanso (inicio/fin)', default: false },
+  { id: 'sales', label: 'Ventas', default: true },
+  { id: 'sales_original', label: 'Ventas originales', default: false },
+  { id: 'sales_corrected', label: 'Corregido por', default: false },
+  { id: 'sales_note', label: 'Nota de corrección', default: false },
+  { id: 'status', label: 'Estado', default: true },
+  { id: 'gps_distance', label: 'Distancia GPS (m)', default: false },
+  { id: 'gps_coords', label: 'Coordenadas GPS', default: false },
+]
+
+function ExportModal({ att, allEmps, sites, schedules, goals, adminUsers, onClose, setToast }) {
+  const [reportType, setReportType] = useState('detail')
+  const [cols, setCols] = useState(() => DETAIL_COLS.filter(c => c.default).map(c => c.id))
+  const [fSites, setFSites] = useState([])
+  const [fEmps, setFEmps] = useState([])
+  const [fStatuses, setFStatuses] = useState([])
+  const [fFrom, setFFrom] = useState('')
+  const [fTo, setFTo] = useState('')
+  const [periodGroup, setPeriodGroup] = useState('day')
+  const [savedConfigs, setSavedConfigs] = useState(() => {
+    try { return JSON.parse(localStorage.getItem('worktic_export_configs') || '[]') } catch { return [] }
+  })
+  const [configName, setConfigName] = useState('')
+  const [showSaveInput, setShowSaveInput] = useState(false)
+
+  const toggleCol = (id) => setCols(prev => prev.includes(id) ? prev.filter(c => c !== id) : [...prev, id])
+  const toggleArr = (arr, setArr, val) => setArr(prev => prev.includes(val) ? prev.filter(v => v !== val) : [...prev, val])
+
+  const filtered = att.filter(r => {
+    if (fSites.length && !fSites.includes(r.site_id)) return false
+    if (fEmps.length && !fEmps.includes(r.employee_id)) return false
+    if (fStatuses.length && !fStatuses.includes(r.status)) return false
+    if (fFrom && r.date < fFrom) return false
+    if (fTo && r.date > fTo) return false
+    return true
+  })
+
+  function saveConfig() {
+    if (!configName.trim()) return
+    const config = { name: configName.trim(), reportType, cols, fSites, fEmps, fStatuses, fFrom, fTo, periodGroup, savedAt: new Date().toISOString() }
+    const updated = [...savedConfigs.filter(c => c.name !== config.name), config]
+    localStorage.setItem('worktic_export_configs', JSON.stringify(updated))
+    setSavedConfigs(updated)
+    setShowSaveInput(false)
+    setConfigName('')
+    setToast('Configuración guardada')
+  }
+
+  function loadConfig(config) {
+    setReportType(config.reportType || 'detail')
+    setCols(config.cols || DETAIL_COLS.filter(c => c.default).map(c => c.id))
+    setFSites(config.fSites || [])
+    setFEmps(config.fEmps || [])
+    setFStatuses(config.fStatuses || [])
+    setFFrom(config.fFrom || '')
+    setFTo(config.fTo || '')
+    setPeriodGroup(config.periodGroup || 'day')
+  }
+
+  function deleteConfig(name) {
+    const updated = savedConfigs.filter(c => c.name !== name)
+    localStorage.setItem('worktic_export_configs', JSON.stringify(updated))
+    setSavedConfigs(updated)
+  }
+
+  function generateCSV() {
+    let headers = []
+    let rows = []
+    const empMap = Object.fromEntries(allEmps.map(e => [e.id, e]))
+    const siteMap = Object.fromEntries(sites.map(s => [s.id, s]))
+    const adminMap = Object.fromEntries((adminUsers || []).map(a => [a.id, a]))
+    const goalMap = Object.fromEntries((goals || []).map(g => [g.employee_id, g]))
+    const tz = (siteId) => siteMap[siteId]?.timezone || 'America/Cancun'
+    const fmtT = (ts, sid) => ts ? new Date(ts).toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: tz(sid) }) : ''
+
+    if (reportType === 'detail') {
+      const colDefs = {
+        date: { h: 'Fecha', v: r => r.date },
+        employee: { h: 'Empleado', v: r => empMap[r.employee_id]?.name || '?' },
+        email: { h: 'Email', v: r => empMap[r.employee_id]?.email || '' },
+        role: { h: 'Rol', v: r => empMap[r.employee_id]?.role || '' },
+        site: { h: 'Sucursal', v: r => siteMap[r.site_id]?.name || '?' },
+        check_in: { h: 'Entrada', v: r => fmtT(r.check_in, r.site_id) },
+        check_out: { h: 'Salida', v: r => fmtT(r.check_out, r.site_id) },
+        hours: { h: 'Horas', v: r => r.hours_worked || '' },
+        lunch: { h: 'Comida inicio', v: r => fmtT(r.lunch_start, r.site_id), h2: 'Comida fin', v2: r => fmtT(r.lunch_end, r.site_id) },
+        break_time: { h: 'Descanso inicio', v: r => fmtT(r.break_start, r.site_id), h2: 'Descanso fin', v2: r => fmtT(r.break_end, r.site_id) },
+        sales: { h: 'Ventas', v: r => r.sales_amount || 0 },
+        sales_original: { h: 'Ventas originales', v: r => r.sales_original != null ? r.sales_original : '' },
+        sales_corrected: { h: 'Corregido por', v: r => r.sales_corrected_by ? (adminMap[r.sales_corrected_by]?.name || adminMap[r.sales_corrected_by]?.email || '') : '' },
+        sales_note: { h: 'Nota corrección', v: r => r.sales_correction_note || '' },
+        status: { h: 'Estado', v: r => stLbl[r.status] || r.status || '' },
+        gps_distance: { h: 'Distancia GPS (m)', v: r => r.gps_distance_m != null ? r.gps_distance_m : '' },
+        gps_coords: { h: 'Latitud', v: r => r.gps_lat || '', h2: 'Longitud', v2: r => r.gps_lng || '' },
+      }
+      cols.forEach(c => {
+        const d = colDefs[c]
+        if (!d) return
+        headers.push(d.h)
+        if (d.h2) headers.push(d.h2)
+      })
+      rows = filtered.map(r => {
+        const row = []
+        cols.forEach(c => {
+          const d = colDefs[c]
+          if (!d) return
+          row.push(d.v(r))
+          if (d.v2) row.push(d.v2(r))
+        })
+        return row
+      })
+      // Totals row
+      const salesIdx = headers.indexOf('Ventas')
+      const hoursIdx = headers.indexOf('Horas')
+      if (salesIdx >= 0 || hoursIdx >= 0) {
+        const totals = headers.map(() => '')
+        totals[0] = 'TOTALES'
+        if (salesIdx >= 0) totals[salesIdx] = filtered.reduce((s, r) => s + (Number(r.sales_amount) || 0), 0)
+        if (hoursIdx >= 0) totals[hoursIdx] = Math.round(filtered.reduce((s, r) => s + (Number(r.hours_worked) || 0), 0) * 100) / 100
+        rows.push(totals)
+      }
+    } else if (reportType === 'by_employee') {
+      headers = ['Empleado', 'Email', 'Rol', 'Sucursales', 'Días trabajados', 'Horas totales', 'Horas promedio', 'Total ventas', 'Meta semanal', '% Puntualidad', 'Retardos', 'Faltas']
+      const grouped = {}
+      filtered.forEach(r => {
+        if (!grouped[r.employee_id]) grouped[r.employee_id] = []
+        grouped[r.employee_id].push(r)
+      })
+      Object.entries(grouped).forEach(([empId, records]) => {
+        const emp = empMap[empId]
+        const empSites = [...new Set(records.map(r => siteMap[r.site_id]?.name).filter(Boolean))].join(', ')
+        const days = records.filter(r => r.check_in).length
+        const totalHours = Math.round(records.reduce((s, r) => s + (Number(r.hours_worked) || 0), 0) * 100) / 100
+        const avgHours = days > 0 ? Math.round((totalHours / days) * 100) / 100 : 0
+        const totalSales = records.reduce((s, r) => s + (Number(r.sales_amount) || 0), 0)
+        const onTime = records.filter(r => r.status === 'on_time').length
+        const late = records.filter(r => r.status === 'late').length
+        const absent = records.filter(r => r.status === 'absent').length
+        const total = records.length
+        const pct = total > 0 ? Math.round((onTime / total) * 100) : 0
+        const goal = goalMap[empId]?.weekly_goal || ''
+        rows.push([emp?.name || '?', emp?.email || '', emp?.role || '', empSites, days, totalHours, avgHours, totalSales, goal, pct + '%', late, absent])
+      })
+      // Totals row
+      const totals = ['TOTALES', '', '', '', 0, 0, '', 0, '', '', 0, 0]
+      rows.forEach(r => { totals[4] += r[4]; totals[5] += r[5]; totals[7] += r[7]; totals[10] += r[10]; totals[11] += r[11] })
+      totals[5] = Math.round(totals[5] * 100) / 100
+      rows.push(totals)
+    } else if (reportType === 'by_site') {
+      headers = ['Sucursal', 'Empleados', 'Registros', 'Días con actividad', 'Horas totales', 'Horas promedio', 'Total ventas', '% Puntualidad', 'Retardos', 'Faltas']
+      const grouped = {}
+      filtered.forEach(r => {
+        if (!grouped[r.site_id]) grouped[r.site_id] = []
+        grouped[r.site_id].push(r)
+      })
+      Object.entries(grouped).forEach(([siteId, records]) => {
+        const site = siteMap[siteId]
+        const empCount = new Set(records.map(r => r.employee_id)).size
+        const days = new Set(records.map(r => r.date)).size
+        const totalHours = Math.round(records.reduce((s, r) => s + (Number(r.hours_worked) || 0), 0) * 100) / 100
+        const avgHours = records.length > 0 ? Math.round((totalHours / records.length) * 100) / 100 : 0
+        const totalSales = records.reduce((s, r) => s + (Number(r.sales_amount) || 0), 0)
+        const onTime = records.filter(r => r.status === 'on_time').length
+        const late = records.filter(r => r.status === 'late').length
+        const absent = records.filter(r => r.status === 'absent').length
+        const pct = records.length > 0 ? Math.round((onTime / records.length) * 100) : 0
+        rows.push([site?.name || '?', empCount, records.length, days, totalHours, avgHours, totalSales, pct + '%', late, absent])
+      })
+      const totals = ['TOTALES', '', 0, '', 0, '', 0, '', 0, 0]
+      rows.forEach(r => { totals[2] += r[2]; totals[4] += r[4]; totals[6] += r[6]; totals[8] += r[8]; totals[9] += r[9] })
+      totals[4] = Math.round(totals[4] * 100) / 100
+      rows.push(totals)
+    } else if (reportType === 'by_period') {
+      headers = ['Período', 'Registros', 'Puntuales', 'Tolerancia', 'Retardos', 'Faltas', 'Total horas', 'Total ventas']
+      const grouped = {}
+      filtered.forEach(r => {
+        let key = r.date
+        if (periodGroup === 'week') {
+          const d = new Date(r.date + 'T12:00:00')
+          const day = d.getDay()
+          const diff = day === 0 ? -6 : 1 - day
+          d.setDate(d.getDate() + diff)
+          key = 'Sem ' + d.toLocaleDateString('en-CA')
+        } else if (periodGroup === 'month') {
+          key = r.date.slice(0, 7)
+        }
+        if (!grouped[key]) grouped[key] = []
+        grouped[key].push(r)
+      })
+      Object.entries(grouped).sort((a, b) => a[0].localeCompare(b[0])).forEach(([period, records]) => {
+        rows.push([
+          period, records.length,
+          records.filter(r => r.status === 'on_time').length,
+          records.filter(r => r.status === 'tolerancia').length,
+          records.filter(r => r.status === 'late').length,
+          records.filter(r => r.status === 'absent').length,
+          Math.round(records.reduce((s, r) => s + (Number(r.hours_worked) || 0), 0) * 100) / 100,
+          records.reduce((s, r) => s + (Number(r.sales_amount) || 0), 0),
+        ])
+      })
+      const totals = ['TOTALES', 0, 0, 0, 0, 0, 0, 0]
+      rows.forEach(r => { for (let i = 1; i < 8; i++) totals[i] += r[i] })
+      totals[6] = Math.round(totals[6] * 100) / 100
+      rows.push(totals)
+    } else if (reportType === 'payroll') {
+      headers = ['Empleado', 'Email', 'Rol', 'Sucursal principal', 'Días trabajados', 'Horas totales', 'Total ventas', 'Meta semanal', 'Puntuales', 'Retardos', 'Faltas']
+      const grouped = {}
+      filtered.forEach(r => {
+        if (!grouped[r.employee_id]) grouped[r.employee_id] = []
+        grouped[r.employee_id].push(r)
+      })
+      Object.entries(grouped).forEach(([empId, records]) => {
+        const emp = empMap[empId]
+        const siteCounts = {}
+        records.forEach(r => { siteCounts[r.site_id] = (siteCounts[r.site_id] || 0) + 1 })
+        const mainSiteId = Object.entries(siteCounts).sort((a, b) => b[1] - a[1])[0]?.[0]
+        const days = records.filter(r => r.check_in).length
+        const totalHours = Math.round(records.reduce((s, r) => s + (Number(r.hours_worked) || 0), 0) * 100) / 100
+        const totalSales = records.reduce((s, r) => s + (Number(r.sales_amount) || 0), 0)
+        const goal = goalMap[empId]?.weekly_goal || ''
+        rows.push([emp?.name || '?', emp?.email || '', emp?.role || '', siteMap[mainSiteId]?.name || '?', days, totalHours, totalSales, goal,
+          records.filter(r => r.status === 'on_time').length,
+          records.filter(r => r.status === 'late').length,
+          records.filter(r => r.status === 'absent').length,
+        ])
+      })
+      const totals = ['TOTALES', '', '', '', 0, 0, 0, '', 0, 0, 0]
+      rows.forEach(r => { totals[4] += r[4]; totals[5] += r[5]; totals[6] += r[6]; totals[8] += r[8]; totals[9] += r[9]; totals[10] += r[10] })
+      totals[5] = Math.round(totals[5] * 100) / 100
+      rows.push(totals)
+    }
+
+    const csv = [headers, ...rows].map(r => r.map(v => `"${String(v).replace(/"/g, '""')}"`).join(',')).join('\n')
+    const blob = new Blob(['\ufeff' + csv], { type: 'text/csv;charset=utf-8;' })
+    const url = URL.createObjectURL(blob)
+    const today = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Cancun' })
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `worktic-${reportType}-${today}.csv`
+    document.body.appendChild(a); a.click(); document.body.removeChild(a)
+    URL.revokeObjectURL(url)
+    setToast(`Exportado ${rows.length - 1} registros`)
+  }
+
+  const sS = { padding: '5px 8px', borderRadius: 5, border: '1px solid #e2e8f0', fontSize: 11, fontFamily: 'inherit', outline: 'none', background: '#fff', color: '#0f172a', width: '100%' }
+  const lblS = { fontSize: 9, fontWeight: 600, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '.5px', marginBottom: 4, display: 'block' }
+  const chipS = (active) => ({ fontSize: 10, padding: '3px 10px', borderRadius: 12, border: '1px solid ' + (active ? '#3b82f6' : '#e2e8f0'), background: active ? 'rgba(59,130,246,.1)' : '#fff', color: active ? '#3b82f6' : '#64748b', cursor: 'pointer', fontFamily: 'inherit', fontWeight: active ? 600 : 400 })
+
+  return (
+    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.4)', zIndex: 300, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }} onClick={onClose}>
+      <div style={{ background: '#fff', borderRadius: 14, width: '100%', maxWidth: 700, maxHeight: '90vh', overflow: 'auto', padding: 0 }} onClick={e => e.stopPropagation()}>
+        {/* Header */}
+        <div style={{ padding: '20px 24px 16px', borderBottom: '1px solid #e2e8f0', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <div>
+            <div style={{ fontSize: 16, fontWeight: 700, color: '#0f172a' }}>📊 Exportar reporte</div>
+            <div style={{ fontSize: 11, color: '#94a3b8', marginTop: 2 }}>{filtered.length} registros con los filtros actuales</div>
+          </div>
+          <button onClick={onClose} style={{ background: 'none', border: 'none', fontSize: 18, color: '#94a3b8', cursor: 'pointer' }}>✕</button>
+        </div>
+
+        <div style={{ padding: '16px 24px', display: 'flex', flexDirection: 'column', gap: 18 }}>
+
+          {/* Saved configs */}
+          {savedConfigs.length > 0 && (
+            <div>
+              <span style={lblS}>Configuraciones guardadas</span>
+              <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                {savedConfigs.map(c => (
+                  <div key={c.name} style={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                    <button onClick={() => loadConfig(c)} style={{ ...chipS(false), background: 'rgba(16,185,129,.08)', borderColor: 'rgba(16,185,129,.25)', color: '#10b981' }}>
+                      📁 {c.name}
+                    </button>
+                    <button onClick={() => deleteConfig(c.name)} style={{ background: 'none', border: 'none', fontSize: 10, color: '#ef4444', cursor: 'pointer', padding: '0 2px' }}>✕</button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Report type */}
+          <div>
+            <span style={lblS}>Tipo de reporte</span>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))', gap: 6 }}>
+              {REPORT_TYPES.map(t => (
+                <button key={t.id} onClick={() => setReportType(t.id)}
+                  style={{ padding: '8px 10px', borderRadius: 8, border: '1.5px solid ' + (reportType === t.id ? '#3b82f6' : '#e2e8f0'), background: reportType === t.id ? 'rgba(59,130,246,.06)' : '#fff', cursor: 'pointer', textAlign: 'left', fontFamily: 'inherit' }}>
+                  <div style={{ fontSize: 12, fontWeight: 600, color: reportType === t.id ? '#3b82f6' : '#0f172a' }}>{t.label}</div>
+                  <div style={{ fontSize: 9, color: '#94a3b8', marginTop: 2 }}>{t.desc}</div>
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Period grouping */}
+          {reportType === 'by_period' && (
+            <div>
+              <span style={lblS}>Agrupar por</span>
+              <div style={{ display: 'flex', gap: 6 }}>
+                {[['day', 'Día'], ['week', 'Semana'], ['month', 'Mes']].map(([v, l]) => (
+                  <button key={v} onClick={() => setPeriodGroup(v)} style={chipS(periodGroup === v)}>{l}</button>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Date range */}
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+            <div>
+              <span style={lblS}>Desde</span>
+              <input type="date" value={fFrom} onChange={e => setFFrom(e.target.value)} style={sS} />
+            </div>
+            <div>
+              <span style={lblS}>Hasta</span>
+              <input type="date" value={fTo} onChange={e => setFTo(e.target.value)} style={sS} />
+            </div>
+          </div>
+
+          {/* Site filter */}
+          <div>
+            <span style={lblS}>Sucursales {fSites.length > 0 && `(${fSites.length})`}</span>
+            <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap' }}>
+              <button onClick={() => setFSites([])} style={chipS(fSites.length === 0)}>Todas</button>
+              {sites.map(s => (
+                <button key={s.id} onClick={() => toggleArr(fSites, setFSites, s.id)} style={chipS(fSites.includes(s.id))}>{s.name}</button>
+              ))}
+            </div>
+          </div>
+
+          {/* Employee filter */}
+          <div>
+            <span style={lblS}>Empleados {fEmps.length > 0 && `(${fEmps.length})`}</span>
+            <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap', maxHeight: 80, overflow: 'auto' }}>
+              <button onClick={() => setFEmps([])} style={chipS(fEmps.length === 0)}>Todos</button>
+              {allEmps.map(e => (
+                <button key={e.id} onClick={() => toggleArr(fEmps, setFEmps, e.id)} style={chipS(fEmps.includes(e.id))}>{e.name}</button>
+              ))}
+            </div>
+          </div>
+
+          {/* Status filter */}
+          <div>
+            <span style={lblS}>Estado</span>
+            <div style={{ display: 'flex', gap: 5 }}>
+              <button onClick={() => setFStatuses([])} style={chipS(fStatuses.length === 0)}>Todos</button>
+              {[['on_time', 'Puntual'], ['tolerancia', 'Tolerancia'], ['late', 'Retardo'], ['absent', 'Falta']].map(([v, l]) => (
+                <button key={v} onClick={() => toggleArr(fStatuses, setFStatuses, v)} style={chipS(fStatuses.includes(v))}>{l}</button>
+              ))}
+            </div>
+          </div>
+
+          {/* Column selector (detail only) */}
+          {reportType === 'detail' && (
+            <div>
+              <span style={lblS}>Columnas a incluir</span>
+              <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap' }}>
+                {DETAIL_COLS.map(c => (
+                  <button key={c.id} onClick={() => toggleCol(c.id)} style={chipS(cols.includes(c.id))}>{c.label}</button>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Save config */}
+          <div style={{ borderTop: '1px solid #e2e8f0', paddingTop: 14, display: 'flex', alignItems: 'center', gap: 8 }}>
+            {showSaveInput ? (
+              <>
+                <input value={configName} onChange={e => setConfigName(e.target.value)} placeholder="Nombre de la configuración" onKeyDown={e => e.key === 'Enter' && saveConfig()}
+                  style={{ ...sS, width: 200 }} autoFocus />
+                <button onClick={saveConfig} style={{ padding: '5px 12px', borderRadius: 5, border: 'none', background: '#10b981', color: '#fff', fontSize: 11, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}>Guardar</button>
+                <button onClick={() => setShowSaveInput(false)} style={{ padding: '5px 8px', borderRadius: 5, border: '1px solid #e2e8f0', background: '#fff', color: '#64748b', fontSize: 11, cursor: 'pointer', fontFamily: 'inherit' }}>Cancelar</button>
+              </>
+            ) : (
+              <button onClick={() => setShowSaveInput(true)} style={{ padding: '5px 12px', borderRadius: 5, border: '1px solid #e2e8f0', background: '#fff', color: '#64748b', fontSize: 11, cursor: 'pointer', fontFamily: 'inherit' }}>💾 Guardar configuración</button>
+            )}
+          </div>
+        </div>
+
+        {/* Footer */}
+        <div style={{ padding: '14px 24px', borderTop: '1px solid #e2e8f0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <span style={{ fontSize: 11, color: '#64748b' }}>{filtered.length} registros · Reporte: {REPORT_TYPES.find(t => t.id === reportType)?.label}</span>
+          <div style={{ display: 'flex', gap: 8 }}>
+            <button onClick={onClose} style={{ padding: '9px 18px', borderRadius: 8, border: '1px solid #e2e8f0', background: '#fff', color: '#64748b', fontSize: 12, cursor: 'pointer', fontFamily: 'inherit' }}>Cancelar</button>
+            <button onClick={generateCSV} disabled={filtered.length === 0}
+              style={{ padding: '9px 24px', borderRadius: 8, border: 'none', background: filtered.length > 0 ? '#10b981' : '#e2e8f0', color: filtered.length > 0 ? '#fff' : '#94a3b8', fontSize: 12, fontWeight: 700, cursor: filtered.length > 0 ? 'pointer' : 'default', fontFamily: 'inherit' }}>
+              ⬇ Descargar CSV
+            </button>
+          </div>
         </div>
       </div>
     </div>
