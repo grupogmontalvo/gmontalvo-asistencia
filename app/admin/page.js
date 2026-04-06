@@ -1478,6 +1478,69 @@ function AdminUserModal({ data, sites, companies, isSuperAdmin, isCompanyAdmin, 
     </div>
   )
 }
+function AISummary({ today, todayAtt, todaySchedules, sites, allEmps }) {
+  const [summary, setSummary] = useState('')
+  const [loading, setLoading] = useState(false)
+  const [loaded, setLoaded] = useState(false)
+
+  useEffect(() => {
+    if (loaded || !todayAtt || !todaySchedules) return
+    setLoaded(true)
+    setLoading(true)
+
+    const statusCount = (st) => todayAtt.filter(r => r.status === st).length
+    const expected = todaySchedules.length
+    const working = todayAtt.filter(r => r.check_in && !r.check_out).length
+    const completed = todayAtt.filter(r => r.check_out).length
+    const absent = Math.max(0, expected - todayAtt.length)
+
+    // Top/worst site by attendance rate
+    const siteStats = sites.map(s => {
+      const exp = todaySchedules.filter(sc => sc.site_id === s.id).length
+      const att = todayAtt.filter(r => r.site_id === s.id).length
+      return { name: s.name, rate: exp ? att / exp : 0, exp }
+    }).filter(s => s.exp > 0).sort((a, b) => b.rate - a.rate)
+
+    // Birthdays today
+    const todayMD = today.slice(5)
+    const birthdaysToday = allEmps.filter(e => e.birth_date?.slice(5) === todayMD && e.active !== false).map(e => e.name.split(' ')[0])
+
+    fetch('/api/ai/summary', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        stats: {
+          today, expected, working, completed, absent,
+          onTime: statusCount('on_time'),
+          tolerance: statusCount('tolerancia'),
+          late: statusCount('late'),
+          activeSites: siteStats.filter(s => s.rate > 0).length,
+          totalSites: sites.length,
+          topSite: siteStats[0]?.name,
+          worstSite: siteStats[siteStats.length - 1]?.name,
+          birthdaysToday,
+        }
+      }),
+    })
+      .then(r => r.json())
+      .then(({ summary }) => { setSummary(summary); setLoading(false) })
+      .catch(() => setLoading(false))
+  }, [todayAtt, todaySchedules])
+
+  if (!loading && !summary) return null
+  return (
+    <div style={{ background: 'linear-gradient(135deg, #f0f9ff 0%, #e8f5e9 100%)', border: '1px solid #bfdbfe', borderRadius: 12, padding: '12px 16px', marginBottom: 16, display: 'flex', alignItems: 'flex-start', gap: 10 }}>
+      <span style={{ fontSize: 18, flexShrink: 0 }}>✨</span>
+      <div style={{ flex: 1 }}>
+        {loading
+          ? <div style={{ fontSize: 12, color: '#64748b', fontStyle: 'italic' }}>Analizando el día...</div>
+          : <div style={{ fontSize: 12, color: '#1e40af', lineHeight: 1.6 }}>{summary}</div>
+        }
+      </div>
+    </div>
+  )
+}
+
 function UnifiedDashboard({ sites, allEmps, att, todayAtt, schedules, todaySchedules, siteHours, today, dashRows, unscheduledAtt, sitesWorking, peopleWorking, setEmpPage, employeeSiteAssignments, setEditingBday }) {
   const [viewMode, setViewMode] = useState('list')     // 'list' | 'grid'
   const [salesPeriod, setSalesPeriod] = useState('today') // 'today' | 'week' | 'month'
@@ -1623,6 +1686,9 @@ function UnifiedDashboard({ sites, allEmps, att, todayAtt, schedules, todaySched
           </div>
         </div>
       </div>
+
+      {/* AI Summary */}
+      <AISummary today={today} todayAtt={todayAtt} todaySchedules={todaySchedules} sites={sites} allEmps={allEmps} />
 
       {/* Upcoming birthdays widget */}
       {(() => {
