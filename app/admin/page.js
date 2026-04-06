@@ -76,6 +76,7 @@ export default function AdminPage() {
   const [tab, setTab]         = useState('dashboard')
   const [modal, setModal]     = useState(null)
   const [empPage, setEmpPage] = useState(null)
+  const [editingBday, setEditingBday] = useState(null) // { emp, msg }
   const [loading, setLoading] = useState(true)
   const [toast, setToast]     = useState(null)
   const [filterEmp,    setFilterEmp]    = useState('')
@@ -147,7 +148,7 @@ export default function AdminPage() {
       }
     }
     // FIX BUG 2: allEmpsQuery carga TODOS los empleados de la empresa (para resolver nombres en attendance)
-    let allEmpsQuery = supabase.from('employees').select('id, name, email, role, phone, skip_sales, skip_photo, free_roam, fixed_week, active, birth_date').order('name')
+    let allEmpsQuery = supabase.from('employees').select('id, name, email, role, phone, skip_sales, skip_photo, free_roam, fixed_week, active, birth_date, birthday_message').order('name')
     if (companyId) allEmpsQuery = allEmpsQuery.eq('company_id', companyId)
 
     let attQuery = supabase.from('attendance').select('*').order('date', { ascending: false })
@@ -198,6 +199,22 @@ export default function AdminPage() {
     } else if (isCompanyAdmin) {
       const { data: au } = await supabase.from('admin_users').select('*, admin_site_permissions(site_id)').eq('company_id', adminUser.company_id).order('created_at')
       setAdminUsers(au || [])
+    }
+    // Birthday notifications: fire once per day if admin has on_birthday pref
+    const todayKey = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Cancun' })
+    const bdayNotifKey = `gm-bday-notif-${todayKey}`
+    if (!localStorage.getItem(bdayNotifKey) && companyId) {
+      const empsData = ae.data || []
+      const todayMD = todayKey.slice(5) // 'MM-DD'
+      const birthdayEmps = empsData.filter(e => e.active !== false && e.birth_date && e.birth_date.slice(5) === todayMD)
+      if (birthdayEmps.length > 0) {
+        localStorage.setItem(bdayNotifKey, '1')
+        fetch('/api/alerts/birthday', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ company_id: companyId, names: birthdayEmps.map(e => e.name.split(' ')[0]) }),
+        }).catch(() => {})
+      }
     }
     setLoading(false)
   }, [adminUser, isSuperAdmin, isCompanyAdmin, selectedCompanyId])
@@ -764,10 +781,48 @@ export default function AdminPage() {
       {salesImportOpen && <SalesImportModal sites={sites} allEmps={allEmps} att={att} schedules={schedules} adminUser={adminUser} employeeSiteAssignments={employeeSiteAssignments} onClose={() => setSalesImportOpen(false)} onDone={() => { setSalesImportOpen(false); load() }} setToast={setToast} />}
       <FeedbackButton open={feedbackOpen} onClose={() => setFeedbackOpen(false)} adminUser={adminUser} />
       {toast && <div style={{ position: 'fixed', bottom: 20, right: 20, background: '#ffffff', border: '1px solid rgba(16,185,129,.25)', borderRadius: 8, padding: '10px 16px', fontSize: 12, fontWeight: 500, zIndex: 200, color: '#10b981' }}>{toast}</div>}
+      {editingBday && (
+        <BdayMsgModal
+          emp={editingBday.emp}
+          onClose={() => setEditingBday(null)}
+          onSave={async (msg) => {
+            await supabase.from('employees').update({ birthday_message: msg || null }).eq('id', editingBday.emp.id)
+            setAllEmps(prev => prev.map(e => e.id === editingBday.emp.id ? { ...e, birthday_message: msg || null } : e))
+            setEditingBday(null)
+            setToast('Mensaje guardado')
+          }}
+        />
+      )}
     </div>
   )
 }
 // ─── Emp Side Panel ───────────────────────────────────────────────────────────
+function BdayMsgModal({ emp, onClose, onSave }) {
+  const [msg, setMsg] = useState(emp.birthday_message || '')
+  const [saving, setSaving] = useState(false)
+  const placeholder = '¡Feliz cumpleaños, {nombre}! 🎂 Que tengas un día increíble. De parte de todo el equipo.'
+  return (
+    <div onClick={onClose} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 300 }}>
+      <div onClick={e => e.stopPropagation()} style={{ background: '#fff', borderRadius: 14, padding: 24, width: 380, maxWidth: '92vw', boxShadow: '0 20px 60px rgba(0,0,0,.2)' }}>
+        <div style={{ fontSize: 15, fontWeight: 700, marginBottom: 4 }}>🎂 Mensaje para {emp.name.split(' ')[0]}</div>
+        <div style={{ fontSize: 11, color: '#94a3b8', marginBottom: 14 }}>Le aparece al hacer check-in en su cumpleaños. Deja vacío para usar el mensaje general de la empresa.</div>
+        <textarea
+          value={msg}
+          onChange={e => setMsg(e.target.value)}
+          rows={4}
+          placeholder={placeholder}
+          style={{ width: '100%', border: '1px solid #e2e8f0', borderRadius: 8, padding: '10px 12px', fontSize: 13, fontFamily: 'inherit', resize: 'vertical', outline: 'none', color: '#0f172a', boxSizing: 'border-box' }}
+        />
+        {msg && <div style={{ fontSize: 11, color: '#64748b', marginTop: 6 }}>Vista previa: {msg.replace('{nombre}', emp.name.split(' ')[0])}</div>}
+        <div style={{ display: 'flex', gap: 8, marginTop: 16, justifyContent: 'flex-end' }}>
+          <button onClick={onClose} style={{ padding: '8px 16px', borderRadius: 7, border: '1px solid #e2e8f0', background: '#fff', color: '#64748b', fontSize: 12, cursor: 'pointer', fontFamily: 'inherit' }}>Cancelar</button>
+          <button onClick={async () => { setSaving(true); await onSave(msg) }} disabled={saving} style={{ padding: '8px 16px', borderRadius: 7, border: 'none', background: '#ec4899', color: '#fff', fontSize: 12, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>{saving ? 'Guardando...' : 'Guardar'}</button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 const ALL_COLS = [
   { key: 'date', label: 'Fecha' }, { key: 'site', label: 'Sucursal' }, { key: 'checkin', label: 'Entrada' },
   { key: 'checkout', label: 'Salida' }, { key: 'hours', label: 'Horas' }, { key: 'time_out', label: 'T. Fuera' },
@@ -1599,9 +1654,9 @@ function UnifiedDashboard({ sites, allEmps, att, todayAtt, schedules, todaySched
                 const lastSite = lastCheckIn ? sites.find(s => s.id === lastCheckIn.site_id)?.name : null
                 const empSiteNames = lastSite ? [lastSite] : (employeeSiteAssignments || []).filter(a => a.employee_id === e.id).map(a => sites.find(s => s.id === a.site_id)?.name).filter(Boolean)
                 return (
-                  <div key={e.id} onClick={() => setEmpPage(e)} style={{ background: isToday ? 'rgba(236,72,153,.1)' : '#ffffff', border: `1px solid ${isToday ? 'rgba(236,72,153,.4)' : '#e2e8f0'}`, borderRadius: 10, padding: '8px 14px', display: 'flex', alignItems: 'center', gap: 10, minWidth: 160, cursor: 'pointer' }}>
+                  <div key={e.id} style={{ background: isToday ? 'rgba(236,72,153,.1)' : '#ffffff', border: `1px solid ${isToday ? 'rgba(236,72,153,.4)' : '#e2e8f0'}`, borderRadius: 10, padding: '8px 14px', display: 'flex', alignItems: 'center', gap: 10, minWidth: 160, position: 'relative' }}>
                     <span style={{ fontSize: 20 }}>{isToday ? '🎉' : '🎂'}</span>
-                    <div>
+                    <div style={{ flex: 1, cursor: 'pointer' }} onClick={() => setEmpPage(e)}>
                       <div style={{ fontSize: 12, fontWeight: 700, color: isToday ? '#ec4899' : '#0f172a' }}>{e.name.split(' ').slice(0, 2).join(' ')}</div>
                       <div style={{ fontSize: 10, color: isToday ? '#ec4899' : '#94a3b8', fontWeight: 600 }}>
                         {isToday ? '¡Hoy! 🥳' : e.daysUntil === 1 ? 'Mañana' : `En ${e.daysUntil} días`} · {dateLabel}
@@ -1610,6 +1665,7 @@ function UnifiedDashboard({ sites, allEmps, att, todayAtt, schedules, todaySched
                         <div style={{ fontSize: 10, color: isToday ? '#ec4899' : '#64748b', marginTop: 2 }}>{empSiteNames.join(', ')}</div>
                       )}
                     </div>
+                    <button onClick={(ev) => { ev.stopPropagation(); setEditingBday({ emp: e, msg: e.birthday_message || '' }) }} title="Personalizar mensaje" style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 14, color: isToday ? '#ec4899' : '#94a3b8', padding: '2px 4px', lineHeight: 1 }}>✏️</button>
                   </div>
                 )
               })}
@@ -2414,11 +2470,13 @@ function AlertsPanel({ adminUserId, adminEmail }) {
   const [onNoshow, setOnNoshow]             = useState(false)
   const [onCheckout, setOnCheckout]         = useState(false)
   const [onMovement, setOnMovement]         = useState(false)
+  const [onBirthday, setOnBirthday]         = useState(false)
   const [pushCheckin, setPushCheckin]       = useState(false)
   const [pushLate, setPushLate]             = useState(false)
   const [pushNoshow, setPushNoshow]         = useState(false)
   const [pushCheckout, setPushCheckout]     = useState(false)
   const [pushMovement, setPushMovement]     = useState(false)
+  const [pushBirthday, setPushBirthday]     = useState(false)
   const [loading, setLoading]               = useState(true)
   const [saving, setSaving]                 = useState(false)
   const [saved, setSaved]                   = useState(false)
@@ -2437,11 +2495,13 @@ function AlertsPanel({ adminUserId, adminEmail }) {
           setOnNoshow(!!prefs.on_noshow)
           setOnCheckout(!!prefs.on_checkout)
           setOnMovement(!!prefs.on_movement)
+          setOnBirthday(!!prefs.on_birthday)
           setPushCheckin(!!prefs.push_on_checkin)
           setPushLate(!!prefs.push_on_late)
           setPushNoshow(!!prefs.push_on_noshow)
           setPushCheckout(!!prefs.push_on_checkout)
           setPushMovement(!!prefs.push_on_movement)
+          setPushBirthday(!!prefs.push_on_birthday)
         }
         setLoading(false)
       })
@@ -2455,8 +2515,8 @@ function AlertsPanel({ adminUserId, adminEmail }) {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         admin_user_id: adminUserId, email,
-        on_checkin: onCheckin, on_late: onLate, on_noshow: onNoshow, on_checkout: onCheckout, on_movement: onMovement,
-        push_on_checkin: pushCheckin, push_on_late: pushLate, push_on_noshow: pushNoshow, push_on_checkout: pushCheckout, push_on_movement: pushMovement,
+        on_checkin: onCheckin, on_late: onLate, on_noshow: onNoshow, on_checkout: onCheckout, on_movement: onMovement, on_birthday: onBirthday,
+        push_on_checkin: pushCheckin, push_on_late: pushLate, push_on_noshow: pushNoshow, push_on_checkout: pushCheckout, push_on_movement: pushMovement, push_on_birthday: pushBirthday,
       }),
     })
     setSaving(false)
@@ -2477,6 +2537,8 @@ function AlertsPanel({ adminUserId, adminEmail }) {
       mail: onCheckout, setMail: setOnCheckout, push: pushCheckout, setPush: setPushCheckout },
     { label: 'Cualquier movimiento 🔄', desc: 'Check-in, check-out, descanso, comida — cualquier evento',
       mail: onMovement, setMail: setOnMovement, push: pushMovement, setPush: setPushMovement },
+    { label: 'Cumpleaños 🎂', desc: 'Aviso cuando es el cumpleaños de un empleado (al abrir el dashboard)',
+      mail: onBirthday, setMail: setOnBirthday, push: pushBirthday, setPush: setPushBirthday },
   ]
 
   if (loading) return <div style={{ padding: 40, textAlign: 'center', color: '#94a3b8', fontSize: 13 }}>Cargando...</div>

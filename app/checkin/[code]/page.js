@@ -1040,7 +1040,7 @@ export default function CheckinPage({ params }) {
 
       {showSalesModal && <SalesModal onConfirm={(amt) => finishCheckout(amt, null)} onSkip={() => finishCheckout(null, null)} />}
 
-      {showBirthday && <BirthdayCelebration empName={emp?.name?.split(' ')[0] || emp?.name} message={birthdayMsg} onClose={() => setShowBirthday(false)} />}
+      {showBirthday && <BirthdayCelebration empName={emp?.name?.split(' ')[0] || emp?.name} message={emp?.birthday_message || birthdayMsg} onClose={() => setShowBirthday(false)} />}
 
       {loading && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(5,8,16,0.7)', zIndex: 400, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>

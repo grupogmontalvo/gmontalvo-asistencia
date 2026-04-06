@@ -14,19 +14,20 @@ export async function POST(request) {
     const body = await request.json()
     const {
       admin_user_id, email,
-      on_checkin, on_late, on_noshow, on_checkout, on_movement,
-      push_on_checkin, push_on_late, push_on_noshow, push_on_checkout, push_on_movement,
+      on_checkin, on_late, on_noshow, on_checkout, on_movement, on_birthday,
+      push_on_checkin, push_on_late, push_on_noshow, push_on_checkout, push_on_movement, push_on_birthday,
     } = body
     if (!admin_user_id || !email) return NextResponse.json({ error: 'Faltan campos requeridos' }, { status: 400 })
     const { data, error } = await supabase.from('alert_preferences').upsert(
       {
         admin_user_id, email,
-        on_checkin, on_late, on_noshow, on_checkout, on_movement, on_tolerance: false,
+        on_checkin, on_late, on_noshow, on_checkout, on_movement, on_tolerance: false, on_birthday: on_birthday || false,
         push_on_checkin: push_on_checkin || false,
         push_on_late: push_on_late || false,
         push_on_noshow: push_on_noshow || false,
         push_on_checkout: push_on_checkout || false,
         push_on_movement: push_on_movement || false,
+        push_on_birthday: push_on_birthday || false,
       },
       { onConflict: 'admin_user_id' }
     ).select().single()
