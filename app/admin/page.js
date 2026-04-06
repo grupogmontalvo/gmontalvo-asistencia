@@ -499,6 +499,8 @@ export default function AdminPage() {
             dashRows={dashRows} unscheduledAtt={unscheduledAtt}
             sitesWorking={sitesWorking} peopleWorking={peopleWorking}
             setEmpPage={setEmpPage}
+            employeeSiteAssignments={employeeSiteAssignments}
+            setEditingBday={setEditingBday}
           />}
           {tab === 'attendance' && <>
             {/* Search bar */}
@@ -1476,7 +1478,7 @@ function AdminUserModal({ data, sites, companies, isSuperAdmin, isCompanyAdmin, 
     </div>
   )
 }
-function UnifiedDashboard({ sites, allEmps, att, todayAtt, schedules, todaySchedules, siteHours, today, dashRows, unscheduledAtt, sitesWorking, peopleWorking, setEmpPage }) {
+function UnifiedDashboard({ sites, allEmps, att, todayAtt, schedules, todaySchedules, siteHours, today, dashRows, unscheduledAtt, sitesWorking, peopleWorking, setEmpPage, employeeSiteAssignments, setEditingBday }) {
   const [viewMode, setViewMode] = useState('list')     // 'list' | 'grid'
   const [salesPeriod, setSalesPeriod] = useState('today') // 'today' | 'week' | 'month'
   const [salesInfoOpen, setSalesInfoOpen] = useState(false)
