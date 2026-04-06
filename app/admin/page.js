@@ -1571,7 +1571,7 @@ function UnifiedDashboard({ sites, allEmps, att, todayAtt, schedules, todaySched
       {/* Upcoming birthdays widget */}
       {(() => {
         const tz = 'America/Cancun'
-        const todayDate = new Date(today + 'T12:00:00')
+        const todayDate = new Date(today + 'T00:00:00')
         const todayMonth = todayDate.getMonth() + 1
         const todayDay   = todayDate.getDate()
         const upcomingBdays = (allEmps || [])
@@ -1595,14 +1595,20 @@ function UnifiedDashboard({ sites, allEmps, att, todayAtt, schedules, todaySched
                 const isToday = e.daysUntil === 0
                 const months = ['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic']
                 const dateLabel = `${e.bDay} ${months[e.bMonth - 1]}`
+                const lastCheckIn = (att || []).filter(r => r.employee_id === e.id).sort((a, b) => new Date(b.created_at) - new Date(a.created_at))[0]
+                const lastSite = lastCheckIn ? sites.find(s => s.id === lastCheckIn.site_id)?.name : null
+                const empSiteNames = lastSite ? [lastSite] : (employeeSiteAssignments || []).filter(a => a.employee_id === e.id).map(a => sites.find(s => s.id === a.site_id)?.name).filter(Boolean)
                 return (
-                  <div key={e.id} style={{ background: isToday ? 'rgba(236,72,153,.1)' : '#ffffff', border: `1px solid ${isToday ? 'rgba(236,72,153,.4)' : '#e2e8f0'}`, borderRadius: 10, padding: '8px 14px', display: 'flex', alignItems: 'center', gap: 10, minWidth: 160 }}>
+                  <div key={e.id} onClick={() => setEmpPage(e)} style={{ background: isToday ? 'rgba(236,72,153,.1)' : '#ffffff', border: `1px solid ${isToday ? 'rgba(236,72,153,.4)' : '#e2e8f0'}`, borderRadius: 10, padding: '8px 14px', display: 'flex', alignItems: 'center', gap: 10, minWidth: 160, cursor: 'pointer' }}>
                     <span style={{ fontSize: 20 }}>{isToday ? '🎉' : '🎂'}</span>
                     <div>
                       <div style={{ fontSize: 12, fontWeight: 700, color: isToday ? '#ec4899' : '#0f172a' }}>{e.name.split(' ').slice(0, 2).join(' ')}</div>
                       <div style={{ fontSize: 10, color: isToday ? '#ec4899' : '#94a3b8', fontWeight: 600 }}>
                         {isToday ? '¡Hoy! 🥳' : e.daysUntil === 1 ? 'Mañana' : `En ${e.daysUntil} días`} · {dateLabel}
                       </div>
+                      {empSiteNames.length > 0 && (
+                        <div style={{ fontSize: 10, color: isToday ? '#ec4899' : '#64748b', marginTop: 2 }}>{empSiteNames.join(', ')}</div>
+                      )}
                     </div>
                   </div>
                 )
