@@ -54,6 +54,105 @@ function autoCode(name) {
   const rand = Math.random().toString(36).slice(2, 5).toUpperCase()
   return base + rand
 }
+function AIChatDrawer({ onClose, att, allEmps, sites, schedules, today }) {
+  const [messages, setMessages] = useState([])
+  const [input, setInput] = useState('')
+  const [loading, setLoading] = useState(false)
+  const bottomRef = useRef(null)
+
+  useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: 'smooth' }) }, [messages])
+
+  function buildContext() {
+    const empMap = Object.fromEntries(allEmps.map(e => [e.id, e.name]))
+    const siteMap = Object.fromEntries(sites.map(s => [s.id, s.name]))
+    const last30 = new Date(); last30.setDate(last30.getDate() - 30)
+    const last30Str = last30.toLocaleDateString('en-CA', { timeZone: 'America/Cancun' })
+    const recentAtt = att.filter(r => r.date >= last30Str)
+    const attLines = recentAtt.map(r =>
+      `${r.date} | ${empMap[r.employee_id] || r.employee_id} | ${siteMap[r.site_id] || r.site_id} | ${r.status || '-'} | entrada: ${r.check_in ? new Date(r.check_in).toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit', hour12: false }) : '-'} | salida: ${r.check_out ? new Date(r.check_out).toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit', hour12: false }) : '-'}`
+    ).join('\n')
+    const empLines = allEmps.filter(e => e.active !== false).map(e => `${e.name} | ${e.role} | ${e.birth_date || ''}`).join('\n')
+    const siteLines = sites.map(s => s.name).join(', ')
+    return `Hoy: ${today}\nSucursales: ${siteLines}\n\nEmpleados activos:\n${empLines}\n\nAsistencia últimos 30 días (fecha|empleado|sucursal|estado|entrada|salida):\n${attLines}`
+  }
+
+  async function send() {
+    const q = input.trim()
+    if (!q || loading) return
+    setInput('')
+    const newMessages = [...messages, { role: 'user', content: q }]
+    setMessages(newMessages)
+    setLoading(true)
+    try {
+      const res = await fetch('/api/ai/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ messages: newMessages, context: buildContext() }),
+      })
+      const { reply } = await res.json()
+      setMessages(prev => [...prev, { role: 'assistant', content: reply }])
+    } catch {
+      setMessages(prev => [...prev, { role: 'assistant', content: 'Hubo un error, intenta de nuevo.' }])
+    }
+    setLoading(false)
+  }
+
+  const suggestions = ['¿Quién llegó tarde hoy?', '¿Cuántas ausencias hubo esta semana?', '¿Quién es el más puntual del mes?']
+
+  return (
+    <div style={{ position: 'fixed', top: 0, right: 0, width: 380, height: '100vh', background: '#ffffff', boxShadow: '-4px 0 30px rgba(0,0,0,.12)', display: 'flex', flexDirection: 'column', zIndex: 500, fontFamily: "'DM Sans', sans-serif" }}>
+      {/* Header */}
+      <div style={{ padding: '16px 18px', borderBottom: '1px solid #e2e8f0', display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: 'linear-gradient(135deg, #6366f1, #8b5cf6)', color: '#fff' }}>
+        <div>
+          <div style={{ fontSize: 14, fontWeight: 700 }}>✨ Asistente IA</div>
+          <div style={{ fontSize: 11, opacity: .8 }}>Pregunta sobre tu equipo y asistencia</div>
+        </div>
+        <button onClick={onClose} style={{ background: 'rgba(255,255,255,.2)', border: 'none', borderRadius: 8, color: '#fff', cursor: 'pointer', fontSize: 16, padding: '4px 10px', lineHeight: 1 }}>✕</button>
+      </div>
+
+      {/* Messages */}
+      <div style={{ flex: 1, overflowY: 'auto', padding: 16, display: 'flex', flexDirection: 'column', gap: 12 }}>
+        {messages.length === 0 && (
+          <div style={{ color: '#94a3b8', fontSize: 12, textAlign: 'center', marginTop: 24 }}>
+            <div style={{ fontSize: 32, marginBottom: 8 }}>🤖</div>
+            <div style={{ marginBottom: 16 }}>Haz una pregunta sobre tu equipo</div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              {suggestions.map(s => (
+                <button key={s} onClick={() => { setInput(s) }} style={{ background: '#f1f5f9', border: '1px solid #e2e8f0', borderRadius: 8, padding: '8px 12px', fontSize: 11, color: '#475569', cursor: 'pointer', fontFamily: 'inherit', textAlign: 'left' }}>{s}</button>
+              ))}
+            </div>
+          </div>
+        )}
+        {messages.map((m, i) => (
+          <div key={i} style={{ display: 'flex', justifyContent: m.role === 'user' ? 'flex-end' : 'flex-start' }}>
+            <div style={{ maxWidth: '85%', padding: '10px 14px', borderRadius: m.role === 'user' ? '14px 14px 4px 14px' : '14px 14px 14px 4px', background: m.role === 'user' ? 'linear-gradient(135deg, #6366f1, #8b5cf6)' : '#f1f5f9', color: m.role === 'user' ? '#fff' : '#0f172a', fontSize: 13, lineHeight: 1.5 }}>
+              {m.content}
+            </div>
+          </div>
+        ))}
+        {loading && (
+          <div style={{ display: 'flex', justifyContent: 'flex-start' }}>
+            <div style={{ background: '#f1f5f9', borderRadius: '14px 14px 14px 4px', padding: '10px 16px', fontSize: 18, color: '#6366f1' }}>•••</div>
+          </div>
+        )}
+        <div ref={bottomRef} />
+      </div>
+
+      {/* Input */}
+      <div style={{ padding: '12px 16px', borderTop: '1px solid #e2e8f0', display: 'flex', gap: 8 }}>
+        <input
+          value={input}
+          onChange={e => setInput(e.target.value)}
+          onKeyDown={e => e.key === 'Enter' && !e.shiftKey && send()}
+          placeholder="Escribe tu pregunta..."
+          style={{ flex: 1, border: '1px solid #e2e8f0', borderRadius: 10, padding: '10px 14px', fontSize: 13, fontFamily: 'inherit', outline: 'none', color: '#0f172a' }}
+        />
+        <button onClick={send} disabled={loading || !input.trim()} style={{ background: 'linear-gradient(135deg, #6366f1, #8b5cf6)', border: 'none', borderRadius: 10, color: '#fff', padding: '0 16px', cursor: loading ? 'wait' : 'pointer', fontSize: 16, opacity: input.trim() ? 1 : 0.5 }}>↑</button>
+      </div>
+    </div>
+  )
+}
+
 function BdayMsgModal({ emp, onClose, onSave }) {
   const [msg, setMsg] = useState(emp.birthday_message || '')
   const [saving, setSaving] = useState(false)
@@ -102,6 +201,7 @@ export default function AdminPage() {
   const [modal, setModal]     = useState(null)
   const [empPage, setEmpPage] = useState(null)
   const [editingBday, setEditingBday] = useState(null) // { emp, msg }
+  const [aiChatOpen, setAiChatOpen] = useState(false)
   const [loading, setLoading] = useState(true)
   const [toast, setToast]     = useState(null)
   const [filterEmp,    setFilterEmp]    = useState('')
@@ -807,6 +907,21 @@ export default function AdminPage() {
       {exportOpen && <ExportModal att={att} allEmps={allEmps} sites={sites} schedules={schedules} goals={goals} adminUsers={adminUsers} onClose={() => setExportOpen(false)} setToast={setToast} />}
       {salesImportOpen && <SalesImportModal sites={sites} allEmps={allEmps} att={att} schedules={schedules} adminUser={adminUser} employeeSiteAssignments={employeeSiteAssignments} onClose={() => setSalesImportOpen(false)} onDone={() => { setSalesImportOpen(false); load() }} setToast={setToast} />}
       <FeedbackButton open={feedbackOpen} onClose={() => setFeedbackOpen(false)} adminUser={adminUser} />
+      {/* AI Chat button */}
+      {!aiChatOpen && (
+        <button onClick={() => setAiChatOpen(true)} style={{ position: 'fixed', bottom: 24, right: 24, background: 'linear-gradient(135deg, #6366f1, #8b5cf6)', border: 'none', borderRadius: 28, padding: '12px 20px', color: '#fff', fontSize: 13, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', boxShadow: '0 4px 20px rgba(99,102,241,.4)', display: 'flex', alignItems: 'center', gap: 8, zIndex: 400 }}>
+          ✨ Pregúntale a la IA
+        </button>
+      )}
+
+      {/* AI Chat drawer */}
+      {aiChatOpen && (
+        <AIChatDrawer
+          onClose={() => setAiChatOpen(false)}
+          att={att} allEmps={allEmps} sites={sites} schedules={schedules} today={today}
+        />
+      )}
+
       {toast && <div style={{ position: 'fixed', bottom: 20, right: 20, background: '#ffffff', border: '1px solid rgba(16,185,129,.25)', borderRadius: 8, padding: '10px 16px', fontSize: 12, fontWeight: 500, zIndex: 200, color: '#10b981' }}>{toast}</div>}
       {editingBday && (
         <BdayMsgModal
