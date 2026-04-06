@@ -54,6 +54,31 @@ function autoCode(name) {
   const rand = Math.random().toString(36).slice(2, 5).toUpperCase()
   return base + rand
 }
+function BdayMsgModal({ emp, onClose, onSave }) {
+  const [msg, setMsg] = useState(emp.birthday_message || '')
+  const [saving, setSaving] = useState(false)
+  const placeholder = '¡Feliz cumpleaños, {nombre}! 🎂 Que tengas un día increíble. De parte de todo el equipo.'
+  return (
+    <div onClick={onClose} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}>
+      <div onClick={e => e.stopPropagation()} style={{ background: '#fff', borderRadius: 14, padding: 24, width: 380, maxWidth: '92vw', boxShadow: '0 20px 60px rgba(0,0,0,.2)' }}>
+        <div style={{ fontSize: 15, fontWeight: 700, marginBottom: 4 }}>🎂 Mensaje para {emp.name.split(' ')[0]}</div>
+        <div style={{ fontSize: 11, color: '#94a3b8', marginBottom: 14 }}>Le aparece al hacer check-in en su cumpleaños. Deja vacío para usar el mensaje general de la empresa.</div>
+        <textarea
+          value={msg}
+          onChange={e => setMsg(e.target.value)}
+          rows={4}
+          placeholder={placeholder}
+          style={{ width: '100%', border: '1px solid #e2e8f0', borderRadius: 8, padding: '10px 12px', fontSize: 13, fontFamily: 'inherit', resize: 'vertical', outline: 'none', color: '#0f172a', boxSizing: 'border-box' }}
+        />
+        {msg && <div style={{ fontSize: 11, color: '#64748b', marginTop: 6 }}>Vista previa: {msg.replace('{nombre}', emp.name.split(' ')[0])}</div>}
+        <div style={{ display: 'flex', gap: 8, marginTop: 16, justifyContent: 'flex-end' }}>
+          <button onClick={onClose} style={{ padding: '8px 16px', borderRadius: 7, border: '1px solid #e2e8f0', background: '#fff', color: '#64748b', fontSize: 12, cursor: 'pointer', fontFamily: 'inherit' }}>Cancelar</button>
+          <button onClick={async () => { setSaving(true); await onSave(msg) }} disabled={saving} style={{ padding: '8px 16px', borderRadius: 7, border: 'none', background: '#ec4899', color: '#fff', fontSize: 12, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>{saving ? 'Guardando...' : 'Guardar'}</button>
+        </div>
+      </div>
+    </div>
+  )
+}
 export default function AdminPage() {
   const router = useRouter()
   const [authUser,  setAuthUser]  = useState(null)
@@ -797,32 +822,6 @@ export default function AdminPage() {
   )
 }
 // ─── Emp Side Panel ───────────────────────────────────────────────────────────
-function BdayMsgModal({ emp, onClose, onSave }) {
-  const [msg, setMsg] = useState(emp.birthday_message || '')
-  const [saving, setSaving] = useState(false)
-  const placeholder = '¡Feliz cumpleaños, {nombre}! 🎂 Que tengas un día increíble. De parte de todo el equipo.'
-  return (
-    <div onClick={onClose} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 300 }}>
-      <div onClick={e => e.stopPropagation()} style={{ background: '#fff', borderRadius: 14, padding: 24, width: 380, maxWidth: '92vw', boxShadow: '0 20px 60px rgba(0,0,0,.2)' }}>
-        <div style={{ fontSize: 15, fontWeight: 700, marginBottom: 4 }}>🎂 Mensaje para {emp.name.split(' ')[0]}</div>
-        <div style={{ fontSize: 11, color: '#94a3b8', marginBottom: 14 }}>Le aparece al hacer check-in en su cumpleaños. Deja vacío para usar el mensaje general de la empresa.</div>
-        <textarea
-          value={msg}
-          onChange={e => setMsg(e.target.value)}
-          rows={4}
-          placeholder={placeholder}
-          style={{ width: '100%', border: '1px solid #e2e8f0', borderRadius: 8, padding: '10px 12px', fontSize: 13, fontFamily: 'inherit', resize: 'vertical', outline: 'none', color: '#0f172a', boxSizing: 'border-box' }}
-        />
-        {msg && <div style={{ fontSize: 11, color: '#64748b', marginTop: 6 }}>Vista previa: {msg.replace('{nombre}', emp.name.split(' ')[0])}</div>}
-        <div style={{ display: 'flex', gap: 8, marginTop: 16, justifyContent: 'flex-end' }}>
-          <button onClick={onClose} style={{ padding: '8px 16px', borderRadius: 7, border: '1px solid #e2e8f0', background: '#fff', color: '#64748b', fontSize: 12, cursor: 'pointer', fontFamily: 'inherit' }}>Cancelar</button>
-          <button onClick={async () => { setSaving(true); await onSave(msg) }} disabled={saving} style={{ padding: '8px 16px', borderRadius: 7, border: 'none', background: '#ec4899', color: '#fff', fontSize: 12, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>{saving ? 'Guardando...' : 'Guardar'}</button>
-        </div>
-      </div>
-    </div>
-  )
-}
-
 const ALL_COLS = [
   { key: 'date', label: 'Fecha' }, { key: 'site', label: 'Sucursal' }, { key: 'checkin', label: 'Entrada' },
   { key: 'checkout', label: 'Salida' }, { key: 'hours', label: 'Horas' }, { key: 'time_out', label: 'T. Fuera' },
@@ -1650,9 +1649,12 @@ function UnifiedDashboard({ sites, allEmps, att, todayAtt, schedules, todaySched
                 const isToday = e.daysUntil === 0
                 const months = ['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic']
                 const dateLabel = `${e.bDay} ${months[e.bMonth - 1]}`
-                const lastCheckIn = (att || []).filter(r => r.employee_id === e.id).sort((a, b) => new Date(b.created_at) - new Date(a.created_at))[0]
-                const lastSite = lastCheckIn ? sites.find(s => s.id === lastCheckIn.site_id)?.name : null
-                const empSiteNames = lastSite ? [lastSite] : (employeeSiteAssignments || []).filter(a => a.employee_id === e.id).map(a => sites.find(s => s.id === a.site_id)?.name).filter(Boolean)
+                const todayScheduleSite = (schedules || []).find(s => s.employee_id === e.id && s.date === today)
+                const todaySchedSiteName = todayScheduleSite ? sites.find(s => s.id === todayScheduleSite.site_id)?.name : null
+                const lastCheckIn = !todaySchedSiteName ? (att || []).filter(r => r.employee_id === e.id).sort((a, b) => new Date(b.created_at) - new Date(a.created_at))[0] : null
+                const lastSiteName = lastCheckIn ? sites.find(s => s.id === lastCheckIn.site_id)?.name : null
+                const assignedSiteNames = (!todaySchedSiteName && !lastSiteName) ? (employeeSiteAssignments || []).filter(a => a.employee_id === e.id).map(a => sites.find(s => s.id === a.site_id)?.name).filter(Boolean) : []
+                const empSiteNames = todaySchedSiteName ? [todaySchedSiteName] : lastSiteName ? [lastSiteName] : assignedSiteNames
                 return (
                   <div key={e.id} style={{ background: isToday ? 'rgba(236,72,153,.1)' : '#ffffff', border: `1px solid ${isToday ? 'rgba(236,72,153,.4)' : '#e2e8f0'}`, borderRadius: 10, padding: '8px 14px', display: 'flex', alignItems: 'center', gap: 10, minWidth: 160, position: 'relative' }}>
                     <span style={{ fontSize: 20 }}>{isToday ? '🎉' : '🎂'}</span>
