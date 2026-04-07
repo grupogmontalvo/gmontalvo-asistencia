@@ -1831,9 +1831,6 @@ function UnifiedDashboard({ sites, allEmps, att, todayAtt, schedules, todaySched
         </div>
       </div>
 
-      {/* AI Summary */}
-      <AISummary today={today} todayAtt={todayAtt} todaySchedules={todaySchedules} sites={sites} allEmps={allEmps} />
-
       {/* Upcoming birthdays widget */}
       {(() => {
         const tz = 'America/Cancun'
