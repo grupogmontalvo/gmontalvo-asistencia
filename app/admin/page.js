@@ -301,20 +301,26 @@ export default function AdminPage() {
     ])
     const loadedSites = s.data || []
     const siteIdSet = new Set(loadedSites.map(x => x.id))
+    const allEmpsData = ae.data || []
+    const allEmpIdSet = new Set(allEmpsData.map(x => x.id))
     // Filter att/schedules by loaded site IDs to handle records with null company_id
     const attData = (companyId && siteIdSet.size > 0) ? (a.data || []).filter(r => siteIdSet.has(r.site_id)) : (a.data || [])
     const scData  = (companyId && siteIdSet.size > 0) ? (sc.data || []).filter(r => siteIdSet.has(r.site_id)) : (sc.data || [])
+    // FIX SECURITY: filter tables that have no DB-level company filter — prevent cross-tenant data leaks
+    const esaData   = companyId ? (esa.data || []).filter(r => siteIdSet.has(r.site_id)) : (esa.data || [])
+    const shData    = companyId ? (sh.data || []).filter(r => siteIdSet.has(r.site_id)) : (sh.data || [])
+    const goalsData = companyId ? (g.data || []).filter(r => allEmpIdSet.has(r.employee_id)) : (g.data || [])
     setSites(loadedSites)
     setEmps(e.data || [])
-    setAllEmps(ae.data || [])
+    setAllEmps(allEmpsData)
     setAtt(attData)
     setSchedules(scData)
-    setGoals(g.data || [])
-    setEmployeeSiteAssignments(esa.data || [])
-    setSiteHours(sh.data || [])
+    setGoals(goalsData)
+    setEmployeeSiteAssignments(esaData)
+    setSiteHours(shData)
     // Filter competitions to those that include at least one of the loaded sites
     const allComps = comp.data || []
-    const allCs = cs.data || []
+    const allCs = companyId ? (cs.data || []).filter(c => siteIdSet.has(c.site_id)) : (cs.data || [])
     const myCompIds = new Set(allCs.filter(c => siteIdSet.has(c.site_id)).map(c => c.competition_id))
     setCompetitions(allComps.filter(c => myCompIds.has(c.id) || c.created_by === adminUser?.id))
     setCompSites(allCs)
