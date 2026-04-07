@@ -212,6 +212,7 @@ export default function AdminPage() {
   const [empSearch,    setEmpSearch]    = useState('')
   const [showInactive, setShowInactive] = useState(false)
   const [attEmpSearch, setAttEmpSearch] = useState('')
+  const [userSearch,   setUserSearch]   = useState('')
   const [sidebarOpen, setSidebarOpen] = useState(true)
   const [feedbackLabel] = useState(() => Math.random() > 0.5 ? ['💡', 'Alguna idea?'] : ['💬', 'Te escuchamos'])
   const [feedbackOpen, setFeedbackOpen] = useState(false)
@@ -781,14 +782,35 @@ export default function AdminPage() {
               {sites.length === 0 && <div style={{ padding: 20, textAlign: 'center', color: '#94a3b8', fontSize: 12, background: '#ffffff', borderRadius: 10, border: '1px solid #e2e8f0' }}>No hay sitios. Agrega el primero.</div>}
             </div>
           )}
-          {tab === 'users' && (isSuperAdmin || isCompanyAdmin) && (
-            <div style={{ background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: 10, overflowX: 'auto' }}>
+          {tab === 'users' && (isSuperAdmin || isCompanyAdmin) && (() => {
+            const filteredUsers = adminUsers.filter(au => {
+              if (!userSearch.trim()) return true
+              const q = userSearch.toLowerCase()
+              const company = companies.find(c => c.id === au.company_id)
+              return (au.name||'').toLowerCase().includes(q) ||
+                     (au.email||'').toLowerCase().includes(q) ||
+                     (company?.name||'').toLowerCase().includes(q)
+            })
+            return (
+            <div style={{ background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: 10, overflow: 'hidden' }}>
+              {/* Search bar */}
+              <div style={{ padding: '12px 16px', borderBottom: '1px solid #e2e8f0', display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+                <div style={{ position: 'relative', flex: 1, minWidth: 200 }}>
+                  <span style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', fontSize: 13, color: '#94a3b8', pointerEvents: 'none' }}>🔍</span>
+                  <input value={userSearch} onChange={e => setUserSearch(e.target.value)}
+                    placeholder='Buscar por nombre, email o empresa...'
+                    style={{ width: '100%', background: '#f8fafc', border: '1px solid #e2e8f0', color: '#0f172a', fontSize: 12, padding: '7px 10px 7px 32px', borderRadius: 7, fontFamily: 'inherit', outline: 'none', boxSizing: 'border-box' }} />
+                  {userSearch && <button onClick={() => setUserSearch('')} style={{ position: 'absolute', right: 8, top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', fontSize: 13, color: '#94a3b8', lineHeight: 1 }}>✕</button>}
+                </div>
+                <span style={{ fontSize: 11, color: '#94a3b8' }}>{filteredUsers.length} usuario{filteredUsers.length !== 1 ? 's' : ''}</span>
+              </div>
+              <div style={{ overflowX: 'auto' }}>
               <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 600 }}>
                 <thead><tr>{['Usuario','Email','Empresa','Rol','Sucursales',''].map(h => (
                   <th key={h} style={{ textAlign: 'left', fontSize: 9, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '.6px', color: '#94a3b8', padding: '9px 16px', borderBottom: '1px solid #e2e8f0' }}>{h}</th>
                 ))}</tr></thead>
                 <tbody>
-                  {adminUsers.map(au => {
+                  {filteredUsers.map(au => {
                     const auSites = (au.admin_site_permissions || []).map(p => sites.find(s => s.id === p.site_id)?.name).filter(Boolean)
                     const auCompany = companies.find(c => c.id === au.company_id)
                     const isActive = au.active !== false
@@ -819,11 +841,12 @@ export default function AdminPage() {
                       </tr>
                     )
                   })}
-                  {adminUsers.length === 0 && <tr><td colSpan={6} style={{ padding: 24, textAlign: 'center', color: '#94a3b8', fontSize: 12 }}>No hay usuarios admin.</td></tr>}
+                  {filteredUsers.length === 0 && <tr><td colSpan={6} style={{ padding: 24, textAlign: 'center', color: '#94a3b8', fontSize: 12 }}>{userSearch ? 'Sin resultados para "' + userSearch + '"' : 'No hay usuarios admin.'}</td></tr>}
                 </tbody>
               </table>
+              </div>
             </div>
-          )}
+          )})()}
           {tab === 'companies' && isSuperAdmin && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
               {companies.map(company => {
