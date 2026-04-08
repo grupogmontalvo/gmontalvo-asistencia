@@ -69,11 +69,11 @@ function AIChatDrawer({ onClose, att, allEmps, sites, schedules, today }) {
     const last30Str = last30.toLocaleDateString('en-CA', { timeZone: 'America/Cancun' })
     const recentAtt = att.filter(r => r.date >= last30Str)
     const attLines = recentAtt.map(r =>
-      `${r.date} | ${empMap[r.employee_id] || r.employee_id} | ${siteMap[r.site_id] || r.site_id} | ${r.status || '-'} | entrada: ${r.check_in ? new Date(r.check_in).toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit', hour12: false }) : '-'} | salida: ${r.check_out ? new Date(r.check_out).toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit', hour12: false }) : '-'}`
+      `${r.date} | ${empMap[r.employee_id] || r.employee_id} | ${siteMap[r.site_id] || r.site_id} | ${r.status || '-'} | entrada: ${r.check_in ? new Date(r.check_in).toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit', hour12: false }) : '-'} | salida: ${r.check_out ? new Date(r.check_out).toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit', hour12: false }) : '-'} | ventas: ${r.sales_amount > 0 ? '$' + Number(r.sales_amount).toLocaleString('es-MX') : '0'}`
     ).join('\n')
     const empLines = allEmps.filter(e => e.active !== false).map(e => `${e.name} | ${e.role} | ${e.birth_date || ''}`).join('\n')
     const siteLines = sites.map(s => s.name).join(', ')
-    return `Hoy: ${today}\nSucursales: ${siteLines}\n\nEmpleados activos:\n${empLines}\n\nAsistencia últimos 30 días (fecha|empleado|sucursal|estado|entrada|salida):\n${attLines}`
+    return `Hoy: ${today}\nSucursales: ${siteLines}\n\nEmpleados activos:\n${empLines}\n\nAsistencia y ventas últimos 30 días (fecha|empleado|sucursal|estado|entrada|salida|ventas):\n${attLines}`
   }
 
   async function send() {
@@ -97,7 +97,7 @@ function AIChatDrawer({ onClose, att, allEmps, sites, schedules, today }) {
     setLoading(false)
   }
 
-  const suggestions = ['¿Quién llegó tarde hoy?', '¿Cuántas ausencias hubo esta semana?', '¿Quién es el más puntual del mes?']
+  const suggestions = ['¿Quién llegó tarde hoy?', '¿Cuánto vendió [nombre] esta semana?', '¿Quién vendió más este mes?', '¿Quién es el más puntual del mes?']
 
   return (
     <div style={{ position: 'fixed', top: 0, right: 0, width: 380, height: '100vh', background: '#ffffff', boxShadow: '-4px 0 30px rgba(0,0,0,.12)', display: 'flex', flexDirection: 'column', zIndex: 500, fontFamily: "'DM Sans', sans-serif" }}>
