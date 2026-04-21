@@ -2002,7 +2002,15 @@ function UnifiedDashboard({ sites, allEmps, att, todayAtt, schedules, todaySched
                   </div>
                 </div>
                 <div style={{ overflowX: 'auto' }}>
-                <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 520 }}>
+                <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 520, tableLayout: 'fixed' }}>
+                  <colgroup>
+                    <col style={{ width: '26%' }} />
+                    <col style={{ width: '20%' }} />
+                    <col style={{ width: '12%' }} />
+                    <col style={{ width: '12%' }} />
+                    <col style={{ width: '14%' }} />
+                    <col style={{ width: '16%' }} />
+                  </colgroup>
                   <thead><tr>{['Empleado','Horario','Entrada','Salida','Ventas','Estado'].map(h => (
                     <th key={h} style={{ textAlign: 'left', fontSize: 9, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '.6px', color: '#94a3b8', padding: '8px 16px', borderBottom: '1px solid #e2e8f0' }}>{h}</th>
                   ))}</tr></thead>
