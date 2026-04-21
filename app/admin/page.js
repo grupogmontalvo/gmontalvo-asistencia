@@ -202,6 +202,7 @@ export default function AdminPage() {
   const [empPage, setEmpPage] = useState(null)
   const [editingBday, setEditingBday] = useState(null) // { emp, msg }
   const [aiChatOpen, setAiChatOpen] = useState(false)
+  const [aiDismissed, setAiDismissed] = useState(false)
   const [loading, setLoading] = useState(true)
   const [toast, setToast]     = useState(null)
   const [filterEmp,    setFilterEmp]    = useState('')
@@ -478,6 +479,11 @@ export default function AdminPage() {
     }
     setToast('Empleado guardado'); setModal(null); load()
   }
+  async function toggleCompanyActive(company) {
+    await supabase.from('companies').update({ active: !company.active }).eq('id', company.id)
+    await load()
+    setToast(company.active ? `Empresa "${company.name}" desactivada` : `Empresa "${company.name}" activada`)
+  }
   async function saveCompany(data) {
     if (data.id) { await supabase.from('companies').update(data).eq('id', data.id) }
     else { delete data.id; await supabase.from('companies').insert(data) }
@@ -531,9 +537,9 @@ export default function AdminPage() {
     <div style={{ display: 'flex', height: '100vh', overflow: 'hidden', fontFamily: "'DM Sans', sans-serif", background: '#f8fafc', color: '#0f172a' }}>
       <style>{`@media(max-width:767px){.sb-overlay{display:block!important}}`}</style>
       {sidebarOpen && <div onClick={() => setSidebarOpen(false)} className="sb-overlay" style={{ display: 'none', position: 'fixed', inset: 0, background: 'rgba(0,0,0,.5)', zIndex: 99 }} />}
-      <div style={{ width: sidebarOpen ? 210 : 0, minWidth: sidebarOpen ? 210 : 0, background: '#f1f5f9', borderRight: sidebarOpen ? '1px solid #e2e8f0' : 'none', display: 'flex', flexDirection: 'column', flexShrink: 0, overflow: 'hidden', transition: 'width .2s ease, min-width .2s ease', position: 'relative', zIndex: 100 }}>
+      <div style={{ width: sidebarOpen ? 210 : 0, minWidth: sidebarOpen ? 210 : 0, height: '100vh', background: '#f1f5f9', borderRight: sidebarOpen ? '1px solid #e2e8f0' : 'none', display: 'flex', flexDirection: 'column', flexShrink: 0, overflowX: 'hidden', overflowY: 'auto', transition: 'width .2s ease, min-width .2s ease', position: 'relative', zIndex: 100 }}>
         <div style={{ width: 210, display: 'flex', flexDirection: 'column', height: '100%' }}>
-          <div style={{ padding: 16, borderBottom: '1px solid #e2e8f0', display: 'flex', alignItems: 'center', gap: 10 }}>
+          <div style={{ flexShrink: 0, padding: 16, borderBottom: '1px solid #e2e8f0', display: 'flex', alignItems: 'center', gap: 10 }}>
             <img src="/logo.jpeg" style={{ width: 32, height: 32, borderRadius: 8 }} alt="GM" />
             <div>
               <div style={{ fontSize: 13, fontWeight: 700 }}>G.Montalvo</div>
@@ -541,7 +547,7 @@ export default function AdminPage() {
             </div>
           </div>
           {isSuperAdmin && (
-            <div style={{ padding: '8px 10px', borderBottom: '1px solid #e2e8f0', background: 'rgba(59,130,246,.05)' }}>
+            <div style={{ flexShrink: 0, padding: '8px 10px', borderBottom: '1px solid #e2e8f0', background: 'rgba(59,130,246,.05)' }}>
               <div style={{ fontSize: 9, color: '#94a3b8', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '.5px', marginBottom: 4 }}>Empresa</div>
               <select value={selectedCompanyId} onChange={e => setSelectedCompanyId(e.target.value)} style={{ width: '100%', background: '#ffffff', border: '1px solid #e2e8f0', color: '#0f172a', fontSize: 11, padding: '5px 8px', borderRadius: 5, fontFamily: 'inherit' }}>
                 <option value=''>Todas</option>
@@ -549,7 +555,7 @@ export default function AdminPage() {
               </select>
             </div>
           )}
-          <nav style={{ flex: 1, padding: 8, display: 'flex', flexDirection: 'column', gap: 2 }}>
+          <nav style={{ flex: 1, minHeight: 0, padding: 8, display: 'flex', flexDirection: 'column', gap: 2, overflowY: 'auto', WebkitOverflowScrolling: 'touch' }}>
             <div style={{ fontSize: 9, fontWeight: 600, textTransform: 'uppercase', letterSpacing: 1, color: '#94a3b8', padding: '8px 8px 4px' }}>Principal</div>
             {[{ id: 'dashboard', lb: '🏠 Dashboard' }, { id: 'schedules', lb: '📅 Horarios' }, { id: 'alerts', lb: '🔔 Mis alertas' }, { id: 'attendance', lb: '✅ Asistencia' }, { id: 'competitions', lb: '🏆 Competencias' }].map(n => (
               <button key={n.id} onClick={() => { setTab(n.id); if (window.innerWidth < 768) setSidebarOpen(false) }} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 10px', borderRadius: 6, cursor: 'pointer', fontSize: 12, fontWeight: 500, color: tab === n.id ? (n.id === 'alerts' ? '#f59e0b' : '#3b82f6') : '#64748b', background: tab === n.id ? (n.id === 'alerts' ? 'rgba(245,158,11,.1)' : 'rgba(59,130,246,.12)') : 'transparent', border: 'none', width: '100%', textAlign: 'left', fontFamily: 'inherit' }}>{n.lb}</button>
@@ -574,7 +580,7 @@ export default function AdminPage() {
               </button>
             </div>
           </nav>
-          <div style={{ padding: '12px 8px', borderTop: '1px solid #e2e8f0', marginTop: 4 }}>
+          <div style={{ flexShrink: 0, padding: '12px 8px', borderTop: '1px solid #e2e8f0' }}>
             <div style={{ fontSize: 10, color: '#94a3b8', padding: '0 8px 6px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{adminUser?.name || authUser?.email}</div>
             <button onClick={handleLogout} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 10px', borderRadius: 6, cursor: 'pointer', fontSize: 12, color: '#ef4444', background: 'transparent', border: 'none', width: '100%', textAlign: 'left', fontFamily: 'inherit' }}>Cerrar sesión</button>
           </div>
@@ -853,15 +859,19 @@ export default function AdminPage() {
                 const compEmps  = emps.filter(e => e.company_id === company.id).length
                 const compSites = sites.filter(s => s.company_id === company.id).length
                 return (
-                  <div key={company.id} style={{ background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: 10, padding: 16, display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 10 }}>
+                  <div key={company.id} style={{ background: '#ffffff', border: `1px solid ${company.active === false ? 'rgba(239,68,68,.2)' : '#e2e8f0'}`, borderRadius: 10, padding: 16, display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 10, opacity: company.active === false ? 0.6 : 1 }}>
                     <div>
-                      <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 2 }}>{company.name}</div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 2 }}>
+                        <div style={{ fontSize: 14, fontWeight: 700 }}>{company.name}</div>
+                        {company.active === false && <span style={{ fontSize: 9, fontWeight: 700, color: '#ef4444', background: 'rgba(239,68,68,.1)', border: '1px solid rgba(239,68,68,.2)', borderRadius: 4, padding: '1px 6px' }}>INACTIVA</span>}
+                      </div>
                       <div style={{ fontSize: 11, color: '#94a3b8', fontFamily: "'JetBrains Mono'" }}>slug: {company.slug}</div>
                       <div style={{ fontSize: 10, color: '#64748b', marginTop: 4 }}>{compSites} sucursal{compSites !== 1 ? 'es' : ''} · {compEmps} empleado{compEmps !== 1 ? 's' : ''}</div>
                     </div>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                       <button onClick={() => setSelectedCompanyId(company.id)} style={{ padding: '5px 10px', borderRadius: 5, border: '1px solid rgba(59,130,246,.25)', background: selectedCompanyId === company.id ? 'rgba(59,130,246,.2)' : 'rgba(59,130,246,.1)', color: '#3b82f6', fontSize: 10, cursor: 'pointer', fontFamily: 'inherit', fontWeight: 600 }}>Ver datos</button>
                       <button onClick={() => setModal({ type: 'company', data: company })} style={{ background: 'none', border: 'none', color: '#64748b', cursor: 'pointer', fontSize: 11, fontFamily: 'inherit' }}>Editar</button>
+                      <button onClick={() => toggleCompanyActive(company)} style={{ padding: '5px 10px', borderRadius: 5, border: `1px solid ${company.active === false ? 'rgba(16,185,129,.3)' : 'rgba(239,68,68,.3)'}`, background: company.active === false ? 'rgba(16,185,129,.08)' : 'rgba(239,68,68,.08)', color: company.active === false ? '#10b981' : '#ef4444', fontSize: 10, cursor: 'pointer', fontFamily: 'inherit', fontWeight: 600 }}>{company.active === false ? '✓ Activar' : '✕ Desactivar'}</button>
                     </div>
                   </div>
                 )
@@ -937,10 +947,13 @@ export default function AdminPage() {
       {salesImportOpen && <SalesImportModal sites={sites} allEmps={allEmps} att={att} schedules={schedules} adminUser={adminUser} employeeSiteAssignments={employeeSiteAssignments} onClose={() => setSalesImportOpen(false)} onDone={() => { setSalesImportOpen(false); load() }} setToast={setToast} />}
       <FeedbackButton open={feedbackOpen} onClose={() => setFeedbackOpen(false)} adminUser={adminUser} />
       {/* AI Chat button */}
-      {!aiChatOpen && (
-        <button onClick={() => setAiChatOpen(true)} style={{ position: 'fixed', bottom: 24, right: 24, background: 'linear-gradient(135deg, #6366f1, #8b5cf6)', border: 'none', borderRadius: 28, padding: '12px 20px', color: '#fff', fontSize: 13, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', boxShadow: '0 4px 20px rgba(99,102,241,.4)', display: 'flex', alignItems: 'center', gap: 8, zIndex: 400 }}>
-          ✨ Pregúntale a la IA
-        </button>
+      {!aiChatOpen && !aiDismissed && (
+        <div style={{ position: 'fixed', bottom: 24, right: 24, display: 'flex', alignItems: 'center', gap: 6, zIndex: 400 }}>
+          <button onClick={() => setAiChatOpen(true)} style={{ background: 'linear-gradient(135deg, #6366f1, #8b5cf6)', border: 'none', borderRadius: 28, padding: '12px 20px', color: '#fff', fontSize: 13, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', boxShadow: '0 4px 20px rgba(99,102,241,.4)', display: 'flex', alignItems: 'center', gap: 8 }}>
+            ✨ Pregúntale a la IA
+          </button>
+          <button onClick={() => setAiDismissed(true)} title="Ocultar" style={{ background: 'rgba(0,0,0,.35)', border: 'none', borderRadius: '50%', width: 22, height: 22, color: '#fff', fontSize: 12, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', lineHeight: 1, padding: 0 }}>✕</button>
+        </div>
       )}
 
       {/* AI Chat drawer */}
@@ -1150,8 +1163,8 @@ function EmpModal({ data, currentGoal, sites, currentSiteIds, onSave, onClose })
     onSave(f, weeklyGoal, selSites)
   }
   return (
-    <div onClick={onClose} style={{ position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', background: 'rgba(0,0,0,.7)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 200 }}>
-      <div onClick={e => e.stopPropagation()} style={{ background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: 12, padding: 22, width: '100%', maxWidth: 440, maxHeight: '85vh', overflow: 'auto' }}>
+    <div style={{ position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', background: 'rgba(0,0,0,.7)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 200 }}>
+      <div style={{ background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: 12, padding: 22, width: '100%', maxWidth: 440, maxHeight: '85vh', overflow: 'auto' }}>
         <h3 style={{ fontSize: 15, fontWeight: 700, marginBottom: 14 }}>{data ? 'Editar Empleado' : 'Nuevo Empleado'}</h3>
         {[['Nombre','name','text'],['Email','email','email'],['Teléfono','phone','tel'],['Fecha de nacimiento (opcional)','birth_date','date']].map(([l,k,t]) => (
           <div key={k} style={{ marginBottom: 10 }}>
@@ -1264,8 +1277,8 @@ function SiteModal({ data, onSave, onClose }) {
     setSearching(false)
   }
   return (
-    <div onClick={onClose} style={{ position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', background: 'rgba(0,0,0,.7)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 200 }}>
-      <div onClick={e => e.stopPropagation()} style={{ background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: 12, padding: 22, width: '100%', maxWidth: 520, maxHeight: '92vh', overflow: 'auto' }}>
+    <div style={{ position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', background: 'rgba(0,0,0,.7)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 200 }}>
+      <div style={{ background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: 12, padding: 22, width: '100%', maxWidth: 520, maxHeight: '92vh', overflow: 'auto' }}>
         <h3 style={{ fontSize: 15, fontWeight: 700, marginBottom: 14 }}>{isNew ? 'Nuevo Sitio' : 'Editar Sitio'}</h3>
         <div style={{ marginBottom: 10 }}><label style={{ fontSize: 10, fontWeight: 600, color: '#64748b', display: 'block', marginBottom: 4 }}>Nombre del sitio</label><input value={f.name||''} onChange={e => upd('name', e.target.value)} style={{ width:'100%',background:'#ffffff',border:'1px solid #e2e8f0',color:'#0f172a',fontSize:12,padding:'8px 10px',borderRadius:6,outline:'none',fontFamily:'inherit' }} placeholder='Ej: Plaza Américas Cancún' /></div>
         <div style={{ marginBottom: 6 }}><label style={{ fontSize: 10, fontWeight: 600, color: '#64748b', display: 'block', marginBottom: 4 }}>Buscar ubicación</label>
@@ -1403,8 +1416,8 @@ function ScheduleModal({ emp, sites, schedules, onSave, onClose }) {
   // FIX BUG 3: estilos para cada campo de horario — cada uno en su propia línea en móvil
   const fieldStyle = { background:'#ffffff',border:'1px solid #e2e8f0',color:'#0f172a',fontSize:11,padding:'6px 8px',borderRadius:5,outline:'none',fontFamily:'inherit',width:'100%' }
   return (
-    <div onClick={onClose} style={{ position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', background: 'rgba(0,0,0,.7)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 200, backdropFilter: 'blur(4px)' }}>
-      <div onClick={e => e.stopPropagation()} style={{ background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: 12, padding: 22, width: '100%', maxWidth: 480, maxHeight: '92vh', overflow: 'auto' }}>
+    <div style={{ position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', background: 'rgba(0,0,0,.7)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 200, backdropFilter: 'blur(4px)' }}>
+      <div style={{ background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: 12, padding: 22, width: '100%', maxWidth: 480, maxHeight: '92vh', overflow: 'auto' }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4, flexWrap: 'wrap', gap: 8 }}>
           <h3 style={{ fontSize: 15, fontWeight: 700 }}>Horarios — {emp.name}</h3>
           <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
