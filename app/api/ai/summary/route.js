@@ -26,7 +26,7 @@ ${stats.topSite ? `- Sucursal con más asistencia: ${stats.topSite}` : ''}
 ${stats.worstSite ? `- Sucursal con más ausencias: ${stats.worstSite}` : ''}`
 
     const message = await client.messages.create({
-      model: 'claude-haiku-4-5-20251001',
+      model: 'claude-sonnet-4-6',
       max_tokens: 150,
       messages: [{ role: 'user', content: prompt }],
     })
