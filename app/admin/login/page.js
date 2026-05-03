@@ -1,5 +1,5 @@
 'use client'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { supabase } from '../../../lib/supabase'
 
 export default function LoginPage() {
@@ -10,6 +10,13 @@ export default function LoginPage() {
   const [loading,  setLoading]  = useState(false)
   const [mode,     setMode]     = useState('login')   // 'login' | 'reset'
   const [resetSent, setResetSent] = useState(false)
+  const [inactiveMsg, setInactiveMsg] = useState(false)
+
+  useEffect(() => {
+    if (typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('inactive') === '1') {
+      setInactiveMsg(true)
+    }
+  }, [])
 
   async function handleLogin() {
     setErr(''); setLoading(true)
@@ -61,6 +68,7 @@ export default function LoginPage() {
             <div style={{ fontSize: 18, fontWeight: 700, color: '#0f172a', marginBottom: 6 }}>Iniciar sesión</div>
             <div style={{ fontSize: 12, color: '#64748b', marginBottom: 24 }}>Acceso exclusivo para administradores.</div>
 
+            {inactiveMsg && <div style={{ background: 'rgba(245,158,11,.1)', border: '1px solid rgba(245,158,11,.25)', borderRadius: 7, padding: '10px 14px', fontSize: 12, color: '#b45309', marginBottom: 14 }}>Tu acceso al panel está desactivado. Contacta al administrador.</div>}
             {err && <div style={S.err}>{err}</div>}
 
             <div style={{ marginBottom: 14 }}>

@@ -197,6 +197,7 @@ export default function AdminPage() {
   const [selectedCompanyId, setSelectedCompanyId] = useState('')
   const [employeeSiteAssignments, setEmployeeSiteAssignments] = useState([])
   const [siteHours, setSiteHours] = useState([])
+  const [siteHoursForSite, setSiteHoursForSite] = useState(null)
   const [tab, setTab]         = useState('dashboard')
   const [modal, setModal]     = useState(null)
   const [empPage, setEmpPage] = useState(null)
@@ -228,6 +229,11 @@ export default function AdminPage() {
       if (!user) { router.push('/admin/login'); return }
       setAuthUser(user)
       const { data: au } = await supabase.from('admin_users').select('*').eq('id', user.id).single()
+      if (!au || au.active === false) {
+        await supabase.auth.signOut()
+        router.push('/admin/login?inactive=1')
+        return
+      }
       setAdminUser(au)
       setAuthLoading(false)
     })
@@ -502,9 +508,9 @@ export default function AdminPage() {
     setModal({ type: 'showPwd', data: { name: au.name, email: au.email, pwd: json.password } })
   }
   async function deleteAdminUser(au) {
-    if (!confirm(`¿Eliminar a ${au.name}? Se borrará su acceso permanentemente.`)) return
+    if (!confirm(`¿Quitar gerencia a ${au.name}?\n\nPerderá acceso al panel /admin. Si también es empleado, su registro y check-in NO se afectan.\n\nPara devolverle el acceso después tendrías que invitarlo de nuevo. Si solo quieres pausar su acceso temporalmente, mejor usa "Desactivar".`)) return
     await fetch(`/api/admin/invite?id=${au.id}`, { method: 'DELETE' })
-    setToast('Usuario eliminado'); load()
+    setToast('Gerencia removida'); load()
   }
   function getSiteUrl(code) {
     if (typeof window === 'undefined') return ''
@@ -551,7 +557,7 @@ export default function AdminPage() {
               <div style={{ fontSize: 9, color: '#94a3b8', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '.5px', marginBottom: 4 }}>Empresa</div>
               <select value={selectedCompanyId} onChange={e => setSelectedCompanyId(e.target.value)} style={{ width: '100%', background: '#ffffff', border: '1px solid #e2e8f0', color: '#0f172a', fontSize: 11, padding: '5px 8px', borderRadius: 5, fontFamily: 'inherit' }}>
                 <option value=''>Todas</option>
-                {companies.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                {companies.filter(c => c.active !== false).map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
               </select>
             </div>
           )}
@@ -768,23 +774,39 @@ export default function AdminPage() {
           })()}
           {tab === 'sites' && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-              {sites.map(site => (
+              {sites.map(site => {
+                const days = Array.from({ length: 7 }, (_, i) => siteHours.find(h => h.site_id === site.id && h.day_of_week === i))
+                const fmt = d => d?.is_open ? `${d.open_time?.slice(0,5)}–${d.close_time?.slice(0,5)}` : (d ? 'Cerrado' : '—')
+                let hoursLabel = 'Sin horario configurado'
+                if (days.some(Boolean)) {
+                  const sigs = days.map(fmt)
+                  const allSame = sigs.every(s => s === sigs[0])
+                  const weekdaysSame = sigs.slice(0,5).every(s => s === sigs[0])
+                  const weekendSame = sigs[5] === sigs[6]
+                  if (allSame) hoursLabel = sigs[0] === 'Cerrado' ? 'Siempre cerrado' : `Todos los días ${sigs[0]}`
+                  else if (weekdaysSame && weekendSame) hoursLabel = `L–V ${sigs[0]} · S–D ${sigs[5]}`
+                  else hoursLabel = sigs.map((s, i) => `${DAY_NAMES[i]} ${s}`).join(' · ')
+                }
+                return (
                 <div key={site.id} style={{ background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: 10, padding: 16, display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 10 }}>
                   <div>
                     <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 2 }}>{site.name}</div>
                     <div style={{ fontSize: 11, color: '#64748b' }}>{site.address}</div>
                     <div style={{ fontSize: 9, color: '#94a3b8', marginTop: 4 }}>Tolerancia: {site.grace_mins}min · Radio GPS: {site.radius_m}m</div>
+                    <div style={{ fontSize: 10, color: '#64748b', marginTop: 4 }}>🕒 {hoursLabel}</div>
                     <div style={{ fontSize: 10, color: '#3b82f6', marginTop: 4, wordBreak: 'break-all' }}>QR: {getSiteUrl(site.code)}</div>
                   </div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
                     <span style={{ fontFamily: "'JetBrains Mono'", fontSize: 11, color: '#3b82f6', background: 'rgba(59,130,246,.12)', padding: '3px 8px', borderRadius: 4, fontWeight: 600 }}>{site.code}</span>
+                    <button onClick={() => setSiteHoursForSite(site)} style={{ padding: '5px 10px', borderRadius: 5, border: '1px solid rgba(16,185,129,.25)', background: 'rgba(16,185,129,.1)', color: '#10b981', fontSize: 10, cursor: 'pointer', fontFamily: 'inherit', fontWeight: 600 }}>🕒 Horario</button>
                     <button onClick={() => { navigator.clipboard.writeText(getSiteUrl(site.code)); setToast('URL copiada') }} style={{ padding: '5px 10px', borderRadius: 5, border: '1px solid #e2e8f0', background: 'transparent', color: '#64748b', fontSize: 10, cursor: 'pointer', fontFamily: 'inherit' }}>Copiar URL</button>
                     <button onClick={() => setModal({ type: 'qr', data: site })} style={{ padding: '5px 10px', borderRadius: 5, border: '1px solid rgba(59,130,246,.25)', background: 'rgba(59,130,246,.12)', color: '#3b82f6', fontSize: 10, cursor: 'pointer', fontFamily: 'inherit', fontWeight: 600 }}>Ver QR</button>
                     <button onClick={() => setModal({ type: 'site', data: site })} style={{ background: 'none', border: 'none', color: '#64748b', cursor: 'pointer', fontSize: 11, fontFamily: 'inherit' }}>Editar</button>
                     <button onClick={() => { if (confirm('Eliminar ' + site.name + '?')) delSite(site.id) }} style={{ background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer', fontSize: 11, fontFamily: 'inherit' }}>Eliminar</button>
                   </div>
                 </div>
-              ))}
+                )
+              })}
               {sites.length === 0 && <div style={{ padding: 20, textAlign: 'center', color: '#94a3b8', fontSize: 12, background: '#ffffff', borderRadius: 10, border: '1px solid #e2e8f0' }}>No hay sitios. Agrega el primero.</div>}
             </div>
           )}
@@ -838,9 +860,9 @@ export default function AdminPage() {
                             {au.id !== authUser?.id && (<>
                               <button onClick={() => resetAdminPwd(au)} style={{ background: 'none', border: 'none', color: '#f59e0b', cursor: 'pointer', fontSize: 11, fontFamily: 'inherit' }}>Reset pwd</button>
                               {isActive
-                                ? <button onClick={async () => { if (confirm('Desactivar a ' + au.name + '?')) { await supabase.from('admin_users').update({ active: false }).eq('id', au.id); await load(); setToast('Usuario desactivado') } }} style={{ background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer', fontSize: 11, fontFamily: 'inherit' }}>Desactivar</button>
+                                ? <button onClick={async () => { if (confirm('¿Desactivar a ' + au.name + '?\n\nNo podrá entrar a /admin pero su cuenta queda intacta — basta darle "Reactivar" para devolverle el acceso. Si también es empleado, su check-in no se afecta.')) { await supabase.from('admin_users').update({ active: false }).eq('id', au.id); await load(); setToast('Usuario desactivado') } }} style={{ background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer', fontSize: 11, fontFamily: 'inherit' }}>Desactivar</button>
                                 : <button onClick={async () => { await supabase.from('admin_users').update({ active: true }).eq('id', au.id); await load(); setToast('Usuario reactivado') }} style={{ background: 'none', border: 'none', color: '#10b981', cursor: 'pointer', fontSize: 11, fontFamily: 'inherit' }}>Reactivar</button>}
-                              <button onClick={() => deleteAdminUser(au)} style={{ background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer', fontSize: 11, fontFamily: 'inherit' }}>Eliminar</button>
+                              <button onClick={() => deleteAdminUser(au)} style={{ background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer', fontSize: 11, fontFamily: 'inherit' }}>Quitar gerencia</button>
                             </>)}
                           </div>
                         </td>
@@ -882,14 +904,25 @@ export default function AdminPage() {
           {tab === 'alerts' && <AlertsPanel adminUserId={adminUser?.id} adminEmail={adminUser?.email} />}
         </div>
       </div>
-      {modal?.type === 'emp' && <EmpModal
-        data={modal.data?.emp || null}
-        currentGoal={modal.data?.goal?.weekly_goal || ''}
-        sites={sites}
-        currentSiteIds={modal.data?.emp ? employeeSiteAssignments.filter(a => a.employee_id === modal.data.emp.id).map(a => a.site_id) : []}
-        onSave={saveEmp}
-        onClose={() => setModal(null)}
-      />}
+      {modal?.type === 'emp' && (() => {
+        const emp = modal.data?.emp
+        const matchingAdmin = emp?.email ? adminUsers.find(au => (au.email || '').toLowerCase() === emp.email.toLowerCase()) : null
+        return <EmpModal
+          data={emp || null}
+          currentGoal={modal.data?.goal?.weekly_goal || ''}
+          sites={sites}
+          currentSiteIds={emp ? employeeSiteAssignments.filter(a => a.employee_id === emp.id).map(a => a.site_id) : []}
+          existingAdmin={matchingAdmin || null}
+          canManageAdmins={isSuperAdmin || isCompanyAdmin}
+          onPromote={() => setModal({ type: 'adminUser', data: { name: emp.name, email: emp.email } })}
+          onRemoveManager={async () => {
+            await deleteAdminUser(matchingAdmin)
+            setModal(null)
+          }}
+          onSave={saveEmp}
+          onClose={() => setModal(null)}
+        />
+      })()}
       {modal?.type === 'site'      && <SiteModal      data={modal.data} onSave={saveSite} onClose={() => setModal(null)} />}
       {modal?.type === 'qr'        && <QrModal        site={modal.data} url={getSiteUrl(modal.data.code)} onClose={() => setModal(null)} />}
       {modal?.type === 'schedule'  && <ScheduleModal  emp={modal.data} sites={sites} schedules={schedules.filter(s => s.employee_id === modal.data.id)} onSave={async () => { await load(); setToast('Horarios guardados'); setModal(null) }} onClose={() => setModal(null)} />}
@@ -942,6 +975,28 @@ export default function AdminPage() {
             <button onClick={() => setModal(null)} style={{ width: '100%', padding: '9px', borderRadius: 7, border: '1px solid #e2e8f0', background: 'transparent', color: '#64748b', fontSize: 12, cursor: 'pointer', fontFamily: 'inherit' }}>Cerrar</button>
           </div>
         </div>
+      )}
+      {siteHoursForSite && (
+        <SiteHoursModal
+          siteId={siteHoursForSite.id}
+          siteName={siteHoursForSite.name}
+          siteHours={siteHours}
+          allSitesCount={sites.length}
+          onSave={async (rows, applyToAll) => {
+            const targets = applyToAll ? sites.map(s => s.id) : [siteHoursForSite.id]
+            const upserts = []
+            for (const tid of targets) {
+              for (let i = 0; i < 7; i++) {
+                upserts.push({ site_id: tid, day_of_week: i, open_time: rows[i].open, close_time: rows[i].close, is_open: rows[i].isOpen })
+              }
+            }
+            await supabase.from('site_hours').upsert(upserts, { onConflict: 'site_id,day_of_week' })
+            setSiteHoursForSite(null)
+            await load()
+            setToast(applyToAll ? `Horario aplicado a ${targets.length} tiendas` : 'Horario guardado')
+          }}
+          onClose={() => setSiteHoursForSite(null)}
+        />
       )}
       {exportOpen && <ExportModal att={att} allEmps={allEmps} sites={sites} schedules={schedules} goals={goals} adminUsers={adminUsers} onClose={() => setExportOpen(false)} setToast={setToast} />}
       {salesImportOpen && <SalesImportModal sites={sites} allEmps={allEmps} att={att} schedules={schedules} adminUser={adminUser} employeeSiteAssignments={employeeSiteAssignments} onClose={() => setSalesImportOpen(false)} onDone={() => { setSalesImportOpen(false); load() }} setToast={setToast} />}
@@ -1141,7 +1196,7 @@ function EmpSidePanel({ emp, att, sites, onClose, onRefresh, fullPage }) {
   )
 }
 // ─── Emp Modal ────────────────────────────────────────────────────────────────
-function EmpModal({ data, currentGoal, sites, currentSiteIds, onSave, onClose }) {
+function EmpModal({ data, currentGoal, sites, currentSiteIds, existingAdmin, canManageAdmins, onPromote, onRemoveManager, onSave, onClose }) {
   const [f, setF] = useState(data || { name: '', email: '', phone: '', role: 'Vendedor(a)', skip_sales: false, skip_photo: false, birth_date: null })
   const [weeklyGoal, setWeeklyGoal] = useState(currentGoal ? String(currentGoal) : '')
   const [goalErr, setGoalErr] = useState('')
@@ -1165,7 +1220,14 @@ function EmpModal({ data, currentGoal, sites, currentSiteIds, onSave, onClose })
   return (
     <div style={{ position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', background: 'rgba(0,0,0,.7)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 200 }}>
       <div style={{ background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: 12, padding: 22, width: '100%', maxWidth: 440, maxHeight: '85vh', overflow: 'auto' }}>
-        <h3 style={{ fontSize: 15, fontWeight: 700, marginBottom: 14 }}>{data ? 'Editar Empleado' : 'Nuevo Empleado'}</h3>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14, gap: 10, flexWrap: 'wrap' }}>
+          <h3 style={{ fontSize: 15, fontWeight: 700, margin: 0 }}>{data ? 'Editar Empleado' : 'Nuevo Empleado'}</h3>
+          {data && canManageAdmins && data.email && (
+            existingAdmin
+              ? <button onClick={onRemoveManager} style={{ padding: '6px 12px', borderRadius: 6, border: '1px solid rgba(239,68,68,.3)', background: 'rgba(239,68,68,.08)', color: '#ef4444', fontSize: 11, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}>✕ Quitar gerencia</button>
+              : <button onClick={onPromote} style={{ padding: '6px 12px', borderRadius: 6, border: '1px solid rgba(16,185,129,.3)', background: 'rgba(16,185,129,.1)', color: '#10b981', fontSize: 11, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}>👤 Hacer gerente</button>
+          )}
+        </div>
         {[['Nombre','name','text'],['Email','email','email'],['Teléfono','phone','tel'],['Fecha de nacimiento (opcional)','birth_date','date']].map(([l,k,t]) => (
           <div key={k} style={{ marginBottom: 10 }}>
             <label style={{ fontSize: 10, fontWeight: 600, color: '#64748b', display: 'block', marginBottom: 4 }}>{l}</label>
@@ -1554,7 +1616,7 @@ function AdminUserModal({ data, sites, companies, isSuperAdmin, isCompanyAdmin, 
   return (
     <div onClick={createdPwd ? undefined : onClose} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.7)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 200 }}>
       <div onClick={e => e.stopPropagation()} style={{ background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: 12, padding: 22, width: '100%', maxWidth: 460, maxHeight: '85vh', overflow: 'auto' }}>
-        <h3 style={{ fontSize: 15, fontWeight: 700, marginBottom: 14 }}>{data ? 'Editar Usuario' : 'Nuevo Usuario Admin'}</h3>
+        <h3 style={{ fontSize: 15, fontWeight: 700, marginBottom: 14 }}>{data?.id ? 'Editar Usuario' : (data?.email ? 'Hacer gerente' : 'Nuevo Usuario Admin')}</h3>
         {createdPwd ? (
           <div>
             <div style={{ background: 'rgba(16,185,129,.08)', border: '1px solid rgba(16,185,129,.2)', borderRadius: 10, padding: '16px 18px', marginBottom: 16 }}>
@@ -1580,7 +1642,7 @@ function AdminUserModal({ data, sites, companies, isSuperAdmin, isCompanyAdmin, 
               <label style={{ fontSize:10,fontWeight:600,color:'#64748b',display:'block',marginBottom:4 }}>Nombre</label>
               <input value={name} onChange={e => setName(e.target.value)} style={iS} />
             </div>
-            {!data && (
+            {!data?.id && (
               <div style={{ marginBottom: 10 }}>
                 <label style={{ fontSize:10,fontWeight:600,color:'#64748b',display:'block',marginBottom:4 }}>Email</label>
                 <input type='email' value={email} onChange={e => setEmail(e.target.value)} style={iS} />
@@ -1595,11 +1657,11 @@ function AdminUserModal({ data, sites, companies, isSuperAdmin, isCompanyAdmin, 
                 {isSuperAdmin && <option value='superadmin'>Super Admin</option>}
               </select>
             </div>
-            {role !== 'superadmin' && isSuperAdmin && companies.length > 0 && (
+            {role !== 'superadmin' && isSuperAdmin && companies.filter(c => c.active !== false).length > 0 && (
               <div style={{ marginBottom: 10 }}>
                 <label style={{ fontSize:10,fontWeight:600,color:'#64748b',display:'block',marginBottom:4 }}>Empresa</label>
                 <select value={companyId} onChange={e => { setCompanyId(e.target.value); setSelSites([]) }} style={iS}>
-                  {companies.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                  {companies.filter(c => c.active !== false).map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
                 </select>
               </div>
             )}
@@ -2646,7 +2708,7 @@ function SchedEditModal({ sched, allEmps, onSave, onDelete, onClose }) {
   )
 }
 // ─── Site Hours Modal ─────────────────────────────────────────────────────────
-function SiteHoursModal({ siteId, siteName, siteHours, onSave, onClose }) {
+function SiteHoursModal({ siteId, siteName, siteHours, onSave, onClose, allSitesCount }) {
   const init = Array.from({ length: 7 }, (_, i) => {
     const existing = (siteHours || []).find(h => h.site_id === siteId && h.day_of_week === i)
     return { isOpen: existing?.is_open ?? true, open: existing?.open_time?.slice(0,5) ?? '10:00', close: existing?.close_time?.slice(0,5) ?? '22:00' }
@@ -2655,7 +2717,11 @@ function SiteHoursModal({ siteId, siteName, siteHours, onSave, onClose }) {
   const [saving, setSaving] = useState(false)
   const upd = (i, k, v) => setRows(r => r.map((row, idx) => idx === i ? { ...row, [k]: v } : row))
   const timeOpts = Array.from({ length: 48 }, (_, i) => { const h = String(Math.floor(i/2)).padStart(2,'0'); const m = i%2===0?'00':'30'; return `${h}:${m}` })
-  async function handleSave() { setSaving(true); await onSave(rows); setSaving(false) }
+  async function handleSave() { setSaving(true); await onSave(rows, false); setSaving(false) }
+  async function handleSaveAll() {
+    if (!confirm(`¿Aplicar este horario a las ${allSitesCount} tiendas? Esto sobrescribirá los horarios actuales de todas.`)) return
+    setSaving(true); await onSave(rows, true); setSaving(false)
+  }
   return (
     <div onClick={onClose} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.7)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 300, padding: '0 12px' }}>
       <div onClick={e => e.stopPropagation()} style={{ background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: 14, padding: 22, width: '100%', maxWidth: 420, maxHeight: '90vh', overflowY: 'auto' }}>
@@ -2690,6 +2756,12 @@ function SiteHoursModal({ siteId, siteName, siteHours, onSave, onClose }) {
           style={{ width: '100%', marginTop: 4, padding: '11px 0', borderRadius: 8, border: 'none', background: '#3b82f6', color: '#fff', fontSize: 13, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit', opacity: saving ? .6 : 1 }}>
           {saving ? 'Guardando...' : 'Guardar horario'}
         </button>
+        {allSitesCount > 1 && (
+          <button onClick={handleSaveAll} disabled={saving}
+            style={{ width: '100%', marginTop: 8, padding: '10px 0', borderRadius: 8, border: '1px solid #e2e8f0', background: 'transparent', color: '#64748b', fontSize: 12, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit', opacity: saving ? .6 : 1 }}>
+            📋 Aplicar a las {allSitesCount} tiendas
+          </button>
+        )}
       </div>
     </div>
   )

@@ -51,7 +51,7 @@ function getWeekBounds(dateStr) {
   return { start: toStr(mon), end: toStr(sun) }
 }
 
-function KpiCarousel({ empId, siteId, thisWeekSales, lastWeekSales, weeklyGoal }) {
+function KpiCarousel({ empId, siteId, thisWeekSales, lastWeekSales, weeklyGoal, empBirthDate }) {
   const [cards, setCards] = useState([])
   const [idx, setIdx] = useState(0)
   const [paused, setPaused] = useState(false)
@@ -80,12 +80,20 @@ function KpiCarousel({ empId, siteId, thisWeekSales, lastWeekSales, weeklyGoal }
       })
     }
 
+    // Birthday card: own birthday
+    const [bdMon, bdDay] = [today.split('-')[1], today.split('-')[2]]
+    if (empBirthDate) {
+      const [,ownMon,ownDay] = empBirthDate.split('-')
+      if (ownMon === bdMon && ownDay === bdDay) {
+        built.push({ icon: '🎂', title: '¡Hoy es tu cumpleaños!', value: '¡Feliz cumpleaños!', sub: '¡De parte de todo el equipo! 🎉', color: '#ec4899', isBirthday: true })
+      }
+    }
+
     // Birthday card: coworkers at this site with birthday today
     const { data: siteAssign } = await supabase
       .from('employee_site_assignments')
       .select('employee_id, employees(name, birth_date)')
       .eq('site_id', siteId)
-    const [bdMon, bdDay] = [today.split('-')[1], today.split('-')[2]]
     const birthdayPeople = (siteAssign || [])
       .filter(a => a.employees?.birth_date)
       .filter(a => {
@@ -998,7 +1006,7 @@ export default function CheckinPage({ params }) {
             + Nuevo Check-In
           </button>
         </div>
-        <KpiCarousel empId={emp?.id} siteId={site?.id} thisWeekSales={thisWeekSales} lastWeekSales={lastWeekSales} weeklyGoal={weeklyGoal} />
+        <KpiCarousel empId={emp?.id} siteId={site?.id} thisWeekSales={thisWeekSales} lastWeekSales={lastWeekSales} weeklyGoal={weeklyGoal} empBirthDate={emp?.birth_date} />
         {events.length > 0 && (
           <div style={S.timeline}>
             <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 10 }}>Registro del Día</div>
@@ -1117,7 +1125,7 @@ export default function CheckinPage({ params }) {
           </div>
         </div>
 
-        <KpiCarousel empId={emp?.id} siteId={site?.id} thisWeekSales={thisWeekSales} lastWeekSales={lastWeekSales} weeklyGoal={weeklyGoal} />
+        <KpiCarousel empId={emp?.id} siteId={site?.id} thisWeekSales={thisWeekSales} lastWeekSales={lastWeekSales} weeklyGoal={weeklyGoal} empBirthDate={emp?.birth_date} />
 
         {checkinErr  && <div style={S.err}>{checkinErr}</div>}
         {checkoutErr && <div style={S.err}>{checkoutErr}</div>}
