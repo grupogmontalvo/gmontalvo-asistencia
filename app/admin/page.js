@@ -450,9 +450,10 @@ export default function AdminPage() {
   }
 
   async function saveSite(data) {
-    const companyId = isSuperAdmin ? (selectedCompanyId || companies[0]?.id) : adminUser.company_id
     if (!data.id) {
       delete data.id
+      const companyId = isSuperAdmin ? data.company_id : adminUser.company_id
+      if (!companyId) { setToast('Selecciona una empresa'); return }
       data.company_id = companyId
       if (!data.code) data.code = autoCode(data.name)
       await supabase.from('sites').insert(data)
@@ -923,7 +924,7 @@ export default function AdminPage() {
           onClose={() => setModal(null)}
         />
       })()}
-      {modal?.type === 'site'      && <SiteModal      data={modal.data} onSave={saveSite} onClose={() => setModal(null)} />}
+      {modal?.type === 'site'      && <SiteModal      data={modal.data} companies={companies} isSuperAdmin={isSuperAdmin} defaultCompanyId={selectedCompanyId} onSave={saveSite} onClose={() => setModal(null)} />}
       {modal?.type === 'qr'        && <QrModal        site={modal.data} url={getSiteUrl(modal.data.code)} onClose={() => setModal(null)} />}
       {modal?.type === 'schedule'  && <ScheduleModal  emp={modal.data} sites={sites} schedules={schedules.filter(s => s.employee_id === modal.data.id)} onSave={async () => { await load(); setToast('Horarios guardados'); setModal(null) }} onClose={() => setModal(null)} />}
       {modal?.type === 'adminUser' && <AdminUserModal data={modal.data} sites={sites} companies={companies} isSuperAdmin={isSuperAdmin} isCompanyAdmin={isCompanyAdmin} adminUser={adminUser} onSave={async () => { await load(); setToast('Usuario guardado'); setModal(null) }} onClose={() => setModal(null)} onResetPwd={resetAdminPwd} />}
@@ -1286,9 +1287,9 @@ function EmpModal({ data, currentGoal, sites, currentSiteIds, existingAdmin, can
   )
 }
 // ─── Site Modal con Leaflet ───────────────────────────────────────────────────
-function SiteModal({ data, onSave, onClose }) {
+function SiteModal({ data, companies = [], isSuperAdmin = false, defaultCompanyId = '', onSave, onClose }) {
   const isNew = !data?.id
-  const [f, setF] = useState(data || { name: '', address: '', grace_mins: 5, absent_mins: 15, lat: '', lng: '', radius_m: 150, timezone: 'America/Cancun' })
+  const [f, setF] = useState(data || { name: '', address: '', grace_mins: 5, absent_mins: 15, lat: '', lng: '', radius_m: 150, timezone: 'America/Cancun', company_id: defaultCompanyId || '' })
   const [searchQuery, setSearchQuery] = useState(data?.address || '')
   const [searching, setSearching] = useState(false)
   const [searchErr, setSearchErr] = useState('')
@@ -1296,7 +1297,8 @@ function SiteModal({ data, onSave, onClose }) {
   const mapInstanceRef = useRef(null)
   const markerRef      = useRef(null)
   const upd = (k, v) => setF(p => ({ ...p, [k]: v }))
-  const valid = f.name?.trim()
+  const needsCompany = isNew && isSuperAdmin
+  const valid = f.name?.trim() && (!needsCompany || f.company_id)
   const hasGps = f.lat !== '' && f.lng !== '' && parseFloat(f.lat) !== 0 && parseFloat(f.lng) !== 0
   useEffect(() => {
     function initMap() {
@@ -1342,6 +1344,15 @@ function SiteModal({ data, onSave, onClose }) {
     <div style={{ position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', background: 'rgba(0,0,0,.7)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 200 }}>
       <div style={{ background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: 12, padding: 22, width: '100%', maxWidth: 520, maxHeight: '92vh', overflow: 'auto' }}>
         <h3 style={{ fontSize: 15, fontWeight: 700, marginBottom: 14 }}>{isNew ? 'Nuevo Sitio' : 'Editar Sitio'}</h3>
+        {needsCompany && (
+          <div style={{ marginBottom: 10 }}>
+            <label style={{ fontSize: 10, fontWeight: 600, color: '#64748b', display: 'block', marginBottom: 4 }}>Empresa</label>
+            <select value={f.company_id || ''} onChange={e => upd('company_id', e.target.value)} style={{ width:'100%',background:'#ffffff',border:'1px solid #e2e8f0',color:'#0f172a',fontSize:12,padding:'8px 10px',borderRadius:6,outline:'none',fontFamily:'inherit' }}>
+              <option value=''>— Selecciona empresa —</option>
+              {companies.filter(c => c.active !== false).map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+            </select>
+          </div>
+        )}
         <div style={{ marginBottom: 10 }}><label style={{ fontSize: 10, fontWeight: 600, color: '#64748b', display: 'block', marginBottom: 4 }}>Nombre del sitio</label><input value={f.name||''} onChange={e => upd('name', e.target.value)} style={{ width:'100%',background:'#ffffff',border:'1px solid #e2e8f0',color:'#0f172a',fontSize:12,padding:'8px 10px',borderRadius:6,outline:'none',fontFamily:'inherit' }} placeholder='Ej: Plaza Américas Cancún' /></div>
         <div style={{ marginBottom: 6 }}><label style={{ fontSize: 10, fontWeight: 600, color: '#64748b', display: 'block', marginBottom: 4 }}>Buscar ubicación</label>
           <div style={{ display: 'flex', gap: 6 }}>
