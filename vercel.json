@@ -3,6 +3,10 @@
     {
       "path": "/api/alerts/noshow",
       "schedule": "0 14 * * *"
+    },
+    {
+      "path": "/api/alerts/reminder",
+      "schedule": "0 7 * * *"
     }
   ]
 }
