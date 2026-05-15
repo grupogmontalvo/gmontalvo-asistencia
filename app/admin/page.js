@@ -464,6 +464,7 @@ export default function AdminPage() {
   }
   async function saveEmp(data, weeklyGoal, siteIds) {
     const companyId = isSuperAdmin ? (selectedCompanyId || companies[0]?.id) : adminUser.company_id
+    if (data.email) data.email = data.email.trim().toLowerCase()
     let empId = data.id
     if (empId) {
       await supabase.from('employees').update(data).eq('id', empId)

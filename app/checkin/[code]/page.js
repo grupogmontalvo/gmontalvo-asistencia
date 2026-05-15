@@ -587,23 +587,43 @@ export default function CheckinPage({ params }) {
     const noSiteGps = !s?.lat || s.lat === 0
     setGps({ status: 'loading' })
     if (!navigator.geolocation) {
-      // Sin geolocation: si tampoco hay GPS del sitio, permitir; si hay, denegar
       setGps(noSiteGps ? { status: 'ok', dist: 0 } : { status: 'denied' })
       return
     }
+    const onSuccess = (pos) => {
+      const lat = pos.coords.latitude; const lng = pos.coords.longitude
+      if (noSiteGps) {
+        setGps({ status: 'ok', dist: 0, lat, lng })
+      } else {
+        const dist = haversine(lat, lng, s.lat, s.lng)
+        setGps({ status: dist <= s.radius_m ? 'ok' : 'far', dist: Math.round(dist), max: s.radius_m, lat, lng })
+      }
+    }
+    const tryLowAccuracy = (prevErr) => {
+      navigator.geolocation.getCurrentPosition(
+        onSuccess,
+        (err) => {
+          if (noSiteGps) { setGps({ status: 'ok', dist: 0 }); return }
+          // err.code: 1=PERMISSION_DENIED, 2=POSITION_UNAVAILABLE, 3=TIMEOUT
+          const code = err?.code ?? prevErr?.code
+          setGps({ status: 'denied', reason: code === 1 ? 'permission' : code === 3 ? 'timeout' : 'unavailable' })
+        },
+        { enableHighAccuracy: false, timeout: 20000, maximumAge: 60000 }
+      )
+    }
     navigator.geolocation.getCurrentPosition(
-      pos => {
-        const lat = pos.coords.latitude; const lng = pos.coords.longitude
-        if (noSiteGps) {
-          // Sitio sin GPS configurado: guardar coordenadas del empleado pero no bloquear
-          setGps({ status: 'ok', dist: 0, lat, lng })
-        } else {
-          const dist = haversine(lat, lng, s.lat, s.lng)
-          setGps({ status: dist <= s.radius_m ? 'ok' : 'far', dist: Math.round(dist), max: s.radius_m, lat, lng })
+      onSuccess,
+      (err) => {
+        // Si falla con alta precisión (común en navegadores in-app, interiores, etc.), reintentar permisivo
+        if (err?.code === 1) {
+          // Permiso denegado: no tiene sentido reintentar
+          if (noSiteGps) { setGps({ status: 'ok', dist: 0 }); return }
+          setGps({ status: 'denied', reason: 'permission' })
+          return
         }
+        tryLowAccuracy(err)
       },
-      () => setGps(noSiteGps ? { status: 'ok', dist: 0 } : { status: 'denied' }),
-      { enableHighAccuracy: true, timeout: 10000 }
+      { enableHighAccuracy: true, timeout: 8000 }
     )
   }
 
@@ -611,17 +631,28 @@ export default function CheckinPage({ params }) {
     const e = email.trim().toLowerCase()
     if (!e) { setEmailErr('Ingresa tu email'); return }
 
-    // 1. Buscar en empleados activos
-    let { data: empData } = await supabase.from('employees').select('*').eq('email', e).eq('active', true).single()
+    // 1. Buscar en empleados activos (case-insensitive en caso de mayúsculas en BD)
+    let { data: empMatches } = await supabase.from('employees').select('*').ilike('email', e).eq('active', true).limit(1)
+    let empData = empMatches?.[0] || null
+
+    // 1b. Si no se encontró activo, ver si existe pero inactivo (mejor mensaje)
+    if (!empData) {
+      const { data: inactiveMatches } = await supabase.from('employees').select('id, active').ilike('email', e).limit(1)
+      if (inactiveMatches?.[0] && !inactiveMatches[0].active) {
+        setEmailErr('Tu cuenta está inactiva. Contacta a tu administrador.')
+        return
+      }
+    }
 
     // 2. Si no está como empleado, checar si es admin/gerente
     if (!empData) {
-      const { data: adminData } = await supabase.from('admin_users').select('*').eq('email', e).single()
+      const { data: adminMatches } = await supabase.from('admin_users').select('*').ilike('email', e).limit(1)
+      const adminData = adminMatches?.[0] || null
       if (adminData) {
         // Crear automáticamente perfil de empleado para el admin
         const { data: newEmp } = await supabase.from('employees').insert({
           name: adminData.name,
-          email: adminData.email,
+          email: (adminData.email || '').trim().toLowerCase(),
           role: adminData.role === 'superadmin' ? 'Administrador' : 'Gerente',
           company_id: adminData.company_id,
           active: true,
@@ -1137,7 +1168,11 @@ export default function CheckinPage({ params }) {
             {gps.status === 'loading' && 'Obteniendo GPS...'}
             {gps.status === 'ok'      && `Ubicación verificada (${gps.dist || 0}m)`}
             {gps.status === 'far'     && `Fuera de rango: ${gps.dist}m (máx ${gps.max}m)`}
-            {gps.status === 'denied'  && 'GPS no disponible'}
+            {gps.status === 'denied'  && (
+              gps.reason === 'permission' ? 'Permiso de ubicación bloqueado — actívalo en ajustes del navegador'
+              : gps.reason === 'timeout' ? 'GPS tardó demasiado — toca Reintentar'
+              : 'GPS no disponible — sal al aire libre o reintenta'
+            )}
           </span>
           {(gps.status === 'denied' || gps.status === 'far') && (
             <button onClick={() => checkGPS(site)} style={{ background: 'none', border: '1px solid #1e2a45', color: '#f1f5f9', padding: '4px 10px', borderRadius: 5, fontSize: 10, cursor: 'pointer', fontFamily: "'DM Sans'" }}>Reintentar</button>
