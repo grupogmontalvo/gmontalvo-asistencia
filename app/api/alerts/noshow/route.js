@@ -1,14 +1,14 @@
 import { NextResponse } from 'next/server'
-import { supabase, getEmails, sendAlert, buildHtml, getPushAdminIds, sendPush } from '../_helpers'
+import { supabase, getEmails, sendAlert, buildHtml, getPushAdminIds, sendPush, isAuthorizedCron } from '../_helpers'
 
 // Called by Vercel cron once per day
 // "Ya viene tarde"  (on_late)   → fires when start_time has passed but still within grace window
 // "No llegó"        (on_noshow) → fires when start_time + grace_mins has passed
 export async function GET(request) {
-  const authHeader = request.headers.get('authorization')
-  if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
+  if (!isAuthorizedCron(request)) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
+  console.log('[noshow cron] start', new Date().toISOString())
 
   try {
     const { data: sites } = await supabase.from('sites').select('*').eq('active', true)

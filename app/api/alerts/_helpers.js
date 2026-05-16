@@ -92,6 +92,15 @@ export async function sendAlert(emails, subject, html) {
   })
 }
 
+// Vercel envía 'x-vercel-cron: 1' automáticamente al disparar un cron del proyecto.
+// Aceptamos eso, o un Bearer CRON_SECRET para pruebas manuales.
+export function isAuthorizedCron(request) {
+  if (request.headers.get('x-vercel-cron')) return true
+  const secret = process.env.CRON_SECRET
+  if (secret && request.headers.get('authorization') === `Bearer ${secret}`) return true
+  return false
+}
+
 export function buildHtml(title, subtitle, rows) {
   const rowsHtml = rows.map(([label, value, color]) =>
     `<tr><td style="padding:6px 0;color:#4a5568">${label}</td><td style="padding:6px 0;font-weight:600${color ? ';color:' + color : ''}">${value}</td></tr>`

@@ -708,6 +708,13 @@ export default function CheckinPage({ params }) {
 
   function doCheckin() {
     if (isIn || isDone || loading) return
+    // Si GPS falla pero permitimos el check-in, pedir confirmación explícita y avisar que queda reportado.
+    if (gps.status !== 'ok') {
+      const msg = gps.status === 'far'
+        ? `Estás a ${gps.dist}m del sitio (máximo ${gps.max}m).\n\nTu check-in se registrará marcado como FUERA DE GEOCERCA y será visible para el administrador.\n\n¿Continuar?`
+        : `No se pudo verificar tu ubicación.\n\nTu check-in se registrará marcado como SIN GPS y será visible para el administrador.\n\n¿Continuar?`
+      if (!confirm(msg)) return
+    }
     emp?.skip_photo ? doCheckinWithPhoto(null) : setShowCamera('in')
   }
 
@@ -718,7 +725,8 @@ export default function CheckinPage({ params }) {
     const today   = checkIn.toLocaleDateString('en-CA', { timeZone: tz })
     const status  = await calcStatus(checkIn)
     const photoUrl = await uploadPhoto(blob, 'in')
-    const record = { employee_id: emp.id, site_id: site.id, company_id: site.company_id || emp.company_id || null, date: today, status, check_in: checkIn.toISOString(), gps_lat: gps.lat || null, gps_lng: gps.lng || null, gps_distance_m: gps.dist || null, ...(photoUrl ? { photo_url: photoUrl } : {}) }
+    const gpsWarn = gps.status === 'far' ? 'far' : gps.status === 'denied' ? (gps.reason || 'unavailable') : null
+    const record = { employee_id: emp.id, site_id: site.id, company_id: site.company_id || emp.company_id || null, date: today, status, check_in: checkIn.toISOString(), gps_lat: gps.lat || null, gps_lng: gps.lng || null, gps_distance_m: gps.dist || null, gps_warn: gpsWarn, ...(photoUrl ? { photo_url: photoUrl } : {}) }
     const { data, error } = await supabase.from('attendance').insert(record).select().single()
     if (!error && data) {
       setTodayRecord(data); setIsIn(true)
@@ -906,6 +914,9 @@ export default function CheckinPage({ params }) {
 
   const tz    = site?.timezone || 'America/Cancun'
   const gpsOk = gps.status === 'ok'
+  // Permitir check-in aunque GPS falle: queda registrado con gps_warn para reporte admin.
+  // Solo bloqueamos mientras el GPS está cargando (idle/loading) para esperar el primer intento.
+  const canCheckin = gps.status !== 'idle' && gps.status !== 'loading'
 
   const FeedbackBtn = () => (
     <>
@@ -1181,13 +1192,17 @@ export default function CheckinPage({ params }) {
 
         <div style={S.btnGrid}>
           <button
-            style={{ ...S.actBtn(isIn || isDone || loading || (!gpsOk && gps.status !== 'idle')), ...(!isIn && !isDone && gpsOk ? { background: 'rgba(16,185,129,.08)', border: '2px solid rgba(16,185,129,.4)' } : {}) }}
-            disabled={isIn || isDone || loading || (!gpsOk && gps.status !== 'idle')}
+            style={{
+              ...S.actBtn(isIn || isDone || loading || !canCheckin),
+              ...(!isIn && !isDone && gpsOk ? { background: 'rgba(16,185,129,.08)', border: '2px solid rgba(16,185,129,.4)' } : {}),
+              ...(!isIn && !isDone && canCheckin && !gpsOk ? { background: 'rgba(245,158,11,.08)', border: '2px solid rgba(245,158,11,.4)' } : {}),
+            }}
+            disabled={isIn || isDone || loading || !canCheckin}
             onClick={doCheckin}
           >
-            <div style={S.actIcon('rgba(16,185,129,.12)', '#10b981')}>✓</div>
+            <div style={S.actIcon(gpsOk || isIn ? 'rgba(16,185,129,.12)' : 'rgba(245,158,11,.12)', gpsOk || isIn ? '#10b981' : '#f59e0b')}>{!isIn && !gpsOk && canCheckin ? '⚠' : '✓'}</div>
             <span style={{ fontSize: !isIn && !isDone ? 13 : 12, fontWeight: !isIn && !isDone ? 700 : 600 }}>
-              {isIn ? 'Check In ✓' : 'Hacer Check In'}
+              {isIn ? 'Check In ✓' : !gpsOk && canCheckin ? 'Check In sin GPS' : 'Hacer Check In'}
             </span>
           </button>
           <button style={S.actBtn(!isIn || onLunch || onBreak)} disabled={!isIn || onLunch || onBreak} onClick={doCheckout}>

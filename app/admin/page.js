@@ -1158,6 +1158,11 @@ function EmpSidePanel({ emp, att, sites, onClose, onRefresh, fullPage }) {
               const tomLabel = tom > 0 ? `${Math.floor(tom/60)>0?Math.floor(tom/60)+'h ':''}${tom%60>0?tom%60+'m':''}`.trim() : '–'
               const gpsLabel = r.gps_lat && r.gps_lng ? `${r.gps_distance_m??'?'}m` : '–'
               const gpsLink  = r.gps_lat && r.gps_lng ? `https://maps.google.com/?q=${r.gps_lat},${r.gps_lng}` : null
+              const gpsWarnLabel = r.gps_warn === 'far' ? 'Fuera de geocerca'
+                : r.gps_warn === 'permission' ? 'Permiso negado'
+                : r.gps_warn === 'timeout' ? 'GPS sin señal (timeout)'
+                : r.gps_warn === 'unavailable' ? 'GPS sin señal'
+                : null
               const isEditing = editingSale?.id === r.id
               return (
                 <tr key={r.id} style={{ borderBottom: '1px solid rgba(226,232,240,.3)' }}>
@@ -1186,7 +1191,11 @@ function EmpSidePanel({ emp, att, sites, onClose, onRefresh, fullPage }) {
                   )}
                   {visibleCols.includes('photo_in')  && <td style={{ padding: '8px 14px' }}>{r.photo_url?<a href={r.photo_url} target='_blank' rel='noopener noreferrer'><img src={r.photo_url} alt='in' style={{ width:32,height:32,borderRadius:6,objectFit:'cover',display:'block',border:'1px solid #e2e8f0' }} /></a>:<span style={{ fontSize:10,color:'#94a3b8' }}>–</span>}</td>}
                   {visibleCols.includes('photo_out') && <td style={{ padding: '8px 14px' }}>{r.photo_url_out?<a href={r.photo_url_out} target='_blank' rel='noopener noreferrer'><img src={r.photo_url_out} alt='out' style={{ width:32,height:32,borderRadius:6,objectFit:'cover',display:'block',border:'1px solid #e2e8f0' }} /></a>:<span style={{ fontSize:10,color:'#94a3b8' }}>–</span>}</td>}
-                  {visibleCols.includes('gps')       && <td style={{ padding: '8px 14px', fontSize: 11, whiteSpace: 'nowrap' }}>{gpsLink?<a href={gpsLink} target='_blank' rel='noopener noreferrer' style={{ color:'#3b82f6',textDecoration:'none',fontFamily:"'JetBrains Mono'" }}>{gpsLabel} ↗</a>:<span style={{ color:'#94a3b8' }}>–</span>}</td>}
+                  {visibleCols.includes('gps')       && <td style={{ padding: '8px 14px', fontSize: 11, whiteSpace: 'nowrap' }}>
+                    {gpsWarnLabel ? <span title={gpsWarnLabel} style={{ display: 'inline-flex', alignItems: 'center', gap: 4, color: '#f59e0b', fontWeight: 600 }}>⚠ {gpsWarnLabel}{gpsLink?<a href={gpsLink} target='_blank' rel='noopener noreferrer' style={{ color: '#f59e0b', textDecoration: 'none', fontFamily: "'JetBrains Mono'", marginLeft: 4 }}>({gpsLabel}↗)</a>:null}</span>
+                      : gpsLink ? <a href={gpsLink} target='_blank' rel='noopener noreferrer' style={{ color:'#3b82f6',textDecoration:'none',fontFamily:"'JetBrains Mono'" }}>{gpsLabel} ↗</a>
+                      : <span style={{ color:'#94a3b8' }}>–</span>}
+                  </td>}
                   {visibleCols.includes('status')    && <td style={{ padding: '8px 14px' }}>{r.status?<span style={{ padding:'2px 8px',borderRadius:4,fontSize:10,fontWeight:600,color:stClr[r.status]||'#64748b',background:stBg[r.status]||'rgba(136,146,168,.1)',whiteSpace:'nowrap' }}>{stLbl[r.status]||r.status}</span>:<span style={{ fontSize:10,color:'#94a3b8' }}>–</span>}</td>}
                 </tr>
               )
@@ -3898,6 +3907,7 @@ function ExportModal({ att, allEmps, sites, schedules, goals, adminUsers, onClos
         status: { h: 'Estado', v: r => stLbl[r.status] || r.status || '' },
         gps_distance: { h: 'Distancia GPS (m)', v: r => r.gps_distance_m != null ? r.gps_distance_m : '' },
         gps_coords: { h: 'Latitud', v: r => r.gps_lat || '', h2: 'Longitud', v2: r => r.gps_lng || '' },
+        gps_warn: { h: 'Aviso GPS', v: r => r.gps_warn === 'far' ? 'Fuera de geocerca' : r.gps_warn === 'permission' ? 'Permiso negado' : r.gps_warn === 'timeout' ? 'GPS timeout' : r.gps_warn === 'unavailable' ? 'GPS sin señal' : '' },
       }
       cols.forEach(c => {
         const d = colDefs[c]
