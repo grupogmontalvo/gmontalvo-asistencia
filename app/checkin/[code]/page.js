@@ -632,12 +632,14 @@ export default function CheckinPage({ params }) {
     if (!e) { setEmailErr('Ingresa tu email'); return }
 
     // 1. Buscar en empleados activos (case-insensitive en caso de mayúsculas en BD)
-    let { data: empMatches } = await supabase.from('employees').select('*').ilike('email', e).eq('active', true).limit(1)
+    const { data: empMatches, error: empErr } = await supabase.from('employees').select('*').ilike('email', e).eq('active', true).limit(1)
+    if (empErr) { setEmailErr('No pudimos conectar. Verifica tu internet e intenta de nuevo.'); return }
     let empData = empMatches?.[0] || null
 
     // 1b. Si no se encontró activo, ver si existe pero inactivo (mejor mensaje)
     if (!empData) {
-      const { data: inactiveMatches } = await supabase.from('employees').select('id, active').ilike('email', e).limit(1)
+      const { data: inactiveMatches, error: inactErr } = await supabase.from('employees').select('id, active').ilike('email', e).limit(1)
+      if (inactErr) { setEmailErr('No pudimos conectar. Verifica tu internet e intenta de nuevo.'); return }
       if (inactiveMatches?.[0] && !inactiveMatches[0].active) {
         setEmailErr('Tu cuenta está inactiva. Contacta a tu administrador.')
         return
@@ -646,7 +648,8 @@ export default function CheckinPage({ params }) {
 
     // 2. Si no está como empleado, checar si es admin/gerente
     if (!empData) {
-      const { data: adminMatches } = await supabase.from('admin_users').select('*').ilike('email', e).limit(1)
+      const { data: adminMatches, error: admErr } = await supabase.from('admin_users').select('*').ilike('email', e).limit(1)
+      if (admErr) { setEmailErr('No pudimos conectar. Verifica tu internet e intenta de nuevo.'); return }
       const adminData = adminMatches?.[0] || null
       if (adminData) {
         // Crear automáticamente perfil de empleado para el admin
