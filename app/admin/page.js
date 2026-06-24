@@ -219,6 +219,7 @@ export default function AdminPage() {
   const [feedbackLabel] = useState(() => Math.random() > 0.5 ? ['💡', 'Alguna idea?'] : ['💬', 'Te escuchamos'])
   const [feedbackOpen, setFeedbackOpen] = useState(false)
   const [salesImportOpen, setSalesImportOpen] = useState(false)
+  const [empImportOpen, setEmpImportOpen] = useState(false)
   const [exportOpen, setExportOpen] = useState(false)
   const today = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Cancun' })
   useEffect(() => {
@@ -606,7 +607,10 @@ export default function AdminPage() {
               <p style={{ fontSize: 11, color: '#64748b', marginTop: 1 }}>{new Date().toLocaleDateString('es-MX', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric', timeZone: 'America/Cancun' })}</p>
             </div>
           </div>
-          {tab === 'employees'  && <button onClick={() => setModal({ type: 'emp', data: null })} style={{ padding: '7px 14px', borderRadius: 7, border: 'none', background: '#3b82f6', color: '#fff', fontSize: 12, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}>+ Nuevo Empleado</button>}
+          {tab === 'employees'  && <div style={{ display: 'flex', gap: 8 }}>
+            <button onClick={() => setEmpImportOpen(true)} style={{ padding: '7px 14px', borderRadius: 7, border: '1px solid rgba(139,92,246,.3)', background: 'rgba(139,92,246,.1)', color: '#a78bfa', fontSize: 12, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit', whiteSpace: 'nowrap' }}>⬆ Importar</button>
+            <button onClick={() => setModal({ type: 'emp', data: null })} style={{ padding: '7px 14px', borderRadius: 7, border: 'none', background: '#3b82f6', color: '#fff', fontSize: 12, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit', whiteSpace: 'nowrap' }}>+ Nuevo Empleado</button>
+          </div>}
           {tab === 'sites'      && <button onClick={() => setModal({ type: 'site', data: null })} style={{ padding: '7px 14px', borderRadius: 7, border: 'none', background: '#3b82f6', color: '#fff', fontSize: 12, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}>+ Nuevo Sitio</button>}
           {tab === 'users'      && (isSuperAdmin || isCompanyAdmin) && <button onClick={() => setModal({ type: 'adminUser', data: null })} style={{ padding: '7px 14px', borderRadius: 7, border: 'none', background: '#3b82f6', color: '#fff', fontSize: 12, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}>+ Nuevo Usuario</button>}
           {tab === 'companies'  && isSuperAdmin && <button onClick={() => setModal({ type: 'company', data: null })} style={{ padding: '7px 14px', borderRadius: 7, border: 'none', background: '#3b82f6', color: '#fff', fontSize: 12, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}>+ Nueva Empresa</button>}
@@ -1002,6 +1006,7 @@ export default function AdminPage() {
       )}
       {exportOpen && <ExportModal att={att} allEmps={allEmps} sites={sites} schedules={schedules} goals={goals} adminUsers={adminUsers} onClose={() => setExportOpen(false)} setToast={setToast} />}
       {salesImportOpen && <SalesImportModal sites={sites} allEmps={allEmps} att={att} schedules={schedules} adminUser={adminUser} employeeSiteAssignments={employeeSiteAssignments} onClose={() => setSalesImportOpen(false)} onDone={() => { setSalesImportOpen(false); load() }} setToast={setToast} />}
+      {empImportOpen && <EmployeeImportModal sites={sites} allEmps={allEmps} companyId={isSuperAdmin ? (selectedCompanyId || companies[0]?.id) : adminUser?.company_id} onClose={() => setEmpImportOpen(false)} onDone={() => { setEmpImportOpen(false); load() }} setToast={setToast} />}
       <FeedbackButton open={feedbackOpen} onClose={() => setFeedbackOpen(false)} adminUser={adminUser} />
       {/* AI Chat button */}
       {!aiChatOpen && !aiDismissed && (
@@ -3299,6 +3304,264 @@ function SalesImportModal({ sites, allEmps, att, schedules, adminUser, employeeS
               <button onClick={handleSave} disabled={validRows.length === 0 || saving}
                 style={{ padding: '12px', borderRadius: 9, border: 'none', background: validRows.length > 0 && !saving ? '#a78bfa' : '#e2e8f0', color: validRows.length > 0 && !saving ? '#fff' : '#94a3b8', fontSize: 13, fontWeight: 700, cursor: validRows.length > 0 && !saving ? 'pointer' : 'not-allowed', fontFamily: 'inherit' }}>
                 {saving ? 'Procesando...' : `Aplicar ${validRows.length} cambios`}
+              </button>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ─── Employee Import Modal ────────────────────────────────────────────────────
+function EmployeeImportModal({ sites, allEmps, companyId, onClose, onDone, setToast }) {
+  const [step, setStep] = useState('choose') // choose | upload | preview
+  const [rows, setRows] = useState([])
+  const [saving, setSaving] = useState(false)
+  const [err, setErr] = useState('')
+  const fileRef = useRef(null)
+
+  const HEADERS = ['Nombre', 'Email', 'Teléfono', 'Fecha de nacimiento', 'Rol', 'Meta semanal', 'Vendedor', 'Pedir foto', 'Sitios']
+  const emailRe = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+
+  function downloadTemplate() {
+    const siteHint = sites.slice(0, 2).map(s => s.name).join(', ') || 'Nombre del sitio'
+    const example = ['Juan Pérez', 'juan@ejemplo.com', '9981234567', '1990-05-15', 'Vendedor(a)', '5000', 'Sí', 'Sí', siteHint]
+    const csv = [HEADERS, example].map(r => r.map(v => `"${String(v).replace(/"/g, '""')}"`).join(',')).join('\n')
+    const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8;' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = 'plantilla-empleados.csv'
+    document.body.appendChild(a); a.click(); document.body.removeChild(a)
+    URL.revokeObjectURL(url)
+    setToast('Plantilla descargada — borra la fila de ejemplo y agrega tus empleados')
+  }
+
+  // CSV line parser that respects quoted fields (so "Sitio A, Sitio B" stays one cell)
+  function parseLine(line) {
+    const out = []; let cur = ''; let inQ = false
+    for (let i = 0; i < line.length; i++) {
+      const ch = line[i]
+      if (inQ) {
+        if (ch === '"') { if (line[i + 1] === '"') { cur += '"'; i++ } else inQ = false }
+        else cur += ch
+      } else {
+        if (ch === '"') inQ = true
+        else if (ch === ',') { out.push(cur); cur = '' }
+        else cur += ch
+      }
+    }
+    out.push(cur)
+    return out.map(c => c.trim())
+  }
+
+  function isYes(v) {
+    const s = (v || '').toString().trim().toLowerCase()
+    return s === 'sí' || s === 'si' || s === 'yes' || s === 'x' || s === '1' || s === 'true'
+  }
+
+  function parseCSV(text) {
+    const lines = text.replace(/^﻿/, '').trim().split(/\r?\n/)
+    if (lines.length < 2) { setErr('El archivo debe tener encabezado y al menos una fila.'); return }
+    const headers = parseLine(lines[0]).map(h => h.toLowerCase())
+    const idx = {
+      name: headers.findIndex(h => h.includes('nombre')),
+      email: headers.findIndex(h => h.includes('email') || h.includes('correo')),
+      phone: headers.findIndex(h => h.includes('tel') || h.includes('phone') || h.includes('celular')),
+      birth: headers.findIndex(h => h.includes('nacim') || h.includes('cumple') || h.includes('birth')),
+      role: headers.findIndex(h => h.includes('rol') || h.includes('puesto')),
+      goal: headers.findIndex(h => h.includes('meta')),
+      vendor: headers.findIndex(h => h.includes('vendedor')),
+      photo: headers.findIndex(h => h.includes('foto')),
+      sites: headers.findIndex(h => h.includes('sitio') || h.includes('sucursal')),
+    }
+    if (idx.name < 0 || idx.email < 0) {
+      setErr('El CSV debe incluir al menos las columnas: Nombre y Email.')
+      return
+    }
+    const existingEmails = new Set(allEmps.map(e => (e.email || '').toLowerCase()).filter(Boolean))
+    const seen = new Set()
+    const parsed = []
+    for (let i = 1; i < lines.length; i++) {
+      const cols = parseLine(lines[i])
+      const get = k => (idx[k] >= 0 ? (cols[idx[k]] || '').trim() : '')
+      const name = get('name')
+      const email = get('email').toLowerCase()
+      if (!name && !email) continue // skip blank line
+      let birth = get('birth')
+      if (/^\d{2}\/\d{2}\/\d{4}$/.test(birth)) { const [d, m, y] = birth.split('/'); birth = `${y}-${m}-${d}` }
+      const goalRaw = get('goal')
+      const goal = goalRaw ? parseFloat(goalRaw.replace(/[$,\s]/g, '')) : 0
+      // Map site names → ids (split on , or ;)
+      const siteCell = get('sites')
+      const siteNames = siteCell ? siteCell.split(/[;,]/).map(s => s.trim()).filter(Boolean) : []
+      const siteIds = []; const unknownSites = []
+      for (const sn of siteNames) {
+        const match = sites.find(s => s.name.toLowerCase() === sn.toLowerCase())
+        if (match) siteIds.push(match.id); else unknownSites.push(sn)
+      }
+      const validEmail = emailRe.test(email)
+      const isDupExisting = validEmail && existingEmails.has(email)
+      const isDupFile = validEmail && seen.has(email)
+      if (validEmail) seen.add(email)
+      const valid = !!name && validEmail && !isDupExisting && !isDupFile
+      parsed.push({
+        name, email,
+        phone: get('phone'),
+        birth_date: birth || null,
+        role: get('role') || 'Vendedor(a)',
+        weekly_goal: goal,
+        skip_sales: idx.vendor >= 0 ? !isYes(get('vendor')) : false,
+        skip_photo: idx.photo >= 0 ? !isYes(get('photo')) : false,
+        siteIds, unknownSites,
+        valid,
+        reason: !name ? 'Falta nombre' : !validEmail ? 'Email inválido' : isDupExisting ? 'Ya existe (omitido)' : isDupFile ? 'Duplicado en archivo' : '',
+      })
+    }
+    setRows(parsed)
+    setErr('')
+    setStep('preview')
+  }
+
+  function handleFile(e) {
+    const file = e.target.files?.[0]
+    if (!file) return
+    const reader = new FileReader()
+    reader.onload = ev => parseCSV(ev.target.result)
+    reader.readAsText(file, 'utf-8')
+  }
+
+  async function handleSave() {
+    const valid = rows.filter(r => r.valid)
+    if (!valid.length) return
+    setSaving(true)
+    let created = 0, errors = 0
+    for (const row of valid) {
+      const { data: newEmp, error } = await supabase.from('employees').insert({
+        name: row.name,
+        email: row.email,
+        phone: row.phone || null,
+        birth_date: row.birth_date,
+        role: row.role,
+        skip_sales: row.skip_sales,
+        skip_photo: row.skip_photo,
+        active: true,
+        company_id: companyId,
+      }).select().single()
+      if (error || !newEmp?.id) { errors++; continue }
+      if (row.weekly_goal && row.weekly_goal > 0) {
+        await supabase.from('employee_goals').upsert({ employee_id: newEmp.id, weekly_goal: row.weekly_goal }, { onConflict: 'employee_id' })
+      }
+      if (row.siteIds.length > 0) {
+        await supabase.from('employee_site_assignments').insert(row.siteIds.map(site_id => ({ employee_id: newEmp.id, site_id })))
+      }
+      created++
+    }
+    setSaving(false)
+    const parts = []
+    if (created) parts.push(`${created} empleados creados`)
+    if (skippedCount) parts.push(`${skippedCount} omitidos`)
+    if (errors) parts.push(`${errors} errores`)
+    setToast(parts.join(', ') || 'Sin cambios')
+    onDone()
+  }
+
+  const validRows = rows.filter(r => r.valid)
+  const invalidRows = rows.filter(r => !r.valid)
+  const skippedCount = invalidRows.filter(r => r.reason === 'Ya existe (omitido)' || r.reason === 'Duplicado en archivo').length
+
+  return (
+    <div onClick={onClose} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 400, padding: 16 }}>
+      <div onClick={e => e.stopPropagation()} style={{ background: '#ffffff', borderRadius: 14, padding: 0, width: '100%', maxWidth: 620, maxHeight: '90vh', overflow: 'auto' }}>
+        <div style={{ padding: '18px 24px 14px', borderBottom: '1px solid #e2e8f0', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <div style={{ fontSize: 15, fontWeight: 700 }}>👥 Importar empleados</div>
+          <button onClick={onClose} style={{ background: 'none', border: 'none', color: '#94a3b8', fontSize: 18, cursor: 'pointer' }}>✕</button>
+        </div>
+
+        <div style={{ padding: '16px 24px 20px' }}>
+          {step === 'choose' && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+              <div style={{ fontSize: 12, color: '#64748b', marginBottom: 4, lineHeight: 1.6 }}>
+                Descarga la plantilla CSV, llénala en Excel con tus empleados, y vuelve a subirla.
+                <br /><span style={{ color: '#f59e0b', fontWeight: 600 }}>Si un email ya existe, esa fila se omite (no se duplica).</span>
+              </div>
+              <button onClick={downloadTemplate}
+                style={{ padding: '14px 16px', borderRadius: 10, border: '1.5px solid rgba(16,185,129,.3)', background: 'rgba(16,185,129,.06)', cursor: 'pointer', textAlign: 'left', fontFamily: 'inherit', display: 'flex', alignItems: 'center', gap: 12 }}>
+                <span style={{ fontSize: 22 }}>⬇</span>
+                <div>
+                  <div style={{ fontSize: 13, fontWeight: 700, color: '#10b981' }}>Descargar plantilla</div>
+                  <div style={{ fontSize: 10, color: '#64748b', marginTop: 2 }}>CSV con columnas y una fila de ejemplo</div>
+                </div>
+              </button>
+              <button onClick={() => setStep('upload')}
+                style={{ padding: '14px 16px', borderRadius: 10, border: '1.5px solid rgba(139,92,246,.3)', background: 'rgba(139,92,246,.06)', cursor: 'pointer', textAlign: 'left', fontFamily: 'inherit', display: 'flex', alignItems: 'center', gap: 12 }}>
+                <span style={{ fontSize: 22 }}>⬆</span>
+                <div>
+                  <div style={{ fontSize: 13, fontWeight: 700, color: '#a78bfa' }}>Subir empleados</div>
+                  <div style={{ fontSize: 10, color: '#64748b', marginTop: 2 }}>Importar CSV con la lista de empleados</div>
+                </div>
+              </button>
+              <div style={{ fontSize: 10, color: '#94a3b8', lineHeight: 1.6, background: '#f8fafc', borderRadius: 8, padding: 10 }}>
+                <strong>Columnas:</strong> Nombre*, Email*, Teléfono, Fecha de nacimiento (AAAA-MM-DD), Rol, Meta semanal, Vendedor (Sí/No), Pedir foto (Sí/No), Sitios.<br />
+                <strong>Sitios:</strong> nombres exactos separados por coma o punto y coma; déjalo vacío para no asignar.<br />
+                * obligatorios.
+              </div>
+            </div>
+          )}
+
+          {step === 'upload' && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+              <button onClick={() => setStep('choose')} style={{ alignSelf: 'flex-start', background: 'none', border: 'none', color: '#3b82f6', fontSize: 11, cursor: 'pointer', fontFamily: 'inherit', padding: 0 }}>← Volver</button>
+              <div style={{ fontSize: 11, color: '#64748b', lineHeight: 1.6 }}>
+                Sube el CSV con tus empleados. Se requieren <strong style={{ color: '#0f172a' }}>Nombre</strong> y <strong style={{ color: '#0f172a' }}>Email</strong> válido en cada fila.
+              </div>
+              <input ref={fileRef} type="file" accept=".csv,.txt" style={{ display: 'none' }} onChange={handleFile} />
+              <button onClick={() => fileRef.current?.click()}
+                style={{ padding: '16px', borderRadius: 10, border: '1.5px dashed rgba(139,92,246,.4)', background: 'rgba(139,92,246,.04)', color: '#a78bfa', fontSize: 12, cursor: 'pointer', fontFamily: 'inherit', textAlign: 'center' }}>
+                📂 Seleccionar archivo CSV
+              </button>
+              {err && <div style={{ fontSize: 11, color: '#ef4444' }}>{err}</div>}
+            </div>
+          )}
+
+          {step === 'preview' && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+              <button onClick={() => { setStep('upload'); setRows([]) }} style={{ alignSelf: 'flex-start', background: 'none', border: 'none', color: '#3b82f6', fontSize: 11, cursor: 'pointer', fontFamily: 'inherit', padding: 0 }}>← Volver</button>
+
+              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                {validRows.length > 0 && <span style={{ fontSize: 10, padding: '3px 10px', borderRadius: 12, background: 'rgba(16,185,129,.1)', color: '#10b981', fontWeight: 600 }}>+ {validRows.length} a crear</span>}
+                {skippedCount > 0 && <span style={{ fontSize: 10, padding: '3px 10px', borderRadius: 12, background: 'rgba(245,158,11,.1)', color: '#b45309', fontWeight: 600 }}>⊘ {skippedCount} omitidos (duplicados)</span>}
+                {invalidRows.length - skippedCount > 0 && <span style={{ fontSize: 10, padding: '3px 10px', borderRadius: 12, background: 'rgba(239,68,68,.1)', color: '#ef4444', fontWeight: 600 }}>✗ {invalidRows.length - skippedCount} con error</span>}
+              </div>
+
+              <div style={{ background: '#fff', borderRadius: 8, overflow: 'hidden', maxHeight: 300, overflowY: 'auto', border: '1px solid #e2e8f0' }}>
+                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 10 }}>
+                  <thead><tr>{['Nombre', 'Email', 'Rol', 'Sitios', 'Estado'].map(h => <th key={h} style={{ textAlign: 'left', padding: '6px 10px', color: '#94a3b8', fontWeight: 600, borderBottom: '1px solid #e2e8f0', whiteSpace: 'nowrap' }}>{h}</th>)}</tr></thead>
+                  <tbody>
+                    {rows.slice(0, 80).map((r, i) => (
+                      <tr key={i} style={{ borderBottom: '1px solid rgba(226,232,240,.3)', background: !r.valid ? 'rgba(239,68,68,.03)' : 'rgba(16,185,129,.03)' }}>
+                        <td style={{ padding: '5px 10px', color: r.name ? '#0f172a' : '#ef4444' }}>{r.name || '—'}</td>
+                        <td style={{ padding: '5px 10px', color: '#64748b' }}>{r.email || '—'}</td>
+                        <td style={{ padding: '5px 10px', color: '#64748b' }}>{r.role}</td>
+                        <td style={{ padding: '5px 10px', color: r.unknownSites.length ? '#f59e0b' : '#64748b' }}>
+                          {r.siteIds.length}{r.unknownSites.length ? ` ⚠ no encontrado: ${r.unknownSites.join(', ')}` : ''}
+                        </td>
+                        <td style={{ padding: '5px 10px' }}>
+                          {r.valid
+                            ? <span style={{ fontSize: 9, padding: '2px 6px', borderRadius: 4, background: 'rgba(16,185,129,.1)', color: '#10b981', fontWeight: 600 }}>Crear</span>
+                            : <span style={{ fontSize: 9, color: r.reason.includes('omitido') ? '#b45309' : '#ef4444' }}>{r.reason}</span>}
+                        </td>
+                      </tr>
+                    ))}
+                    {rows.length > 80 && <tr><td colSpan={5} style={{ padding: '6px 10px', color: '#94a3b8', fontSize: 10 }}>...y {rows.length - 80} filas más</td></tr>}
+                  </tbody>
+                </table>
+              </div>
+
+              <button onClick={handleSave} disabled={validRows.length === 0 || saving}
+                style={{ padding: '12px', borderRadius: 9, border: 'none', background: validRows.length > 0 && !saving ? '#10b981' : '#e2e8f0', color: validRows.length > 0 && !saving ? '#fff' : '#94a3b8', fontSize: 13, fontWeight: 700, cursor: validRows.length > 0 && !saving ? 'pointer' : 'not-allowed', fontFamily: 'inherit' }}>
+                {saving ? 'Creando...' : `Crear ${validRows.length} empleados`}
               </button>
             </div>
           )}
