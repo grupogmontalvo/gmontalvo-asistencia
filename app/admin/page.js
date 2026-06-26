@@ -2166,7 +2166,7 @@ function sbTimeToY(time) {
 function sbYToTime(y) {
   const tot = SB_START + Math.max(0, y) / SB_HOUR_H
   const h = Math.floor(tot)
-  const m = Math.round(((tot - h) * 60) / 30) * 30
+  const m = Math.round(((tot - h) * 60) / 15) * 15
   const fh = m >= 60 ? h + 1 : h; const fm = m >= 60 ? 0 : m
   return `${String(Math.max(SB_START, Math.min(SB_END - 1, fh))).padStart(2, '0')}:${String(fm).padStart(2, '0')}`
 }
@@ -2243,7 +2243,7 @@ function ScheduleBoard({ sites, allEmps, schedules, employeeSiteAssignments, sit
   }, [selSiteId])
   function adjDefaultDur(delta) {
     setDefaultDur(d => {
-      const next = Math.round(Math.min(24, Math.max(0.5, d + delta)) * 2) / 2
+      const next = Math.round(Math.min(24, Math.max(0.5, d + delta)) * 4) / 4
       try { localStorage.setItem('schedDur_' + selSiteId, String(next)) } catch {}
       return next
     })
@@ -2451,9 +2451,9 @@ function ScheduleBoard({ sites, allEmps, schedules, employeeSiteAssignments, sit
           {/* Duration default control */}
           <div style={{ display: 'flex', alignItems: 'center', gap: 6, background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: 8, padding: '4px 8px' }}>
             <span style={{ fontSize: 9, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '.5px' }}>Turno</span>
-            <button onClick={() => adjDefaultDur(-0.5)} style={{ background: 'none', border: 'none', color: '#64748b', cursor: 'pointer', fontSize: 14, padding: '0 2px', fontFamily: 'inherit', lineHeight: 1 }}>−</button>
+            <button onClick={() => adjDefaultDur(-0.25)} style={{ background: 'none', border: 'none', color: '#64748b', cursor: 'pointer', fontSize: 14, padding: '0 2px', fontFamily: 'inherit', lineHeight: 1 }}>−</button>
             <span style={{ fontSize: 12, fontWeight: 700, color: '#0f172a', minWidth: 32, textAlign: 'center' }}>{fmtDur(defaultDur)}</span>
-            <button onClick={() => adjDefaultDur(0.5)} style={{ background: 'none', border: 'none', color: '#64748b', cursor: 'pointer', fontSize: 14, padding: '0 2px', fontFamily: 'inherit', lineHeight: 1 }}>+</button>
+            <button onClick={() => adjDefaultDur(0.25)} style={{ background: 'none', border: 'none', color: '#64748b', cursor: 'pointer', fontSize: 14, padding: '0 2px', fontFamily: 'inherit', lineHeight: 1 }}>+</button>
           </div>
         </div>
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
@@ -2644,15 +2644,15 @@ function QuickShiftModal({ empId, date, startTime: initialStart, siteId, allEmps
   const [start, setStart] = useState(initialStart)
   const [duration, setDuration] = useState(defaultDuration || 8)
   const emp = allEmps.find(e => e.id === empId)
-  const timeOpts = Array.from({ length: 48 }, (_, i) => {
-    const h = String(Math.floor(i/2)).padStart(2,'0'); const m = i%2===0?'00':'30'; return `${h}:${m}`
+  const timeOpts = Array.from({ length: 96 }, (_, i) => {
+    const h = String(Math.floor(i/4)).padStart(2,'0'); const m = String((i%4)*15).padStart(2,'0'); return `${h}:${m}`
   })
   const [sh, sm] = start.split(':').map(Number)
   const totalMins = sh * 60 + sm + Math.round(duration * 60)
   const endH = Math.min(23, Math.floor(totalMins / 60))
   const endM = totalMins % 60
   const endTime = `${String(endH).padStart(2,'0')}:${String(endM).padStart(2,'0')}`
-  function adjDur(delta) { setDuration(d => Math.round(Math.min(24, Math.max(0.5, d + delta)) * 2) / 2) }
+  function adjDur(delta) { setDuration(d => Math.round(Math.min(24, Math.max(0.5, d + delta)) * 4) / 4) }
   function fmtDur(h) { const hrs = Math.floor(h); const mins = Math.round((h-hrs)*60); return mins === 0 ? `${hrs}h` : `${hrs}h ${mins}m` }
   return (
     <div onClick={onClose} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.75)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 500, padding: '0 16px' }}>
@@ -2669,13 +2669,13 @@ function QuickShiftModal({ empId, date, startTime: initialStart, siteId, allEmps
         <div style={{ marginBottom: 20 }}>
           <div style={{ fontSize: 10, color: '#94a3b8', marginBottom: 10, textTransform: 'uppercase', letterSpacing: '.5px' }}>Duración del turno</div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 14, justifyContent: 'center' }}>
-            <button onClick={() => adjDur(-0.5)}
+            <button onClick={() => adjDur(-0.25)}
               style={{ width: 40, height: 40, borderRadius: 10, border: '1px solid #e2e8f0', background: '#ffffff', color: '#0f172a', fontSize: 22, cursor: 'pointer', fontFamily: 'inherit', display: 'flex', alignItems: 'center', justifyContent: 'center', lineHeight: 1 }}>−</button>
             <div style={{ textAlign: 'center', minWidth: 90 }}>
               <div style={{ fontSize: 26, fontWeight: 700, color: '#0f172a', lineHeight: 1 }}>{fmtDur(duration)}</div>
               <div style={{ fontSize: 11, color: '#64748b', marginTop: 5 }}>Salida: <span style={{ color: '#10b981', fontWeight: 600 }}>{endTime}</span></div>
             </div>
-            <button onClick={() => adjDur(0.5)}
+            <button onClick={() => adjDur(0.25)}
               style={{ width: 40, height: 40, borderRadius: 10, border: '1px solid #e2e8f0', background: '#ffffff', color: '#0f172a', fontSize: 22, cursor: 'pointer', fontFamily: 'inherit', display: 'flex', alignItems: 'center', justifyContent: 'center', lineHeight: 1 }}>+</button>
           </div>
         </div>
@@ -2695,7 +2695,7 @@ function SchedEditModal({ sched, allEmps, onSave, onDelete, onClose }) {
   const [end, setEnd]     = useState(sched.end_time)
   const [err, setErr]     = useState('')
   const emp = allEmps.find(e => e.id === sched.empId)
-  const timeOpts = Array.from({ length: 48 }, (_, i) => { const h = String(Math.floor(i/2)).padStart(2,'0'); const m = i%2===0?'00':'30'; return `${h}:${m}` })
+  const timeOpts = Array.from({ length: 96 }, (_, i) => { const h = String(Math.floor(i/4)).padStart(2,'0'); const m = String((i%4)*15).padStart(2,'0'); return `${h}:${m}` })
   function handleSave() {
     const [sh, sm] = start.split(':').map(Number)
     const [eh, em] = end.split(':').map(Number)
