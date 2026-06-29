@@ -22,6 +22,14 @@ export async function POST(request) {
 
     const cleanEmail = email.trim().toLowerCase()
 
+    // Candado: no permitir dos empresas con el mismo nombre (ignora mayúsculas/espacios).
+    // Se verifica ANTES de crear el usuario de auth para no dejar cuentas huérfanas.
+    const { data: dupCompany } = await supabase
+      .from('companies').select('id').ilike('name', company.trim()).maybeSingle()
+    if (dupCompany) {
+      return NextResponse.json({ error: 'Ya existe una empresa registrada con ese nombre. Usa un nombre distinto.' }, { status: 400 })
+    }
+
     // 1. Try to create auth user
     let userId
     const { data: authData, error: authErr } = await supabase.auth.admin.createUser({
@@ -70,6 +78,10 @@ export async function POST(request) {
       const { data: newCompany, error: compErr } = await supabase
         .from('companies').insert({ name: company.trim(), plan: 'free', slug }).select().single()
       if (compErr) {
+        // Violación del índice único de nombre (carrera entre dos registros simultáneos)
+        if (compErr.code === '23505') {
+          return NextResponse.json({ error: 'Ya existe una empresa registrada con ese nombre. Usa un nombre distinto.' }, { status: 400 })
+        }
         return NextResponse.json({ error: `Error al crear empresa: ${compErr.message}` }, { status: 500 })
       }
       companyId = newCompany.id
