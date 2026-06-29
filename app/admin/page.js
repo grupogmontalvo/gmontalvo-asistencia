@@ -7,6 +7,21 @@ const stLbl = { on_time: 'Puntual', tolerancia: 'Tolerancia', late: 'Retardo', a
 const stClr = { on_time: '#10b981', tolerancia: '#f59e0b', late: '#ef4444', absent: '#ef4444' }
 const stBg  = { on_time: 'rgba(16,185,129,.12)', tolerancia: 'rgba(245,158,11,.12)', late: 'rgba(239,68,68,.12)', absent: 'rgba(239,68,68,.12)' }
 const MAX_SALE = 9999999
+// Supabase/PostgREST devuelve máx. 1000 filas por petición. Paginamos para traer todo
+// (tablas grandes como schedules/attendance superan 1000 en empresas con muchos turnos).
+// buildQuery debe devolver un builder NUEVO en cada llamada (no se puede reusar tras await).
+async function fetchAllPages(buildQuery, pageSize = 1000) {
+  let from = 0
+  const all = []
+  for (;;) {
+    const { data, error } = await buildQuery().range(from, from + pageSize - 1)
+    if (error || !data || data.length === 0) break
+    all.push(...data)
+    if (data.length < pageSize) break
+    from += pageSize
+  }
+  return all
+}
 function fmtTime(ts, tz) {
   if (!ts) return '-'
   return new Date(ts).toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: tz || 'America/Cancun' })
@@ -229,7 +244,14 @@ export default function AdminPage() {
     supabase.auth.getUser().then(async ({ data: { user } }) => {
       if (!user) { router.push('/admin/login'); return }
       setAuthUser(user)
-      const { data: au } = await supabase.from('admin_users').select('*').eq('id', user.id).single()
+      const { data: au, error: auErr } = await supabase.from('admin_users').select('*').eq('id', user.id).maybeSingle()
+      // Solo expulsar si la cuenta existe y está desactivada, o si no hay registro de admin.
+      // Un error transitorio de red/consulta NO debe cerrar sesión y mostrar "acceso desactivado".
+      if (auErr) {
+        setAuthLoading(false)
+        setToast('No se pudo verificar tu acceso. Revisa tu conexión e intenta de nuevo.')
+        return
+      }
       if (!au || au.active === false) {
         await supabase.auth.signOut()
         router.push('/admin/login?inactive=1')
@@ -285,29 +307,33 @@ export default function AdminPage() {
     let allEmpsQuery = supabase.from('employees').select('id, name, email, role, phone, skip_sales, skip_photo, free_roam, fixed_week, active, birth_date, birthday_message').order('name')
     if (companyId) allEmpsQuery = allEmpsQuery.eq('company_id', companyId)
 
-    let attQuery = supabase.from('attendance').select('*').order('date', { ascending: false })
-    if (companyId) attQuery = attQuery.eq('company_id', companyId)
-
-    // FIX BUG 1: para gerentes, también cargamos attendance de sus sucursales (no solo de empleados asignados)
-    if (!isSuperAdmin && !isCompanyAdmin && permSiteIds) {
-      attQuery = attQuery.in('site_id', permSiteIds)
+    // attendance y schedules pueden superar las 1000 filas → se paginan (ver fetchAllPages).
+    // Builders re-invocables: cada página crea un builder nuevo con los mismos filtros.
+    const buildAtt = () => {
+      let q = supabase.from('attendance').select('*').order('date', { ascending: false })
+      if (companyId) q = q.eq('company_id', companyId)
+      // FIX BUG 1: para gerentes, también cargamos attendance de sus sucursales (no solo de empleados asignados)
+      if (!isSuperAdmin && !isCompanyAdmin && permSiteIds) q = q.in('site_id', permSiteIds)
+      return q
     }
-
-    let scQuery = supabase.from('schedules').select('*')
-    // Para gerentes: filtrar por site_id (confiable) en lugar de company_id (muchos registros no lo tienen)
-    if (!isSuperAdmin && !isCompanyAdmin && permSiteIds && permSiteIds.length > 0) {
-      scQuery = scQuery.in('site_id', permSiteIds)
-    } else if (companyId) {
-      scQuery = scQuery.eq('company_id', companyId)
+    const buildSched = () => {
+      // order por fecha (desc): paginación determinista y la semana visible nunca se corta antes de cargar.
+      let q = supabase.from('schedules').select('*').order('date', { ascending: false })
+      // Para gerentes: filtrar por site_id (confiable) en lugar de company_id (muchos registros no lo tienen)
+      if (!isSuperAdmin && !isCompanyAdmin && permSiteIds && permSiteIds.length > 0) q = q.in('site_id', permSiteIds)
+      else if (companyId) q = q.eq('company_id', companyId)
+      return q
     }
-    const [s, e, ae, a, sc, g, esa, sh, comp, cs] = await Promise.all([
-      sitesQuery, empsQuery, allEmpsQuery, attQuery, scQuery,
+    const [s, e, ae, g, esa, sh, comp, cs] = await Promise.all([
+      sitesQuery, empsQuery, allEmpsQuery,
       supabase.from('employee_goals').select('*'),
       supabase.from('employee_site_assignments').select('*'),
       supabase.from('site_hours').select('*'),
       supabase.from('competitions').select('*').order('created_at', { ascending: false }),
       supabase.from('competition_sites').select('*'),
     ])
+    const a  = { data: await fetchAllPages(buildAtt) }
+    const sc = { data: await fetchAllPages(buildSched) }
     const loadedSites = s.data || []
     const siteIdSet = new Set(loadedSites.map(x => x.id))
     const allEmpsData = ae.data || []
