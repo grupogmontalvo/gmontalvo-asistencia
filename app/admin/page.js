@@ -1279,8 +1279,12 @@ function EmpModal({ data, currentGoal, sites, currentSiteIds, existingAdmin, can
         ))}
         <div style={{ marginBottom: 10 }}>
           <label style={{ fontSize: 10, fontWeight: 600, color: '#64748b', display: 'block', marginBottom: 4 }}>Rol</label>
-          <select value={f.role||'Vendedor(a)'} onChange={e => upd('role', e.target.value)} style={{ width:'100%',background:'#ffffff',border:'1px solid #e2e8f0',color:'#0f172a',fontSize:12,padding:'8px 10px',borderRadius:6,fontFamily:'inherit' }}>
-            <option>Vendedor(a)</option><option>Encargado(a)</option><option>Gerente</option><option>Gerente Regional</option><option>Supervisor(a)</option>
+          <select value={f.role||'Vendedor(a)'} onChange={e => {
+            const r = e.target.value
+            // Colaborador funciona como vendedor pero por defecto NO pide ventas; Vendedor(a) sí.
+            setF(p => ({ ...p, role: r, ...(r === 'Colaborador' ? { skip_sales: true } : r === 'Vendedor(a)' ? { skip_sales: false } : {}) }))
+          }} style={{ width:'100%',background:'#ffffff',border:'1px solid #e2e8f0',color:'#0f172a',fontSize:12,padding:'8px 10px',borderRadius:6,fontFamily:'inherit' }}>
+            <option>Vendedor(a)</option><option>Colaborador</option><option>Encargado(a)</option><option>Gerente</option><option>Gerente Regional</option><option>Supervisor(a)</option>
           </select>
         </div>
         {sites.length > 0 && (
