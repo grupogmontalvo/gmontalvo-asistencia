@@ -1787,8 +1787,7 @@ export default function Home() {
       <footer>
         <div className="footer-copy">© 2026 Worktic. Todos los derechos reservados.</div>
         <div className="footer-links">
-          <a href="#" className="footer-link">Privacidad</a>
-          <a href="#" className="footer-link">Términos</a>
+          <a href="/privacidad" className="footer-link">Privacidad</a>
           <a href="/admin/login" className="footer-link">Admin →</a>
         </div>
       </footer>

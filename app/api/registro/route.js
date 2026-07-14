@@ -93,6 +93,7 @@ export async function POST(request) {
         email: cleanEmail,
         role: 'company_admin',
         company_id: companyId,
+        privacy_accepted_at: new Date().toISOString(),
       })
       if (adminErr) {
         // Rollback company

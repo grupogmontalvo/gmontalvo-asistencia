@@ -97,7 +97,7 @@ export default function RegistroPage() {
       </div>
 
       <div style={{ marginTop: 20, fontSize: 11, color: '#4a5568', textAlign: 'center' }}>
-        Al registrarte aceptas que esto es una beta gratuita. <a href='/'>Volver al inicio</a>
+        Al registrarte aceptas nuestro <a href='/privacidad' target='_blank' rel='noopener noreferrer'>Aviso de Privacidad</a> y que esto es una beta gratuita. <a href='/'>Volver al inicio</a>
       </div>
     </div>
   )

@@ -536,12 +536,7 @@ export default function CheckinPage({ params }) {
       if (token) {
         const { data: device } = await supabase.from('devices').select('*, employees(*)').eq('device_token', token).single()
         if (device?.employees) {
-          setEmp(device.employees)
-          await loadTodayRecord(device.employees.id, siteData.id, siteData.timezone)
-          await loadSchedule(device.employees.id, siteData.timezone)
-          await loadWeeklyData(device.employees.id, siteData.timezone)
-          checkGPS(siteData)
-          setStep('checkin')
+          await enterCheckin(device.employees, siteData)
           await supabase.from('devices').update({ last_used: new Date().toISOString() }).eq('device_token', token)
           return
         }
@@ -581,6 +576,30 @@ export default function CheckinPage({ params }) {
         setEvents(evs)
       }
     }
+  }
+
+  const [privacySaving, setPrivacySaving] = useState(false)
+
+  // Punto único de entrada al check-in una vez identificado el empleado.
+  // Si aún no aceptó el Aviso de Privacidad, se detiene en ese paso primero.
+  async function enterCheckin(empData, siteData) {
+    setEmp(empData)
+    if (!empData.privacy_accepted_at) { setStep('privacy'); return }
+    await loadTodayRecord(empData.id, siteData.id, siteData.timezone)
+    await loadSchedule(empData.id, siteData.timezone)
+    await loadWeeklyData(empData.id, siteData.timezone)
+    checkGPS(siteData)
+    setStep('checkin')
+  }
+
+  async function acceptPrivacy() {
+    if (!emp || privacySaving) return
+    setPrivacySaving(true)
+    const now = new Date().toISOString()
+    await supabase.from('employees').update({ privacy_accepted_at: now }).eq('id', emp.id)
+    const updatedEmp = { ...emp, privacy_accepted_at: now }
+    setPrivacySaving(false)
+    await enterCheckin(updatedEmp, site)
   }
 
   function checkGPS(s) {
@@ -671,12 +690,7 @@ export default function CheckinPage({ params }) {
     const token = crypto.randomUUID()
     localStorage.setItem('gm-device-token', token)
     await supabase.from('devices').insert({ device_token: token, employee_id: empData.id, user_agent: navigator.userAgent })
-    setEmp(empData)
-    await loadTodayRecord(empData.id, site.id, site.timezone)
-    await loadSchedule(empData.id, site.timezone)
-    await loadWeeklyData(empData.id, site.timezone)
-    checkGPS(site)
-    setStep('checkin')
+    await enterCheckin(empData, site)
   }
 
   async function calcStatus(checkInTime) {
@@ -1016,6 +1030,25 @@ export default function CheckinPage({ params }) {
         {emailErr && <div style={S.err}>{emailErr}</div>}
         <button style={S.btnP} onClick={tryEmail}>Continuar</button>
         <p style={{ ...S.muted, textAlign: 'center' }}>Si no conoces tu email, pregunta a tu administrador.</p>
+      </div>
+    </div>
+  )
+
+  if (step === 'privacy') return (
+    <div style={S.page}>
+      <div style={S.bar}><img src='/logo.jpeg' style={S.logo} alt='GM' /><span style={{ fontSize: 13, fontWeight: 600 }}>{site?.name || 'G.Montalvo'}</span></div>
+      <div style={S.container}>
+        <div style={{ textAlign: 'center', padding: '24px 0 10px' }}>
+          <div style={{ fontSize: 30, marginBottom: 8 }}>🔒</div>
+          <div style={{ fontSize: 16, fontWeight: 700, marginBottom: 8 }}>Aviso de Privacidad</div>
+          <p style={{ ...S.sub, textAlign: 'left', lineHeight: 1.6 }}>
+            Worktic tratará tus datos de nombre, correo electrónico, geolocalización (al momento del registro) y datos técnicos de uso, con la finalidad de prestar y administrar el servicio de control de asistencia. La ubicación se captura únicamente al escanear el código, no de forma continua.
+            <br /><br />
+            Respecto de tus datos, Worktic actúa como encargado por cuenta del negocio que te emplea. Puedes consultar el aviso de privacidad integral y ejercer tus derechos ARCO en <a href='/privacidad' target='_blank' rel='noopener noreferrer' style={{ color: '#3b82f6' }}>worktic.app/privacidad</a> o escribiendo a hola@worktic.app.
+          </p>
+        </div>
+        <button style={S.btnP} onClick={acceptPrivacy} disabled={privacySaving}>{privacySaving ? 'Guardando...' : 'Aceptar y continuar'}</button>
+        <p style={{ ...S.muted, textAlign: 'center' }}>Al continuar, reconoces haber leído este aviso.</p>
       </div>
     </div>
   )

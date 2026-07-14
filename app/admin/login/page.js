@@ -138,6 +138,9 @@ export default function LoginPage() {
           </>
         )}
       </div>
+      <div style={{ marginTop: 20, fontSize: 11, color: '#94a3b8' }}>
+        <a href='/privacidad' target='_blank' rel='noopener noreferrer' style={{ color: '#94a3b8', textDecoration: 'underline' }}>Aviso de Privacidad</a>
+      </div>
     </div>
   )
 }
