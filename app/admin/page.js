@@ -258,6 +258,8 @@ export default function AdminPage() {
         return
       }
       setAdminUser(au)
+      // Preselecciona la empresa por defecto del admin (si tiene una configurada), sin limitar su acceso a las demás.
+      if (au.default_company_id) setSelectedCompanyId(au.default_company_id)
       setAuthLoading(false)
     })
   }, [])
