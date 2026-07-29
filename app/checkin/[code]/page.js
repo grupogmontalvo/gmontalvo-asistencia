@@ -250,14 +250,47 @@ function SalesModal({ onConfirm, onSkip }) {
   )
 }
 
-async function detectFaceCount(blob) {
-  if (typeof window === 'undefined' || !('FaceDetector' in window)) return null
+// --- Validación de selfie (MediaPipe BlazeFace, corre en el dispositivo) ---
+let faceDetectorPromise = null
+function getFaceDetector() {
+  if (!faceDetectorPromise) {
+    faceDetectorPromise = (async () => {
+      const { FaceDetector, FilesetResolver } = await import('@mediapipe/tasks-vision')
+      const fileset = await FilesetResolver.forVisionTasks('https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@1.0.0/wasm')
+      return FaceDetector.createFromOptions(fileset, {
+        baseOptions: { modelAssetPath: 'https://storage.googleapis.com/mediapipe-models/face_detector/blaze_face_short_range/float16/1/blaze_face_short_range.tflite' },
+        runningMode: 'IMAGE',
+        minDetectionConfidence: 0.55,
+      })
+    })()
+    faceDetectorPromise.catch(() => { faceDetectorPromise = null })
+  }
+  return faceDetectorPromise
+}
+
+function canvasBrightness(canvas) {
+  const s = document.createElement('canvas')
+  s.width = 32; s.height = 32
+  s.getContext('2d').drawImage(canvas, 0, 0, 32, 32)
+  const d = s.getContext('2d').getImageData(0, 0, 32, 32).data
+  let sum = 0
+  for (let i = 0; i < d.length; i += 4) sum += 0.299 * d[i] + 0.587 * d[i + 1] + 0.114 * d[i + 2]
+  return sum / (d.length / 4)
+}
+
+// Devuelve { ok: true } o { ok: false, msg } — si el detector no puede cargar, deja pasar
+async function validateSelfie(canvas) {
+  if (canvasBrightness(canvas) < 45) return { ok: false, msg: 'La foto está muy oscura. Busca un lugar con más luz.' }
+  let detector
+  try { detector = await getFaceDetector() } catch { return { ok: true } }
   try {
-    const fd = new window.FaceDetector({ fastMode: true, maxDetectedFaces: 5 })
-    const img = await createImageBitmap(blob)
-    const faces = await fd.detect(img)
-    return faces.length
-  } catch { return null }
+    const { detections } = detector.detect(canvas)
+    if (detections.length === 0) return { ok: false, msg: 'No se detectó tu rostro. Mira de frente a la cámara, sin cubrebocas ni lentes oscuros.' }
+    if (detections.length > 1) return { ok: false, msg: 'Se detectó más de una persona. Solo debes aparecer tú en la foto.' }
+    const box = detections[0].boundingBox
+    if (box.width < canvas.width * 0.18) return { ok: false, msg: 'Tu rostro se ve muy lejos. Acércate más a la cámara.' }
+    return { ok: true }
+  } catch { return { ok: true } }
 }
 
 function CameraModal({ onCapture, onClose, title = '📸 Foto de entrada' }) {
@@ -280,29 +313,24 @@ function CameraModal({ onCapture, onClose, title = '📸 Foto de entrada' }) {
       } catch (e) { setErr('No se pudo acceder a la cámara. Verifica los permisos del navegador.') }
     }
     startCam()
+    getFaceDetector().catch(() => {})
     return () => { streamRef.current?.getTracks().forEach(t => t.stop()) }
   }, [])
 
-  function capture() {
+  async function capture() {
     const video = videoRef.current; const canvas = canvasRef.current
     if (!video || !canvas) return
     canvas.width = video.videoWidth; canvas.height = video.videoHeight
     canvas.getContext('2d').drawImage(video, 0, 0)
     setValidating(true); setFaceErr('')
-    canvas.toBlob(async b => {
-      if (!b) { setValidating(false); return }
-      streamRef.current?.getTracks().forEach(t => t.stop())
-      const previewUrl = URL.createObjectURL(b)
-      // Face validation — warning only, never blocks
-      const faceCount = await detectFaceCount(b)
+    // Validación obligatoria: si la foto no pasa, la cámara sigue activa para reintentar
+    const result = await validateSelfie(canvas)
+    if (!result.ok) { setValidating(false); setFaceErr(result.msg); return }
+    canvas.toBlob(b => {
       setValidating(false)
-      if (faceCount !== null && faceCount === 0) {
-        setFaceErr('No se detectó ningún rostro. Verifica que tu cara esté bien iluminada.')
-      } else if (faceCount !== null && faceCount > 1) {
-        setFaceErr('Se detectaron varios rostros. Solo debe aparecer una persona.')
-      }
-      // Always set blob — user can proceed even with face warning
-      setBlob(b); setPreview(previewUrl)
+      if (!b) return
+      streamRef.current?.getTracks().forEach(t => t.stop())
+      setBlob(b); setPreview(URL.createObjectURL(b))
     }, 'image/jpeg', 0.85)
   }
 
@@ -331,12 +359,7 @@ function CameraModal({ onCapture, onClose, title = '📸 Foto de entrada' }) {
             </div>
           ) : preview ? (
             <>
-              <img src={preview} alt='preview' style={{ width: '100%', borderRadius: 12, display: 'block', marginBottom: faceErr ? 8 : 14 }} />
-              {faceErr && (
-                <div style={{ background: 'rgba(245,158,11,.1)', border: '1px solid rgba(245,158,11,.3)', borderRadius: 8, padding: '10px 12px', fontSize: 12, color: '#f59e0b', marginBottom: 12, textAlign: 'center' }}>
-                  ⚠ {faceErr}
-                </div>
-              )}
+              <img src={preview} alt='preview' style={{ width: '100%', borderRadius: 12, display: 'block', marginBottom: 14 }} />
               <div style={{ display: 'flex', gap: 8 }}>
                 <button onClick={retake} style={{ flex: 1, padding: '12px', borderRadius: 10, border: '1px solid #1e2a45', background: 'transparent', color: '#8892a8', fontFamily: "'DM Sans', sans-serif", fontSize: 13, cursor: 'pointer' }}>Repetir</button>
                 <button onClick={() => onCapture(blob)} style={{ flex: 2, padding: '12px', borderRadius: 10, border: 'none', background: '#10b981', color: '#fff', fontFamily: "'DM Sans', sans-serif", fontSize: 13, fontWeight: 700, cursor: 'pointer' }}>✓ Usar esta foto</button>
@@ -350,6 +373,11 @@ function CameraModal({ onCapture, onClose, title = '📸 Foto de entrada' }) {
                 {validating && <div style={{ position: 'absolute', color: '#3b82f6', fontSize: 13 }}>Validando foto...</div>}
               </div>
               <canvas ref={canvasRef} style={{ display: 'none' }} />
+              {faceErr && (
+                <div style={{ background: 'rgba(239,68,68,.1)', border: '1px solid rgba(239,68,68,.3)', borderRadius: 8, padding: '10px 12px', fontSize: 12, color: '#ef4444', marginBottom: 12, textAlign: 'center' }}>
+                  ⚠ {faceErr}
+                </div>
+              )}
               <button onClick={capture} disabled={!camReady || validating} style={{ width: '100%', padding: '14px', borderRadius: 10, border: 'none', background: (camReady && !validating) ? '#10b981' : '#1e2a45', color: '#fff', fontFamily: "'DM Sans', sans-serif", fontSize: 14, fontWeight: 700, cursor: (camReady && !validating) ? 'pointer' : 'not-allowed' }}>
                 {validating ? 'Verificando...' : '📷 Tomar foto'}
               </button>
