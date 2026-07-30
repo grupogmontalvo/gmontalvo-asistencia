@@ -3,6 +3,11 @@ import { useState, useEffect, useRef } from 'react'
 import { supabase } from '../../../lib/supabase'
 import { InstallButton } from '../../components/PWAInstall'
 
+// Sucursal de demostración pública (worktic.app/checkin/DEMO): es un sandbox.
+// Nada de lo que ocurre ahí se guarda en la base de datos.
+const DEMO_COMPANY_ID = '00000000-0000-0000-0000-000000000001'
+const isDemoSite = (s) => s?.company_id === DEMO_COMPANY_ID
+
 const S = {
   page: { minHeight: '100vh', background: '#0c1022', display: 'flex', flexDirection: 'column', alignItems: 'center' },
   bar: { width: '100%', padding: '14px 18px', display: 'flex', alignItems: 'center', justifyContent: 'center', borderBottom: '1px solid #1e2a45', background: '#111827', gap: 10 },
@@ -293,6 +298,15 @@ async function validateSelfie(canvas) {
   } catch { return { ok: true } }
 }
 
+function DemoBanner() {
+  return (
+    <div style={{ width: '100%', maxWidth: 400, margin: '12px 16px 0', padding: '10px 14px', borderRadius: 10, background: 'rgba(245,158,11,.12)', border: '1px solid rgba(245,158,11,.3)', color: '#f59e0b', fontSize: 12, textAlign: 'center', lineHeight: 1.5 }}>
+      🧪 <strong>Modo demostración</strong> — nada de lo que hagas aquí se guarda.
+      <br />Si eres empleado, escanea el código QR de tu sucursal.
+    </div>
+  )
+}
+
 function CameraModal({ onCapture, onClose, title = '📸 Foto de entrada' }) {
   const videoRef  = useRef(null)
   const canvasRef = useRef(null)
@@ -484,6 +498,7 @@ function BirthdayCelebration({ empName, message, onClose }) {
 export default function CheckinPage({ params }) {
   const siteCode = params.code
   const [site, setSite]               = useState(null)
+  const isDemo = isDemoSite(site)
   const [emp, setEmp]                 = useState(null)
   const [step, setStep]               = useState('loading')
   const [email, setEmail]             = useState('')
@@ -560,10 +575,13 @@ export default function CheckinPage({ params }) {
         const { data: co } = await supabase.from('companies').select('birthday_message').eq('id', siteData.company_id).maybeSingle()
         if (co?.birthday_message) setBirthdayMsg(co.birthday_message)
       }
-      const token = localStorage.getItem('gm-device-token')
+      // En la sucursal demo siempre se pide el email: el dispositivo recordado
+      // pertenece a una empresa real y no debe arrastrarse al sandbox.
+      const token = isDemoSite(siteData) ? null : localStorage.getItem('gm-device-token')
       if (token) {
         const { data: device } = await supabase.from('devices').select('*, employees(*)').eq('device_token', token).single()
-        if (device?.employees) {
+        // Solo auto-entra si el empleado recordado es de la misma empresa que la sucursal.
+        if (device?.employees && device.employees.company_id === siteData.company_id) {
           await enterCheckin(device.employees, siteData)
           await supabase.from('devices').update({ last_used: new Date().toISOString() }).eq('device_token', token)
           return
@@ -613,9 +631,12 @@ export default function CheckinPage({ params }) {
   async function enterCheckin(empData, siteData) {
     setEmp(empData)
     if (!empData.privacy_accepted_at) { setStep('privacy'); return }
-    await loadTodayRecord(empData.id, siteData.id, siteData.timezone)
-    await loadSchedule(empData.id, siteData.timezone)
-    await loadWeeklyData(empData.id, siteData.timezone)
+    // El sandbox demo arranca siempre en blanco y no consulta datos reales.
+    if (!isDemoSite(siteData)) {
+      await loadTodayRecord(empData.id, siteData.id, siteData.timezone)
+      await loadSchedule(empData.id, siteData.timezone)
+      await loadWeeklyData(empData.id, siteData.timezone)
+    }
     checkGPS(siteData)
     setStep('checkin')
   }
@@ -624,7 +645,7 @@ export default function CheckinPage({ params }) {
     if (!emp || privacySaving) return
     setPrivacySaving(true)
     const now = new Date().toISOString()
-    await supabase.from('employees').update({ privacy_accepted_at: now }).eq('id', emp.id)
+    if (!isDemo) await supabase.from('employees').update({ privacy_accepted_at: now }).eq('id', emp.id)
     const updatedEmp = { ...emp, privacy_accepted_at: now }
     setPrivacySaving(false)
     await enterCheckin(updatedEmp, site)
@@ -678,14 +699,31 @@ export default function CheckinPage({ params }) {
     const e = email.trim().toLowerCase()
     if (!e) { setEmailErr('Ingresa tu email'); return }
 
-    // 1. Buscar en empleados activos (case-insensitive en caso de mayúsculas en BD)
-    const { data: empMatches, error: empErr } = await supabase.from('employees').select('*').ilike('email', e).eq('active', true).limit(1)
+    // Sucursal demo: sandbox. Cualquier email entra con un perfil ficticio y
+    // nada se persiste, para que un empleado real nunca registre asistencia aquí.
+    if (isDemoSite(site)) {
+      await enterCheckin({
+        id: 'demo-' + e,
+        name: e.split('@')[0].replace(/[._-]+/g, ' ').replace(/\b\w/g, c => c.toUpperCase()),
+        email: e,
+        role: 'Vendedor(a) (demo)',
+        company_id: DEMO_COMPANY_ID,
+        privacy_accepted_at: new Date().toISOString(),
+        skip_sales: false,
+        skip_photo: false,
+      }, site)
+      return
+    }
+
+    // 1. Buscar en empleados activos de ESTA empresa. Cada empresa es independiente:
+    // el empleado puede checar en cualquier sucursal propia, pero nunca en otra empresa.
+    const { data: empMatches, error: empErr } = await supabase.from('employees').select('*').ilike('email', e).eq('active', true).eq('company_id', site.company_id).limit(1)
     if (empErr) { setEmailErr('No pudimos conectar. Verifica tu internet e intenta de nuevo.'); return }
     let empData = empMatches?.[0] || null
 
     // 1b. Si no se encontró activo, ver si existe pero inactivo (mejor mensaje)
     if (!empData) {
-      const { data: inactiveMatches, error: inactErr } = await supabase.from('employees').select('id, active').ilike('email', e).limit(1)
+      const { data: inactiveMatches, error: inactErr } = await supabase.from('employees').select('id, active').ilike('email', e).eq('company_id', site.company_id).limit(1)
       if (inactErr) { setEmailErr('No pudimos conectar. Verifica tu internet e intenta de nuevo.'); return }
       if (inactiveMatches?.[0] && !inactiveMatches[0].active) {
         setEmailErr('Tu cuenta está inactiva. Contacta a tu administrador.')
@@ -693,18 +731,20 @@ export default function CheckinPage({ params }) {
       }
     }
 
-    // 2. Si no está como empleado, checar si es admin/gerente
+    // 2. Si no está como empleado, checar si es admin/gerente. Los superadmin no
+    // tienen empresa asignada, así que entran a cualquiera; el resto solo a la suya.
     if (!empData) {
       const { data: adminMatches, error: admErr } = await supabase.from('admin_users').select('*').ilike('email', e).limit(1)
       if (admErr) { setEmailErr('No pudimos conectar. Verifica tu internet e intenta de nuevo.'); return }
       const adminData = adminMatches?.[0] || null
-      if (adminData) {
+      const adminPuedeEntrar = adminData && (adminData.role === 'superadmin' || adminData.company_id === site.company_id)
+      if (adminPuedeEntrar) {
         // Crear automáticamente perfil de empleado para el admin
         const { data: newEmp } = await supabase.from('employees').insert({
           name: adminData.name,
           email: (adminData.email || '').trim().toLowerCase(),
           role: adminData.role === 'superadmin' ? 'Administrador' : 'Gerente',
-          company_id: adminData.company_id,
+          company_id: adminData.company_id || site.company_id,
           active: true,
           skip_sales: true,
           skip_photo: false,
@@ -713,7 +753,7 @@ export default function CheckinPage({ params }) {
       }
     }
 
-    if (!empData) { setEmailErr('Email no registrado. Contacta a tu administrador.'); return }
+    if (!empData) { setEmailErr('Email no registrado en esta sucursal. Contacta a tu administrador.'); return }
 
     const token = crypto.randomUUID()
     localStorage.setItem('gm-device-token', token)
@@ -722,6 +762,7 @@ export default function CheckinPage({ params }) {
   }
 
   async function calcStatus(checkInTime) {
+    if (isDemoSite(site)) return 'on_time'
     const tz    = site?.timezone || 'America/Cancun'
     const today = checkInTime.toLocaleDateString('en-CA', { timeZone: tz })
     const grace = site?.grace_mins || 15
@@ -738,6 +779,7 @@ export default function CheckinPage({ params }) {
 
   async function uploadPhoto(blob, suffix) {
     if (!blob) return null
+    if (isDemoSite(site)) return null
     try {
       const tz    = site?.timezone || 'America/Cancun'
       const today = new Date().toLocaleDateString('en-CA', { timeZone: tz })
@@ -772,7 +814,10 @@ export default function CheckinPage({ params }) {
     const photoUrl = await uploadPhoto(blob, 'in')
     const gpsWarn = gps.status === 'far' ? 'far' : gps.status === 'denied' ? (gps.reason || 'unavailable') : null
     const record = { employee_id: emp.id, site_id: site.id, company_id: site.company_id || emp.company_id || null, date: today, status, check_in: checkIn.toISOString(), gps_lat: gps.lat || null, gps_lng: gps.lng || null, gps_distance_m: gps.dist || null, gps_warn: gpsWarn, ...(photoUrl ? { photo_url: photoUrl } : {}) }
-    const { data, error } = await supabase.from('attendance').insert(record).select().single()
+    // Sandbox demo: se simula el registro en memoria, sin tocar la base de datos.
+    const { data, error } = isDemoSite(site)
+      ? { data: { ...record, id: 'demo-attendance' }, error: null }
+      : await supabase.from('attendance').insert(record).select().single()
     if (!error && data) {
       setTodayRecord(data); setIsIn(true)
       setCiTime(fmtTime(checkIn, tz))
@@ -785,7 +830,7 @@ export default function CheckinPage({ params }) {
         if (bdMon === todayMon && bdDay === todayDay) setShowBirthday(true)
       }
       // Fire alert (non-blocking)
-      fetch('/api/alerts/checkin', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ attendance_id: data.id }) }).catch(() => {})
+      if (!isDemoSite(site)) fetch('/api/alerts/checkin', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ attendance_id: data.id }) }).catch(() => {})
     } else if (error) {
       setCheckinErr('No se pudo registrar la entrada. Intenta de nuevo.')
       console.error('Check-in error:', error.message)
@@ -846,12 +891,10 @@ export default function CheckinPage({ params }) {
     pendingCheckoutPhotoRef.current = null
     const photoUrlOut = await uploadPhoto(blob, 'out')
 
-    const { data: updatedRecord, error } = await supabase
-      .from('attendance')
-      .update({ check_out: checkOut.toISOString(), hours_worked: parseFloat(hrs), ...(salesAmount !== null ? { sales_amount: salesAmount } : {}), ...(photoUrlOut ? { photo_url_out: photoUrlOut } : {}) })
-      .eq('id', todayRecord.id)
-      .select()
-      .single()
+    const cambios = { check_out: checkOut.toISOString(), hours_worked: parseFloat(hrs), ...(salesAmount !== null ? { sales_amount: salesAmount } : {}), ...(photoUrlOut ? { photo_url_out: photoUrlOut } : {}) }
+    const { data: updatedRecord, error } = isDemoSite(site)
+      ? { data: { ...todayRecord, ...cambios }, error: null }
+      : await supabase.from('attendance').update(cambios).eq('id', todayRecord.id).select().single()
 
     if (error) {
       console.error('Check-out error:', error)
@@ -867,7 +910,7 @@ export default function CheckinPage({ params }) {
     if (salesAmount !== null && salesAmount > 0) newEvs.push({ type: 'sale', time: fmtTime(checkOut, tz), amount: salesAmount })
     setEvents(prev => [...prev, ...newEvs])
     setLoading(false)
-    fetch('/api/alerts/checkout', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ attendance_id: updatedRecord.id }) }).catch(() => {})
+    if (!isDemoSite(site)) fetch('/api/alerts/checkout', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ attendance_id: updatedRecord.id }) }).catch(() => {})
   }
 
   function requestLunch(start) {
@@ -891,29 +934,23 @@ export default function CheckinPage({ params }) {
   async function doLunch(start) {
     if (!todayRecord) return
     const tz = site?.timezone || 'America/Cancun'; const t = new Date()
-    if (start) {
-      await supabase.from('attendance').update({ lunch_start: t.toISOString() }).eq('id', todayRecord.id)
-      setOnLunch(true); setEvents(prev => [...prev, { type: 'ls', time: fmtTime(t, tz) }])
-    } else {
-      await supabase.from('attendance').update({ lunch_end: t.toISOString() }).eq('id', todayRecord.id)
-      setOnLunch(false); setEvents(prev => [...prev, { type: 'le', time: fmtTime(t, tz) }])
-    }
-    setTodayRecord(prev => ({ ...prev, [start ? 'lunch_start' : 'lunch_end']: t.toISOString() }))
-    fetch('/api/alerts/movement', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ attendance_id: todayRecord.id, type: start ? 'lunch_start' : 'lunch_end' }) }).catch(() => {})
+    const campo = start ? 'lunch_start' : 'lunch_end'
+    if (!isDemoSite(site)) await supabase.from('attendance').update({ [campo]: t.toISOString() }).eq('id', todayRecord.id)
+    setOnLunch(start)
+    setEvents(prev => [...prev, { type: start ? 'ls' : 'le', time: fmtTime(t, tz) }])
+    setTodayRecord(prev => ({ ...prev, [campo]: t.toISOString() }))
+    if (!isDemoSite(site)) fetch('/api/alerts/movement', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ attendance_id: todayRecord.id, type: campo }) }).catch(() => {})
   }
 
   async function doBreak(start) {
     if (!todayRecord) return
     const tz = site?.timezone || 'America/Cancun'; const t = new Date()
-    if (start) {
-      await supabase.from('attendance').update({ break_start: t.toISOString() }).eq('id', todayRecord.id)
-      setOnBreak(true); setEvents(prev => [...prev, { type: 'bs', time: fmtTime(t, tz) }])
-    } else {
-      await supabase.from('attendance').update({ break_end: t.toISOString() }).eq('id', todayRecord.id)
-      setOnBreak(false); setEvents(prev => [...prev, { type: 'be', time: fmtTime(t, tz) }])
-    }
-    setTodayRecord(prev => ({ ...prev, [start ? 'break_start' : 'break_end']: t.toISOString() }))
-    fetch('/api/alerts/movement', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ attendance_id: todayRecord.id, type: start ? 'break_start' : 'break_end' }) }).catch(() => {})
+    const campo = start ? 'break_start' : 'break_end'
+    if (!isDemoSite(site)) await supabase.from('attendance').update({ [campo]: t.toISOString() }).eq('id', todayRecord.id)
+    setOnBreak(start)
+    setEvents(prev => [...prev, { type: start ? 'bs' : 'be', time: fmtTime(t, tz) }])
+    setTodayRecord(prev => ({ ...prev, [campo]: t.toISOString() }))
+    if (!isDemoSite(site)) fetch('/api/alerts/movement', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ attendance_id: todayRecord.id, type: campo }) }).catch(() => {})
   }
 
   function handleFbFile(e) {
@@ -941,9 +978,13 @@ export default function CheckinPage({ params }) {
   function closeFeedback() { setFeedbackOpen(false); setFbStatus('idle'); setFbMsg(''); setFbScreenshot(null) }
 
   async function logout() {
-    const token = localStorage.getItem('gm-device-token')
-    if (token) await supabase.from('devices').delete().eq('device_token', token)
-    localStorage.removeItem('gm-device-token')
+    // En el sandbox demo no hay dispositivo vinculado: no se toca el token real
+    // que el empleado pueda tener guardado para su propia sucursal.
+    if (!isDemo) {
+      const token = localStorage.getItem('gm-device-token')
+      if (token) await supabase.from('devices').delete().eq('device_token', token)
+      localStorage.removeItem('gm-device-token')
+    }
     setEmp(null); setStep('email')
   }
 
@@ -1049,15 +1090,18 @@ export default function CheckinPage({ params }) {
   if (step === 'email') return (
     <div style={S.page}>
       <div style={S.bar}><img src='/logo.jpeg' style={S.logo} alt='GM' /><span style={{ fontSize: 13, fontWeight: 600 }}>{site?.name || 'G.Montalvo'}</span></div>
+      {isDemo && <DemoBanner />}
       <div style={S.container}>
         <div style={{ textAlign: 'center', padding: '24px 0 10px' }}>
-          <div style={{ fontSize: 16, fontWeight: 700, marginBottom: 4 }}>Bienvenido</div>
-          <p style={S.sub}>Ingresa el email con el que te registraron. Solo se pide una vez en este dispositivo.</p>
+          <div style={{ fontSize: 16, fontWeight: 700, marginBottom: 4 }}>{isDemo ? 'Prueba Worktic' : 'Bienvenido'}</div>
+          <p style={S.sub}>{isDemo
+            ? 'Escribe cualquier correo para explorar la app. Es una simulación: nada de lo que hagas aquí se guarda.'
+            : 'Ingresa el email con el que te registraron. Solo se pide una vez en este dispositivo.'}</p>
         </div>
         <input style={S.input} type='email' value={email} onChange={e => { setEmail(e.target.value); setEmailErr('') }} onKeyDown={e => { if (e.key === 'Enter') tryEmail() }} placeholder='tu@email.com' autoFocus />
         {emailErr && <div style={S.err}>{emailErr}</div>}
         <button style={S.btnP} onClick={tryEmail}>Continuar</button>
-        <p style={{ ...S.muted, textAlign: 'center' }}>Si no conoces tu email, pregunta a tu administrador.</p>
+        <p style={{ ...S.muted, textAlign: 'center' }}>{isDemo ? 'Esta es la sucursal de demostración de Worktic.' : 'Si no conoces tu email, pregunta a tu administrador.'}</p>
       </div>
     </div>
   )
@@ -1112,7 +1156,7 @@ export default function CheckinPage({ params }) {
             + Nuevo Check-In
           </button>
         </div>
-        <KpiCarousel empId={emp?.id} siteId={site?.id} thisWeekSales={thisWeekSales} lastWeekSales={lastWeekSales} weeklyGoal={weeklyGoal} empBirthDate={emp?.birth_date} />
+        <KpiCarousel empId={isDemo ? null : emp?.id} siteId={site?.id} thisWeekSales={thisWeekSales} lastWeekSales={lastWeekSales} weeklyGoal={weeklyGoal} empBirthDate={emp?.birth_date} />
         {events.length > 0 && (
           <div style={S.timeline}>
             <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 10 }}>Registro del Día</div>
@@ -1167,6 +1211,7 @@ export default function CheckinPage({ params }) {
       )}
 
       <div style={S.bar}><img src='/logo.jpeg' style={S.logo} alt='GM' /><span style={{ fontSize: 13, fontWeight: 600 }}>{site?.name}</span></div>
+      {isDemo && <DemoBanner />}
       <div style={S.container}>
         <div style={S.card}>
           {/* Nombre con badge y ventas en los extremos */}
@@ -1231,7 +1276,7 @@ export default function CheckinPage({ params }) {
           </div>
         </div>
 
-        <KpiCarousel empId={emp?.id} siteId={site?.id} thisWeekSales={thisWeekSales} lastWeekSales={lastWeekSales} weeklyGoal={weeklyGoal} empBirthDate={emp?.birth_date} />
+        <KpiCarousel empId={isDemo ? null : emp?.id} siteId={site?.id} thisWeekSales={thisWeekSales} lastWeekSales={lastWeekSales} weeklyGoal={weeklyGoal} empBirthDate={emp?.birth_date} />
 
         {checkinErr  && <div style={S.err}>{checkinErr}</div>}
         {checkoutErr && <div style={S.err}>{checkoutErr}</div>}

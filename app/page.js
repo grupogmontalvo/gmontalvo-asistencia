@@ -1154,6 +1154,16 @@ const css = `
     margin-left: 2px;
   }
 
+  .autodemo-qr-note {
+    font-size: 11px;
+    color: var(--gris-claro);
+    line-height: 1.5;
+    max-width: 240px;
+    margin-top: 6px;
+    margin-left: 2px;
+    opacity: 0.85;
+  }
+
   @media (max-width: 768px) {
     .autodemo { padding: 48px 20px 44px; }
   }
@@ -1242,6 +1252,7 @@ export default function Home() {
                   />
                 </a>
                 <div className="autodemo-qr-label">worktic.app/checkin/DEMO</div>
+                <div className="autodemo-qr-note">Sucursal de prueba — nada se guarda. Si ya eres empleado, usa el QR de tu sucursal.</div>
               </div>
             </div>
           </div>
