@@ -528,7 +528,8 @@ export default function AdminPage() {
   }
   async function delEmp(id) { await supabase.from('employees').update({ active: false }).eq('id', id); setToast('Empleado eliminado'); setModal(null); load() }
   async function toggleEmpActive(emp) {
-    await supabase.from('employees').update({ active: !emp.active }).eq('id', emp.id)
+    // Activar desde aquí también aprueba: si no, quedaría activo y "pendiente" a la vez.
+    await supabase.from('employees').update({ active: !emp.active, ...(emp.active ? {} : { pending_approval: false }) }).eq('id', emp.id)
     setToast(emp.active ? 'Empleado desactivado' : 'Empleado reactivado'); load()
   }
   async function delSite(id) { await supabase.from('sites').update({ active: false }).eq('id', id); setToast('Sitio eliminado'); setModal(null); load() }
@@ -598,7 +599,7 @@ export default function AdminPage() {
               <button key={n.id} onClick={() => { setTab(n.id); if (window.innerWidth < 768) setSidebarOpen(false) }} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 10px', borderRadius: 6, cursor: 'pointer', fontSize: 12, fontWeight: 500, color: tab === n.id ? (n.id === 'alerts' ? '#f59e0b' : '#3b82f6') : '#64748b', background: tab === n.id ? (n.id === 'alerts' ? 'rgba(245,158,11,.1)' : 'rgba(59,130,246,.12)') : 'transparent', border: 'none', width: '100%', textAlign: 'left', fontFamily: 'inherit' }}>{n.lb}</button>
             ))}
             <div style={{ fontSize: 9, fontWeight: 600, textTransform: 'uppercase', letterSpacing: 1, color: '#94a3b8', padding: '12px 8px 4px' }}>Gestión</div>
-            {[{ id: 'employees', lb: '👥 Empleados' }, { id: 'sites', lb: '📍 Sitios' }].map(n => (
+            {[{ id: 'employees', lb: '👥 Empleados' }, { id: 'altas', lb: '🔗 Altas por link' }, { id: 'sites', lb: '📍 Sitios' }].map(n => (
               <button key={n.id} onClick={() => { setTab(n.id); if (window.innerWidth < 768) setSidebarOpen(false) }} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 10px', borderRadius: 6, cursor: 'pointer', fontSize: 12, fontWeight: 500, color: tab === n.id ? '#3b82f6' : '#64748b', background: tab === n.id ? 'rgba(59,130,246,.12)' : 'transparent', border: 'none', width: '100%', textAlign: 'left', fontFamily: 'inherit' }}>{n.lb}</button>
             ))}
             {(isSuperAdmin || isCompanyAdmin) && <>
@@ -629,7 +630,7 @@ export default function AdminPage() {
             <button onClick={() => setSidebarOpen(o => !o)} style={{ background: 'none', border: '1px solid #e2e8f0', borderRadius: 6, color: '#64748b', cursor: 'pointer', padding: '5px 9px', fontSize: 16, lineHeight: 1, fontFamily: 'inherit' }}>☰</button>
             <div>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                <h1 style={{ fontSize: 17, fontWeight: 700 }}>{{ dashboard: 'Dashboard', schedules: 'Horarios', attendance: 'Asistencia', employees: 'Empleados', sites: 'Sitios', users: 'Usuarios', companies: 'Empresas', competitions: 'Competencias' }[tab]}</h1>
+                <h1 style={{ fontSize: 17, fontWeight: 700 }}>{{ dashboard: 'Dashboard', schedules: 'Horarios', attendance: 'Asistencia', employees: 'Empleados', altas: 'Altas por link', sites: 'Sitios', users: 'Usuarios', companies: 'Empresas', competitions: 'Competencias' }[tab]}</h1>
                 {activeCompany && <span style={{ fontSize: 10, color: '#3b82f6', background: 'rgba(59,130,246,.1)', border: '1px solid rgba(59,130,246,.2)', borderRadius: 4, padding: '2px 8px', fontWeight: 600 }}>{activeCompany.name}</span>}
               </div>
               <p style={{ fontSize: 11, color: '#64748b', marginTop: 1 }}>{new Date().toLocaleDateString('es-MX', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric', timeZone: 'America/Cancun' })}</p>
@@ -753,7 +754,9 @@ export default function AdminPage() {
                           <button onClick={() => emp.active && setEmpPage(emp)} style={{ background: 'none', border: 'none', padding: 0, cursor: emp.active ? 'pointer' : 'default', textAlign: 'left', fontFamily: 'inherit' }}>
                             <div style={{ fontSize: 12, fontWeight: 600, color: emp.active ? '#3b82f6' : '#94a3b8', textDecoration: emp.active ? 'underline' : 'none', textDecorationColor: 'rgba(59,130,246,.3)', display: 'flex', alignItems: 'center', gap: 6 }}>
                               {emp.name}
-                              {!emp.active && <span style={{ fontSize: 9, fontWeight: 700, color: '#94a3b8', background: '#f1f5f9', border: '1px solid #e2e8f0', borderRadius: 3, padding: '1px 5px' }}>INACTIVO</span>}
+                              {!emp.active && (emp.pending_approval
+                                ? <span style={{ fontSize: 9, fontWeight: 700, color: '#b45309', background: 'rgba(245,158,11,.12)', border: '1px solid rgba(245,158,11,.3)', borderRadius: 3, padding: '1px 5px' }}>PENDIENTE</span>
+                                : <span style={{ fontSize: 9, fontWeight: 700, color: '#94a3b8', background: '#f1f5f9', border: '1px solid #e2e8f0', borderRadius: 3, padding: '1px 5px' }}>INACTIVO</span>)}
                             </div>
                             <div style={{ fontSize: 10, color: '#94a3b8' }}>{emp.phone || ''}</div>
                           </button>
@@ -935,6 +938,10 @@ export default function AdminPage() {
               {companies.length === 0 && <div style={{ padding: 20, textAlign: 'center', color: '#94a3b8', fontSize: 12, background: '#ffffff', borderRadius: 10, border: '1px solid #e2e8f0' }}>No hay empresas.</div>}
             </div>
           )}
+          {tab === 'altas' && <AltasPanel
+            companyId={isSuperAdmin ? (selectedCompanyId || companies[0]?.id) : adminUser?.company_id}
+            sites={sites} adminUser={adminUser} onRefresh={load} setToast={setToast} />}
+
           {tab === 'alerts' && <AlertsPanel adminUserId={adminUser?.id} adminEmail={adminUser?.email} />}
         </div>
       </div>
@@ -2825,6 +2832,260 @@ function SiteHoursModal({ siteId, siteName, siteHours, onSave, onClose, allSites
   )
 }
 // ─── Company Modal ────────────────────────────────────────────────────────────
+/* ── Altas por link: genera links preconfigurados y aprueba a quien se registra ── */
+function AltasPanel({ companyId, sites, adminUser, onRefresh, setToast }) {
+  const [links, setLinks]         = useState([])
+  const [pendientes, setPendientes] = useState([])
+  const [cargando, setCargando]   = useState(true)
+  const [creando, setCreando]     = useState(false)
+  const [qrLink, setQrLink]       = useState(null)
+  const [form, setForm] = useState({ label: '', role: 'Vendedor(a)', siteIds: [], weeklyGoal: '', dias: '7', maxUses: '', skipSales: false, skipPhoto: false })
+
+  const misSitios = (sites || []).filter(s => s.company_id === companyId)
+
+  useEffect(() => { if (companyId) cargar() }, [companyId])
+
+  async function cargar() {
+    setCargando(true)
+    const [{ data: ls }, { data: ps }] = await Promise.all([
+      supabase.from('invite_links').select('*').eq('company_id', companyId).order('created_at', { ascending: false }),
+      supabase.from('employees').select('*').eq('company_id', companyId).eq('pending_approval', true).order('created_at', { ascending: false }),
+    ])
+    setLinks(ls || []); setPendientes(ps || []); setCargando(false)
+  }
+
+  async function crearLink() {
+    if (!form.label.trim()) { setToast('Ponle un nombre al link'); return }
+    if (!form.siteIds.length) { setToast('Elige al menos una sucursal'); return }
+    setCreando(true)
+    const token = (crypto.randomUUID() + crypto.randomUUID()).replace(/-/g, '').slice(0, 32)
+    const dias = parseInt(form.dias, 10)
+    const { error } = await supabase.from('invite_links').insert({
+      token,
+      label: form.label.trim(),
+      company_id: companyId,
+      site_ids: form.siteIds,
+      role: form.role.trim() || 'Vendedor(a)',
+      weekly_goal: form.weeklyGoal ? parseFloat(form.weeklyGoal) : null,
+      skip_sales: form.skipSales,
+      skip_photo: form.skipPhoto,
+      expires_at: dias > 0 ? new Date(Date.now() + dias * 86400000).toISOString() : null,
+      max_uses: form.maxUses ? parseInt(form.maxUses, 10) : null,
+      created_by: adminUser?.id || null,
+    })
+    setCreando(false)
+    if (error) { setToast('No se pudo crear el link'); return }
+    setForm({ label: '', role: 'Vendedor(a)', siteIds: [], weeklyGoal: '', dias: '7', maxUses: '', skipSales: false, skipPhoto: false })
+    setToast('Link creado')
+    cargar()
+  }
+
+  // Desactivar / reactivar con un solo clic
+  async function alternarLink(link) {
+    await supabase.from('invite_links').update({ active: !link.active }).eq('id', link.id)
+    setToast(link.active ? 'Link desactivado' : 'Link reactivado')
+    cargar()
+  }
+
+  async function borrarLink(link) {
+    if (!confirm(`¿Eliminar el link "${link.label}"?\n\nLos empleados que ya se registraron con él no se ven afectados.`)) return
+    await supabase.from('invite_links').delete().eq('id', link.id)
+    setToast('Link eliminado'); cargar()
+  }
+
+  async function aprobar(emp) {
+    await supabase.from('employees').update({ active: true, pending_approval: false }).eq('id', emp.id)
+    setToast(`${emp.name.split(' ')[0]} ya puede checar`)
+    cargar(); onRefresh?.()
+  }
+
+  async function rechazar(emp) {
+    if (!confirm(`¿Rechazar el registro de ${emp.name}?\n\nSe elimina y tendría que registrarse de nuevo.`)) return
+    await supabase.from('employee_site_assignments').delete().eq('employee_id', emp.id)
+    await supabase.from('employee_goals').delete().eq('employee_id', emp.id)
+    await supabase.from('employees').delete().eq('id', emp.id)
+    setToast('Registro rechazado'); cargar(); onRefresh?.()
+  }
+
+  const urlDe = (link) => `${typeof window !== 'undefined' ? window.location.origin : 'https://worktic.app'}/alta/${link.token}`
+
+  function copiar(link) {
+    navigator.clipboard.writeText(urlDe(link)).then(() => setToast('Link copiado')).catch(() => setToast('No se pudo copiar'))
+  }
+
+  function estadoDe(link) {
+    if (!link.active) return { txt: 'Desactivado', color: '#64748b', bg: '#f1f5f9' }
+    if (link.expires_at && new Date(link.expires_at) < new Date()) return { txt: 'Vencido', color: '#ef4444', bg: 'rgba(239,68,68,.1)' }
+    if (link.max_uses != null && link.uses >= link.max_uses) return { txt: 'Límite alcanzado', color: '#ef4444', bg: 'rgba(239,68,68,.1)' }
+    return { txt: 'Activo', color: '#10b981', bg: 'rgba(16,185,129,.1)' }
+  }
+
+  const card  = { background: '#fff', border: '1px solid #e2e8f0', borderRadius: 10, padding: 18 }
+  const inp   = { width: '100%', background: '#fff', border: '1px solid #e2e8f0', color: '#0f172a', fontSize: 12, padding: '8px 10px', borderRadius: 6, outline: 'none', fontFamily: 'inherit', boxSizing: 'border-box' }
+  const lbl   = { fontSize: 11, color: '#64748b', fontWeight: 600, display: 'block', marginBottom: 4 }
+  const btnSm = (bg, col, brd) => ({ padding: '5px 10px', borderRadius: 6, border: brd || 'none', background: bg, color: col, fontSize: 11, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit', whiteSpace: 'nowrap' })
+
+  if (!companyId) return <div style={{ padding: 20, fontSize: 13, color: '#64748b' }}>Selecciona una empresa para administrar sus altas.</div>
+
+  return (
+    <div style={{ padding: 20, display: 'flex', flexDirection: 'column', gap: 18 }}>
+
+      {/* Pendientes de aprobación */}
+      <div style={card}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+          <h3 style={{ fontSize: 14, fontWeight: 700 }}>Pendientes de aprobación</h3>
+          {pendientes.length > 0 && <span style={{ fontSize: 11, fontWeight: 700, color: '#f59e0b', background: 'rgba(245,158,11,.12)', border: '1px solid rgba(245,158,11,.25)', borderRadius: 20, padding: '1px 9px' }}>{pendientes.length}</span>}
+        </div>
+        <p style={{ fontSize: 11, color: '#64748b', marginBottom: 14 }}>Gente que se registró con un link. No puede checar hasta que la apruebes.</p>
+
+        {cargando ? <div style={{ fontSize: 12, color: '#94a3b8' }}>Cargando...</div>
+          : pendientes.length === 0 ? <div style={{ fontSize: 12, color: '#94a3b8' }}>No hay registros pendientes.</div>
+          : (
+            <div style={{ overflowX: 'auto' }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 640 }}>
+                <thead>
+                  <tr style={{ borderBottom: '1px solid #e2e8f0' }}>
+                    {['Nombre', 'Correo', 'Teléfono', 'Cumpleaños', 'Puesto', ''].map(h => (
+                      <th key={h} style={{ textAlign: 'left', padding: '8px 10px', fontSize: 10, fontWeight: 600, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: .5 }}>{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {pendientes.map(p => (
+                    <tr key={p.id} style={{ borderBottom: '1px solid #f1f5f9' }}>
+                      <td style={{ padding: '10px', fontSize: 12, fontWeight: 600 }}>{p.name}</td>
+                      <td style={{ padding: '10px', fontSize: 12, color: '#475569' }}>{p.email}</td>
+                      <td style={{ padding: '10px', fontSize: 12, color: '#475569' }}>{p.phone || '—'}</td>
+                      <td style={{ padding: '10px', fontSize: 12, color: '#475569' }}>{p.birth_date || '—'}</td>
+                      <td style={{ padding: '10px', fontSize: 12, color: '#475569' }}>{p.role}</td>
+                      <td style={{ padding: '10px', textAlign: 'right', whiteSpace: 'nowrap' }}>
+                        <button onClick={() => aprobar(p)} style={{ ...btnSm('#10b981', '#fff'), marginRight: 6 }}>✓ Aprobar</button>
+                        <button onClick={() => rechazar(p)} style={btnSm('transparent', '#ef4444', '1px solid rgba(239,68,68,.3)')}>Rechazar</button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+      </div>
+
+      {/* Crear link */}
+      <div style={card}>
+        <h3 style={{ fontSize: 14, fontWeight: 700, marginBottom: 4 }}>Crear link de alta</h3>
+        <p style={{ fontSize: 11, color: '#64748b', marginBottom: 14 }}>La sucursal y el puesto quedan fijos en el link. Quien se registre solo captura sus datos personales.</p>
+
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 12, marginBottom: 12 }}>
+          <div>
+            <label style={lbl}>Nombre del link</label>
+            <input style={inp} value={form.label} onChange={e => setForm(f => ({ ...f, label: e.target.value }))} placeholder='Ej: Vendedores La Letra' />
+          </div>
+          <div>
+            <label style={lbl}>Puesto que se asigna</label>
+            <input style={inp} value={form.role} onChange={e => setForm(f => ({ ...f, role: e.target.value }))} placeholder='Vendedor(a)' />
+          </div>
+          <div>
+            <label style={lbl}>Vence en (días)</label>
+            <select style={inp} value={form.dias} onChange={e => setForm(f => ({ ...f, dias: e.target.value }))}>
+              <option value='1'>1 día</option>
+              <option value='7'>7 días</option>
+              <option value='30'>30 días</option>
+              <option value='0'>Sin vencimiento</option>
+            </select>
+          </div>
+          <div>
+            <label style={lbl}>Máximo de registros</label>
+            <input style={inp} type='number' min='1' value={form.maxUses} onChange={e => setForm(f => ({ ...f, maxUses: e.target.value }))} placeholder='Sin límite' />
+          </div>
+          <div>
+            <label style={lbl}>Meta semanal (opcional)</label>
+            <input style={inp} type='number' min='0' value={form.weeklyGoal} onChange={e => setForm(f => ({ ...f, weeklyGoal: e.target.value }))} placeholder='Sin meta' />
+          </div>
+        </div>
+
+        <div style={{ marginBottom: 12 }}>
+          <label style={lbl}>Sucursales que se asignan</label>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+            {misSitios.length === 0 && <span style={{ fontSize: 12, color: '#94a3b8' }}>Esta empresa no tiene sucursales todavía.</span>}
+            {misSitios.map(s => {
+              const on = form.siteIds.includes(s.id)
+              return (
+                <button key={s.id} type='button'
+                  onClick={() => setForm(f => ({ ...f, siteIds: on ? f.siteIds.filter(x => x !== s.id) : [...f.siteIds, s.id] }))}
+                  style={{ padding: '6px 12px', borderRadius: 20, fontSize: 11, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit', border: `1px solid ${on ? '#3b82f6' : '#e2e8f0'}`, background: on ? 'rgba(59,130,246,.1)' : '#fff', color: on ? '#3b82f6' : '#64748b' }}>
+                  {on ? '✓ ' : ''}{s.name}
+                </button>
+              )
+            })}
+          </div>
+        </div>
+
+        <div style={{ display: 'flex', gap: 16, marginBottom: 14, flexWrap: 'wrap' }}>
+          <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: '#475569', cursor: 'pointer' }}>
+            <input type='checkbox' checked={form.skipSales} onChange={e => setForm(f => ({ ...f, skipSales: e.target.checked }))} />
+            No registra ventas
+          </label>
+          <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: '#475569', cursor: 'pointer' }}>
+            <input type='checkbox' checked={form.skipPhoto} onChange={e => setForm(f => ({ ...f, skipPhoto: e.target.checked }))} />
+            No pide foto al checar
+          </label>
+        </div>
+
+        <button onClick={crearLink} disabled={creando}
+          style={{ padding: '9px 18px', borderRadius: 7, border: 'none', background: creando ? '#94a3b8' : '#3b82f6', color: '#fff', fontSize: 12, fontWeight: 600, cursor: creando ? 'not-allowed' : 'pointer', fontFamily: 'inherit' }}>
+          {creando ? 'Creando...' : '+ Crear link'}
+        </button>
+      </div>
+
+      {/* Links existentes */}
+      <div style={card}>
+        <h3 style={{ fontSize: 14, fontWeight: 700, marginBottom: 14 }}>Links creados</h3>
+        {cargando ? <div style={{ fontSize: 12, color: '#94a3b8' }}>Cargando...</div>
+          : links.length === 0 ? <div style={{ fontSize: 12, color: '#94a3b8' }}>Todavía no has creado ningún link.</div>
+          : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+              {links.map(l => {
+                const est = estadoDe(l)
+                return (
+                  <div key={l.id} style={{ border: '1px solid #e2e8f0', borderRadius: 8, padding: 14, opacity: l.active ? 1 : .65 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginBottom: 8 }}>
+                      <span style={{ fontSize: 13, fontWeight: 700 }}>{l.label}</span>
+                      <span style={{ fontSize: 10, fontWeight: 700, color: est.color, background: est.bg, borderRadius: 4, padding: '2px 7px' }}>{est.txt}</span>
+                      <span style={{ fontSize: 11, color: '#94a3b8' }}>
+                        {l.uses} registro{l.uses === 1 ? '' : 's'}{l.max_uses != null ? ` de ${l.max_uses}` : ''}
+                        {l.expires_at && ` · vence ${new Date(l.expires_at).toLocaleDateString('es-MX', { day: 'numeric', month: 'short' })}`}
+                      </span>
+                    </div>
+                    <div style={{ fontSize: 11, color: '#64748b', marginBottom: 10 }}>
+                      {l.role} · {(l.site_ids || []).map(id => misSitios.find(s => s.id === id)?.name).filter(Boolean).join(', ') || 'sin sucursal'}
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                      <code style={{ flex: 1, minWidth: 180, fontSize: 11, background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 6, padding: '6px 9px', color: '#475569', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{urlDe(l)}</code>
+                      <button onClick={() => copiar(l)} style={btnSm('#f1f5f9', '#475569', '1px solid #e2e8f0')}>Copiar</button>
+                      <button onClick={() => setQrLink(qrLink === l.id ? null : l.id)} style={btnSm('#f1f5f9', '#475569', '1px solid #e2e8f0')}>QR</button>
+                      <button onClick={() => alternarLink(l)}
+                        style={btnSm(l.active ? 'rgba(245,158,11,.12)' : 'rgba(16,185,129,.12)', l.active ? '#b45309' : '#047857', `1px solid ${l.active ? 'rgba(245,158,11,.3)' : 'rgba(16,185,129,.3)'}`)}>
+                        {l.active ? '⏸ Desactivar' : '▶ Reactivar'}
+                      </button>
+                      <button onClick={() => borrarLink(l)} style={btnSm('transparent', '#ef4444', '1px solid rgba(239,68,68,.25)')}>Eliminar</button>
+                    </div>
+                    {qrLink === l.id && (
+                      <div style={{ marginTop: 12, textAlign: 'center' }}>
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img src={`https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent(urlDe(l))}`}
+                             alt={`QR de ${l.label}`} style={{ borderRadius: 8, border: '1px solid #e2e8f0' }} />
+                      </div>
+                    )}
+                  </div>
+                )
+              })}
+            </div>
+          )}
+      </div>
+    </div>
+  )
+}
+
 function AlertsPanel({ adminUserId, adminEmail }) {
   const [email, setEmail]                   = useState(adminEmail || '')
   const [onCheckin, setOnCheckin]           = useState(false)

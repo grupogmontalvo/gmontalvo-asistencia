@@ -721,12 +721,14 @@ export default function CheckinPage({ params }) {
     if (empErr) { setEmailErr('No pudimos conectar. Verifica tu internet e intenta de nuevo.'); return }
     let empData = empMatches?.[0] || null
 
-    // 1b. Si no se encontró activo, ver si existe pero inactivo (mejor mensaje)
+    // 1b. Si no se encontró activo, distinguir "pendiente de aprobación" de "dado de baja"
     if (!empData) {
-      const { data: inactiveMatches, error: inactErr } = await supabase.from('employees').select('id, active').ilike('email', e).eq('company_id', site.company_id).limit(1)
+      const { data: inactiveMatches, error: inactErr } = await supabase.from('employees').select('id, active, pending_approval').ilike('email', e).eq('company_id', site.company_id).limit(1)
       if (inactErr) { setEmailErr('No pudimos conectar. Verifica tu internet e intenta de nuevo.'); return }
       if (inactiveMatches?.[0] && !inactiveMatches[0].active) {
-        setEmailErr('Tu cuenta está inactiva. Contacta a tu administrador.')
+        setEmailErr(inactiveMatches[0].pending_approval
+          ? 'Tu registro está pendiente de aprobación. Tu administrador debe autorizarte antes de que puedas checar.'
+          : 'Tu cuenta está inactiva. Contacta a tu administrador.')
         return
       }
     }
