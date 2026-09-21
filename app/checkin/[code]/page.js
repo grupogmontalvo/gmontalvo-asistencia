@@ -593,9 +593,11 @@ export default function CheckinPage({ params }) {
   }, [siteCode])
 
   async function loadTodayRecord(empId, siteId, tz) {
-    const today = new Date().toLocaleDateString('en-CA', { timeZone: tz || 'America/Cancun' })
-    const { data } = await supabase.from('attendance').select('*').eq('employee_id', empId).eq('date', today).order('created_at', { ascending: false }).limit(1).maybeSingle()
-    if (data) {
+    // El día lo resuelve el servidor con el huso de la sucursal, no el dispositivo.
+    const { data } = await supabase.rpc('checkin_registro_hoy', {
+      p_employee_id: empId, p_site_id: siteId,
+    }).maybeSingle()
+    if (data?.id) {
       setTodayRecord(data)
       if (data.check_in) setCiTime(fmtTime(new Date(data.check_in), tz))
       if (data.check_out) {
@@ -763,22 +765,6 @@ export default function CheckinPage({ params }) {
     await enterCheckin(empData, site)
   }
 
-  async function calcStatus(checkInTime) {
-    if (isDemoSite(site)) return 'on_time'
-    const tz    = site?.timezone || 'America/Cancun'
-    const today = checkInTime.toLocaleDateString('en-CA', { timeZone: tz })
-    const grace = site?.grace_mins || 15
-    const { data: sched } = await supabase.from('schedules').select('*').eq('employee_id', emp.id).eq('date', today).maybeSingle()
-    if (!sched) return null
-    const [schedH, schedM] = sched.start_time.split(':').map(Number)
-    const schedDate = new Date(checkInTime)
-    schedDate.setHours(schedH, schedM, 0, 0)
-    const diffMins = Math.floor((checkInTime - schedDate) / 60000)
-    if (diffMins <= 0)     return 'on_time'
-    if (diffMins <= grace) return 'tolerancia'
-    return 'late'
-  }
-
   async function uploadPhoto(blob, suffix) {
     if (!blob) return null
     if (isDemoSite(site)) return null
@@ -809,18 +795,24 @@ export default function CheckinPage({ params }) {
 
   async function doCheckinWithPhoto(blob) {
     setShowCamera(null); setLoading(true); setCheckinErr('')
-    const checkIn = new Date()
     const tz      = site?.timezone || 'America/Cancun'
-    const today   = checkIn.toLocaleDateString('en-CA', { timeZone: tz })
-    const status  = await calcStatus(checkIn)
     const photoUrl = await uploadPhoto(blob, 'in')
     const gpsWarn = gps.status === 'far' ? 'far' : gps.status === 'denied' ? (gps.reason || 'unavailable') : null
-    const record = { employee_id: emp.id, site_id: site.id, company_id: site.company_id || emp.company_id || null, date: today, status, check_in: checkIn.toISOString(), gps_lat: gps.lat || null, gps_lng: gps.lng || null, gps_distance_m: gps.dist || null, gps_warn: gpsWarn, ...(photoUrl ? { photo_url: photoUrl } : {}) }
-    // Sandbox demo: se simula el registro en memoria, sin tocar la base de datos.
+    // La hora, la fecha y el estado los decide el servidor: el reloj del
+    // dispositivo se puede alterar y no es prueba de nada.
     const { data, error } = isDemoSite(site)
-      ? { data: { ...record, id: 'demo-attendance' }, error: null }
-      : await supabase.from('attendance').insert(record).select().single()
+      ? { data: { id: 'demo-attendance', check_in: new Date().toISOString(), status: 'on_time' }, error: null }
+      : await supabase.rpc('checkin_registrar', {
+          p_employee_id: emp.id,
+          p_site_id: site.id,
+          p_gps_lat: gps.lat || null,
+          p_gps_lng: gps.lng || null,
+          p_gps_distance_m: gps.dist || null,
+          p_gps_warn: gpsWarn,
+          p_photo_url: photoUrl || null,
+        }).single()
     if (!error && data) {
+      const checkIn = new Date(data.check_in)
       setTodayRecord(data); setIsIn(true)
       setCiTime(fmtTime(checkIn, tz))
       setEvents(prev => [...prev, { type: 'ci', time: fmtTime(checkIn, tz) }])
@@ -882,21 +874,20 @@ export default function CheckinPage({ params }) {
     if (!todayRecord) { setCheckoutErr('Error: no se encontró el registro de entrada. Contacta a tu administrador.'); return }
     setLoading(true); setCheckoutErr('')
 
-    const tz       = site?.timezone || 'America/Cancun'
-    const checkOut = new Date()
-    const ciDate   = new Date(todayRecord.check_in)
-    const lunchMins = todayRecord.lunch_start && todayRecord.lunch_end
-      ? (new Date(todayRecord.lunch_end) - new Date(todayRecord.lunch_start)) / 60000 : 0
-    const hrs = ((checkOut - ciDate) / 3600000 - lunchMins / 60).toFixed(1)
+    const tz = site?.timezone || 'America/Cancun'
 
     const blob = photoBlob ?? pendingCheckoutPhotoRef.current
     pendingCheckoutPhotoRef.current = null
     const photoUrlOut = await uploadPhoto(blob, 'out')
 
-    const cambios = { check_out: checkOut.toISOString(), hours_worked: parseFloat(hrs), ...(salesAmount !== null ? { sales_amount: salesAmount } : {}), ...(photoUrlOut ? { photo_url_out: photoUrlOut } : {}) }
+    // La hora de salida y las horas trabajadas las calcula el servidor.
     const { data: updatedRecord, error } = isDemoSite(site)
-      ? { data: { ...todayRecord, ...cambios }, error: null }
-      : await supabase.from('attendance').update(cambios).eq('id', todayRecord.id).select().single()
+      ? { data: { ...todayRecord, check_out: new Date().toISOString(), hours_worked: 0, ...(salesAmount !== null ? { sales_amount: salesAmount } : {}) }, error: null }
+      : await supabase.rpc('checkin_salida', {
+          p_attendance_id: todayRecord.id,
+          p_sales_amount: salesAmount,
+          p_photo_url_out: photoUrlOut || null,
+        }).single()
 
     if (error) {
       console.error('Check-out error:', error)
@@ -906,6 +897,7 @@ export default function CheckinPage({ params }) {
 
     if (salesAmount > 0) setThisWeekSales(prev => prev + salesAmount)
 
+    const checkOut = new Date(updatedRecord.check_out)
     setTodayRecord(updatedRecord); setIsIn(false); setIsDone(true); setOnLunch(false); setOnBreak(false)
     setCoTime(fmtTime(checkOut, tz))
     const newEvs = [{ type: 'co', time: fmtTime(checkOut, tz) }]
@@ -933,26 +925,32 @@ export default function CheckinPage({ params }) {
     })
   }
 
-  async function doLunch(start) {
+  // Comida y descanso también sellan con la hora del servidor.
+  async function marcarMovimiento(campo, tipoEvento, setEstado, activo) {
     if (!todayRecord) return
-    const tz = site?.timezone || 'America/Cancun'; const t = new Date()
-    const campo = start ? 'lunch_start' : 'lunch_end'
-    if (!isDemoSite(site)) await supabase.from('attendance').update({ [campo]: t.toISOString() }).eq('id', todayRecord.id)
-    setOnLunch(start)
-    setEvents(prev => [...prev, { type: start ? 'ls' : 'le', time: fmtTime(t, tz) }])
-    setTodayRecord(prev => ({ ...prev, [campo]: t.toISOString() }))
+    const tz = site?.timezone || 'America/Cancun'
+    let hora = new Date().toISOString()
+    if (!isDemoSite(site)) {
+      const { data, error } = await supabase.rpc('checkin_movimiento', {
+        p_attendance_id: todayRecord.id, p_tipo: campo,
+      }).single()
+      if (error) { console.error('Movimiento error:', error); return }
+      hora = data[campo]
+      setTodayRecord(data)
+    } else {
+      setTodayRecord(prev => ({ ...prev, [campo]: hora }))
+    }
+    setEstado(activo)
+    setEvents(prev => [...prev, { type: tipoEvento, time: fmtTime(new Date(hora), tz) }])
     if (!isDemoSite(site)) fetch('/api/alerts/movement', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ attendance_id: todayRecord.id, type: campo }) }).catch(() => {})
   }
 
+  async function doLunch(start) {
+    await marcarMovimiento(start ? 'lunch_start' : 'lunch_end', start ? 'ls' : 'le', setOnLunch, start)
+  }
+
   async function doBreak(start) {
-    if (!todayRecord) return
-    const tz = site?.timezone || 'America/Cancun'; const t = new Date()
-    const campo = start ? 'break_start' : 'break_end'
-    if (!isDemoSite(site)) await supabase.from('attendance').update({ [campo]: t.toISOString() }).eq('id', todayRecord.id)
-    setOnBreak(start)
-    setEvents(prev => [...prev, { type: start ? 'bs' : 'be', time: fmtTime(t, tz) }])
-    setTodayRecord(prev => ({ ...prev, [campo]: t.toISOString() }))
-    if (!isDemoSite(site)) fetch('/api/alerts/movement', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ attendance_id: todayRecord.id, type: campo }) }).catch(() => {})
+    await marcarMovimiento(start ? 'break_start' : 'break_end', start ? 'bs' : 'be', setOnBreak, start)
   }
 
   function handleFbFile(e) {
