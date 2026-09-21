@@ -94,21 +94,15 @@ function KpiCarousel({ empId, siteId, thisWeekSales, lastWeekSales, weeklyGoal, 
       }
     }
 
-    // Birthday card: coworkers at this site with birthday today
-    const { data: siteAssign } = await supabase
-      .from('employee_site_assignments')
-      .select('employee_id, employees(name, birth_date)')
-      .eq('site_id', siteId)
-    const birthdayPeople = (siteAssign || [])
-      .filter(a => a.employees?.birth_date)
-      .filter(a => {
-        const parts = a.employees.birth_date.split('-')
-        return parts[1] === bdMon && parts[2] === bdDay && a.employee_id !== empId
-      })
-    for (const bp of birthdayPeople) {
+    // Birthday card: coworkers at this site with birthday today.
+    // Por función: devuelve solo los nombres del día, no la lista de empleados.
+    const { data: birthdayPeople } = await supabase.rpc('checkin_cumples_hoy', {
+      p_site_id: siteId, p_employee_id: empId,
+    })
+    for (const bp of (birthdayPeople || [])) {
       built.push({
         icon: '🎂', title: '¡Cumpleaños hoy!',
-        value: bp.employees.name.split(' ')[0],
+        value: (bp.nombre || '').split(' ')[0],
         sub: '¡Felicítalo cuando lo veas! 🎉',
         color: '#ec4899', isBirthday: true
       })
@@ -538,31 +532,18 @@ export default function CheckinPage({ params }) {
 
   useEffect(() => { const t = setInterval(() => setNow(new Date()), 1000); return () => clearInterval(t) }, [])
 
-  async function loadSchedule(empId, tz) {
-    const today = new Date().toLocaleDateString('en-CA', { timeZone: tz || 'America/Cancun' })
-    const { data } = await supabase.from('schedules').select('*').eq('employee_id', empId).eq('date', today).maybeSingle()
-    setSchedule(data)
-  }
-
-  async function loadWeeklyData(empId, tz) {
-    const today = new Date().toLocaleDateString('en-CA', { timeZone: tz || 'America/Cancun' })
-    const thisWeek = getWeekBounds(today)
-    const lastMonDate = new Date(thisWeek.start + 'T12:00:00')
-    lastMonDate.setDate(lastMonDate.getDate() - 7)
-    const lastWeek = getWeekBounds(lastMonDate.toLocaleDateString('en-CA'))
-
-    const monthStart = today.slice(0, 7) + '-01'
-    const [thisRes, lastRes, goalRes, monthRes] = await Promise.all([
-      supabase.from('attendance').select('sales_amount').eq('employee_id', empId).gte('date', thisWeek.start).lte('date', thisWeek.end),
-      supabase.from('attendance').select('sales_amount').eq('employee_id', empId).gte('date', lastWeek.start).lte('date', lastWeek.end),
-      supabase.from('employee_goals').select('weekly_goal').eq('employee_id', empId).maybeSingle(),
-      supabase.from('attendance').select('sales_amount').eq('employee_id', empId).gte('date', monthStart).lte('date', today),
-    ])
-
-    setThisWeekSales((thisRes.data || []).reduce((s, r) => s + (parseFloat(r.sales_amount) || 0), 0))
-    setLastWeekSales((lastRes.data || []).reduce((s, r) => s + (parseFloat(r.sales_amount) || 0), 0))
-    setWeeklyGoal(parseFloat(goalRes.data?.weekly_goal) || 0)
-    setThisMonthSales((monthRes.data || []).reduce((s, r) => s + (parseFloat(r.sales_amount) || 0), 0))
+  // Horario, meta y ventas llegan juntos desde el servidor, que además resuelve
+  // la semana con el huso de la sucursal.
+  async function loadResumen(empId, siteId) {
+    const { data } = await supabase.rpc('checkin_resumen', {
+      p_employee_id: empId, p_site_id: siteId,
+    })
+    if (!data) return
+    setSchedule(data.horario || null)
+    setWeeklyGoal(parseFloat(data.meta_semanal) || 0)
+    setThisWeekSales(parseFloat(data.ventas_semana) || 0)
+    setLastWeekSales(parseFloat(data.ventas_semana_pasada) || 0)
+    setThisMonthSales(parseFloat(data.ventas_mes) || 0)
   }
 
   useEffect(() => {
@@ -579,13 +560,11 @@ export default function CheckinPage({ params }) {
       // pertenece a una empresa real y no debe arrastrarse al sandbox.
       const token = isDemoSite(siteData) ? null : localStorage.getItem('gm-device-token')
       if (token) {
-        const { data: device } = await supabase.from('devices').select('*, employees(*)').eq('device_token', token).single()
-        // Solo auto-entra si el empleado recordado es de la misma empresa que la sucursal.
-        if (device?.employees && device.employees.company_id === siteData.company_id) {
-          await enterCheckin(device.employees, siteData)
-          await supabase.from('devices').update({ last_used: new Date().toISOString() }).eq('device_token', token)
-          return
-        }
+        // La función valida el dispositivo y que el empleado sea de esta empresa.
+        const { data: empDevice } = await supabase.rpc('checkin_por_dispositivo', {
+          p_token: token, p_site_id: siteData.id,
+        })
+        if (empDevice?.id) { await enterCheckin(empDevice, siteData); return }
       }
       setStep('email')
     }
@@ -636,8 +615,7 @@ export default function CheckinPage({ params }) {
     // El sandbox demo arranca siempre en blanco y no consulta datos reales.
     if (!isDemoSite(siteData)) {
       await loadTodayRecord(empData.id, siteData.id, siteData.timezone)
-      await loadSchedule(empData.id, siteData.timezone)
-      await loadWeeklyData(empData.id, siteData.timezone)
+      await loadResumen(empData.id, siteData.id)
     }
     checkGPS(siteData)
     setStep('checkin')
@@ -647,7 +625,7 @@ export default function CheckinPage({ params }) {
     if (!emp || privacySaving) return
     setPrivacySaving(true)
     const now = new Date().toISOString()
-    if (!isDemo) await supabase.from('employees').update({ privacy_accepted_at: now }).eq('id', emp.id)
+    if (!isDemo) await supabase.rpc('checkin_privacidad', { p_employee_id: emp.id })
     const updatedEmp = { ...emp, privacy_accepted_at: now }
     setPrivacySaving(false)
     await enterCheckin(updatedEmp, site)
@@ -717,51 +695,30 @@ export default function CheckinPage({ params }) {
       return
     }
 
-    // 1. Buscar en empleados activos de ESTA empresa. Cada empresa es independiente:
-    // el empleado puede checar en cualquier sucursal propia, pero nunca en otra empresa.
-    const { data: empMatches, error: empErr } = await supabase.from('employees').select('*').ilike('email', e).eq('active', true).eq('company_id', site.company_id).limit(1)
-    if (empErr) { setEmailErr('No pudimos conectar. Verifica tu internet e intenta de nuevo.'); return }
-    let empData = empMatches?.[0] || null
+    // La identificación corre en el servidor: valida que el correo pertenezca a
+    // la empresa de esta sucursal y devuelve solo a ese empleado. La tabla de
+    // empleados no queda expuesta a la llave pública.
+    const { data: res, error: idErr } = await supabase.rpc('checkin_identificar', {
+      p_email: e, p_site_id: site.id,
+    })
+    if (idErr) { setEmailErr('No pudimos conectar. Verifica tu internet e intenta de nuevo.'); return }
 
-    // 1b. Si no se encontró activo, distinguir "pendiente de aprobación" de "dado de baja"
-    if (!empData) {
-      const { data: inactiveMatches, error: inactErr } = await supabase.from('employees').select('id, active, pending_approval').ilike('email', e).eq('company_id', site.company_id).limit(1)
-      if (inactErr) { setEmailErr('No pudimos conectar. Verifica tu internet e intenta de nuevo.'); return }
-      if (inactiveMatches?.[0] && !inactiveMatches[0].active) {
-        setEmailErr(inactiveMatches[0].pending_approval
-          ? 'Tu registro está pendiente de aprobación. Tu administrador debe autorizarte antes de que puedas checar.'
-          : 'Tu cuenta está inactiva. Contacta a tu administrador.')
-        return
-      }
+    if (res?.estado === 'pendiente') {
+      setEmailErr('Tu registro está pendiente de aprobación. Tu administrador debe autorizarte antes de que puedas checar.'); return
     }
-
-    // 2. Si no está como empleado, checar si es admin/gerente. Los superadmin no
-    // tienen empresa asignada, así que entran a cualquiera; el resto solo a la suya.
-    if (!empData) {
-      const { data: adminMatches, error: admErr } = await supabase.from('admin_users').select('*').ilike('email', e).limit(1)
-      if (admErr) { setEmailErr('No pudimos conectar. Verifica tu internet e intenta de nuevo.'); return }
-      const adminData = adminMatches?.[0] || null
-      const adminPuedeEntrar = adminData && (adminData.role === 'superadmin' || adminData.company_id === site.company_id)
-      if (adminPuedeEntrar) {
-        // Crear automáticamente perfil de empleado para el admin
-        const { data: newEmp } = await supabase.from('employees').insert({
-          name: adminData.name,
-          email: (adminData.email || '').trim().toLowerCase(),
-          role: adminData.role === 'superadmin' ? 'Administrador' : 'Gerente',
-          company_id: adminData.company_id || site.company_id,
-          active: true,
-          skip_sales: true,
-          skip_photo: false,
-        }).select().single()
-        empData = newEmp
-      }
+    if (res?.estado === 'inactivo') {
+      setEmailErr('Tu cuenta está inactiva. Contacta a tu administrador.'); return
     }
-
-    if (!empData) { setEmailErr('Email no registrado en esta sucursal. Contacta a tu administrador.'); return }
+    if (res?.estado !== 'ok' || !res?.empleado) {
+      setEmailErr('Email no registrado en esta sucursal. Contacta a tu administrador.'); return
+    }
+    const empData = res.empleado
 
     const token = crypto.randomUUID()
     localStorage.setItem('gm-device-token', token)
-    await supabase.from('devices').insert({ device_token: token, employee_id: empData.id, user_agent: navigator.userAgent })
+    await supabase.rpc('checkin_vincular', {
+      p_employee_id: empData.id, p_token: token, p_user_agent: navigator.userAgent,
+    })
     await enterCheckin(empData, site)
   }
 
@@ -982,7 +939,7 @@ export default function CheckinPage({ params }) {
     // que el empleado pueda tener guardado para su propia sucursal.
     if (!isDemo) {
       const token = localStorage.getItem('gm-device-token')
-      if (token) await supabase.from('devices').delete().eq('device_token', token)
+      if (token) await supabase.rpc('checkin_desvincular', { p_token: token })
       localStorage.removeItem('gm-device-token')
     }
     setEmp(null); setStep('email')
