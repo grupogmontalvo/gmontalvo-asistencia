@@ -141,7 +141,8 @@ export default function AltaPage({ params }) {
 
         {err && <div style={S.err}>{err}</div>}
 
-        <button type='submit' style={S.btn(enviando)} disabled={enviando}>
+        {/* preventDefault: evita que el primer toque solo cierre el teclado */}
+        <button type='submit' onPointerDown={e => e.preventDefault()} style={S.btn(enviando)} disabled={enviando}>
           {enviando ? 'Enviando...' : 'Enviar registro'}
         </button>
 

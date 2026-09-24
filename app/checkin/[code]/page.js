@@ -614,8 +614,10 @@ export default function CheckinPage({ params }) {
     if (!empData.privacy_accepted_at) { setStep('privacy'); return }
     // El sandbox demo arranca siempre en blanco y no consulta datos reales.
     if (!isDemoSite(siteData)) {
+      // Solo se espera el registro del día, que decide qué botón mostrar.
+      // El resumen (horario, meta y ventas) llega después sin frenar la entrada.
       await loadTodayRecord(empData.id, siteData.id, siteData.timezone)
-      await loadResumen(empData.id, siteData.id)
+      loadResumen(empData.id, siteData.id).catch(() => {})
     }
     checkGPS(siteData)
     setStep('checkin')
@@ -1057,7 +1059,10 @@ export default function CheckinPage({ params }) {
         </div>
         <input style={S.input} type='email' value={email} onChange={e => { setEmail(e.target.value); setEmailErr('') }} onKeyDown={e => { if (e.key === 'Enter') tryEmail() }} placeholder='tu@email.com' autoFocus />
         {emailErr && <div style={S.err}>{emailErr}</div>}
-        <button style={S.btnP} onClick={tryEmail}>Continuar</button>
+        {/* preventDefault evita que el input pierda el foco al tocar: en el
+            celular eso cerraba el teclado, el layout saltaba y el primer toque
+            se perdía, obligando a tocar dos veces. */}
+        <button style={S.btnP} onPointerDown={e => e.preventDefault()} onClick={tryEmail}>Continuar</button>
         <p style={{ ...S.muted, textAlign: 'center' }}>{isDemo ? 'Esta es la sucursal de demostración de Worktic.' : 'Si no conoces tu email, pregunta a tu administrador.'}</p>
       </div>
     </div>

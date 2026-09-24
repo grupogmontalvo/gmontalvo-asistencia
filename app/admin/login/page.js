@@ -99,7 +99,9 @@ export default function LoginPage() {
               </button>
             </div>
 
-            <button onClick={handleLogin} disabled={!validLogin || loading} style={S.btn(validLogin && !loading)}>
+            {/* preventDefault: en el celular el primer toque solo cerraba el
+                teclado y movía el botón, así que había que tocar dos veces. */}
+            <button onPointerDown={e => e.preventDefault()} onClick={handleLogin} disabled={!validLogin || loading} style={S.btn(validLogin && !loading)}>
               {loading ? 'Entrando...' : 'Entrar'}
             </button>
           </>
