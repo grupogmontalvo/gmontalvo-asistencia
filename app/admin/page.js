@@ -420,13 +420,16 @@ export default function AdminPage() {
       }
     } else {
       const grace = site?.grace_mins || 5; const absent = site?.absent_mins || 15; const start = sc.start_time?.slice(0, 5)
+      // Mismo margen de cortesía que aplica el servidor al guardar el estado,
+      // para que esta vista en vivo no contradiga lo que queda registrado.
+      const margin = site?.margin_mins ?? 1
       if (start) {
         const [sh, sm] = start.split(':').map(Number); const [nh, nm] = nowTime.split(':').map(Number)
         const diffMins = (nh * 60 + nm) - (sh * 60 + sm)
         if (diffMins < 0) { color = '#64748b'; bg = 'rgba(136,146,168,.1)'; statusLabel = 'Esperado' }
-        else if (diffMins === 0) { color = '#10b981'; bg = 'rgba(16,185,129,.12)'; statusLabel = 'En hora' }
-        else if (diffMins <= grace) { color = '#f59e0b'; bg = 'rgba(245,158,11,.12)'; statusLabel = 'En tolerancia' }
-        else if (diffMins <= absent) { color = '#f59e0b'; bg = 'rgba(245,158,11,.12)'; statusLabel = 'Tolerancia vencida' }
+        else if (diffMins <= margin) { color = '#10b981'; bg = 'rgba(16,185,129,.12)'; statusLabel = 'En hora' }
+        else if (diffMins <= grace + margin) { color = '#f59e0b'; bg = 'rgba(245,158,11,.12)'; statusLabel = 'En tolerancia' }
+        else if (diffMins <= absent + margin) { color = '#f59e0b'; bg = 'rgba(245,158,11,.12)'; statusLabel = 'Tolerancia vencida' }
         else { color = '#ef4444'; bg = 'rgba(239,68,68,.12)'; statusLabel = 'No se presentó' }
       } else { color = '#64748b'; bg = 'rgba(136,146,168,.1)'; statusLabel = 'Esperado' }
     }
