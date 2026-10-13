@@ -1,5 +1,5 @@
 'use client'
-import { useState, useEffect, useCallback, useRef } from 'react'
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { supabase } from '../../lib/supabase'
 import { useRouter } from 'next/navigation'
 import { InstallButton, usePushNotifications } from '../components/PWAInstall'
@@ -391,6 +391,46 @@ export default function AdminPage() {
     if (toast) { const t = setTimeout(() => setToast(null), 2500); return () => clearTimeout(t) }
   }, [toast])
   useEffect(() => { if (adminUser) load() }, [tab])
+
+  // Faltas: turnos asignados que ya pasaron sin ningún registro de entrada.
+  // En la base solo nace una fila cuando alguien checa, así que quien no se
+  // presentó no aparecía en los reportes. Estas filas se arman aquí a partir
+  // del horario y no se guardan. Va antes de los return condicionales porque
+  // los hooks deben ejecutarse siempre en el mismo orden.
+  const faltas = useMemo(() => {
+    const conRegistro = new Set(att.map(r => `${r.employee_id}|${r.date}`))
+    const empsPorId  = new Map(allEmps.map(e => [e.id, e]))
+    const sitesPorId = new Map(sites.map(s => [s.id, s]))
+    const ahora = new Date()
+    const out = []
+    for (const sc of schedules) {
+      if (!sc.start_time || sc.date > today) continue
+      if (conRegistro.has(`${sc.employee_id}|${sc.date}`)) continue
+      const emp = empsPorId.get(sc.employee_id)
+      if (!emp || emp.active === false) continue
+      const site = sitesPorId.get(sc.site_id)
+      if (sc.date === today) {
+        // Hoy todavía puede llegar: solo cuenta como falta pasado el límite.
+        const tz = site?.timezone || 'America/Cancun'
+        const [nh, nm] = ahora.toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: tz }).split(':').map(Number)
+        const [sh, sm] = sc.start_time.split(':').map(Number)
+        const limite = (site?.absent_mins ?? 15) + (site?.margin_mins ?? 1)
+        if ((nh * 60 + nm) < (sh * 60 + sm) + limite) continue
+      }
+      out.push({
+        id: `falta-${sc.id}`, es_falta: true,
+        employee_id: sc.employee_id, site_id: sc.site_id, date: sc.date,
+        status: 'absent',
+        check_in: null, check_out: null, hours_worked: null, sales_amount: null,
+      })
+    }
+    return out
+  }, [schedules, att, sites, allEmps, today])
+
+  const attConFaltas = useMemo(
+    () => [...att, ...faltas].sort((a, b) => b.date.localeCompare(a.date)),
+    [att, faltas])
+
   if (authLoading) return (
     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100vh', background: '#f8fafc', color: '#64748b', fontFamily: "'DM Sans'" }}>Cargando...</div>
   )
@@ -444,7 +484,7 @@ export default function AdminPage() {
   ]).size
   const peopleWorking = dashRows.filter(r => r.record && !r.record.check_out).length
     + unscheduledAtt.filter(r => !r.check_out).length
-  const filteredAtt = att.filter(r => {
+  const filteredAtt = attConFaltas.filter(r => {
     if (filterEmp    && r.employee_id !== filterEmp)   return false
     if (filterSite   && r.site_id !== filterSite)       return false
     if (filterFrom   && r.date < filterFrom)            return false
@@ -555,7 +595,7 @@ export default function AdminPage() {
     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100vh', background: '#f8fafc', color: '#64748b', fontFamily: "'DM Sans'" }}>Cargando...</div>
   )
   if (empPage) {
-    const empAtt = att.filter(r => r.employee_id === empPage.id)
+    const empAtt = attConFaltas.filter(r => r.employee_id === empPage.id)
     return (
       <div style={{ background: '#f8fafc', minHeight: '100vh', fontFamily: "'DM Sans', sans-serif", color: '#0f172a', display: 'flex', flexDirection: 'column' }}>
         <div style={{ padding: '12px 18px', borderBottom: '1px solid #e2e8f0', background: '#ffffff', display: 'flex', alignItems: 'center', gap: 12, flexShrink: 0 }}>
@@ -1042,7 +1082,7 @@ export default function AdminPage() {
           onClose={() => setSiteHoursForSite(null)}
         />
       )}
-      {exportOpen && <ExportModal att={att} allEmps={allEmps} sites={sites} schedules={schedules} goals={goals} adminUsers={adminUsers} onClose={() => setExportOpen(false)} setToast={setToast} />}
+      {exportOpen && <ExportModal att={attConFaltas} allEmps={allEmps} sites={sites} schedules={schedules} goals={goals} adminUsers={adminUsers} onClose={() => setExportOpen(false)} setToast={setToast} />}
       {salesImportOpen && <SalesImportModal sites={sites} allEmps={allEmps} att={att} schedules={schedules} adminUser={adminUser} employeeSiteAssignments={employeeSiteAssignments} onClose={() => setSalesImportOpen(false)} onDone={() => { setSalesImportOpen(false); load() }} setToast={setToast} />}
       {empImportOpen && <EmployeeImportModal sites={sites} allEmps={allEmps} companyId={isSuperAdmin ? (selectedCompanyId || companies[0]?.id) : adminUser?.company_id} onClose={() => setEmpImportOpen(false)} onDone={() => { setEmpImportOpen(false); load() }} setToast={setToast} />}
       <FeedbackButton open={feedbackOpen} onClose={() => setFeedbackOpen(false)} adminUser={adminUser} />
@@ -1226,7 +1266,8 @@ function EmpSidePanel({ emp, att, sites, onClose, onRefresh, fullPage }) {
                       ) : (
                         <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
                           <span style={{ fontSize: 11, fontFamily: "'JetBrains Mono'", color: r.sales_amount > 0 ? '#10b981' : '#94a3b8' }}>{r.sales_amount > 0 ? '$'+Number(r.sales_amount).toLocaleString('es-MX') : '–'}</span>
-                          <button onClick={() => { setEditingSale({ id: r.id, value: r.sales_amount || 0 }); setSaleErr('') }} style={{ background: 'none', border: 'none', color: '#94a3b8', cursor: 'pointer', fontSize: 11, padding: '1px 4px', borderRadius: 3, lineHeight: 1 }} title='Editar venta'>✎</button>
+                          {/* Una falta no existe como fila en la base: no se le edita la venta. */}
+                          {!r.es_falta && <button onClick={() => { setEditingSale({ id: r.id, value: r.sales_amount || 0 }); setSaleErr('') }} style={{ background: 'none', border: 'none', color: '#94a3b8', cursor: 'pointer', fontSize: 11, padding: '1px 4px', borderRadius: 3, lineHeight: 1 }} title='Editar venta'>✎</button>}
                         </div>
                       )}
                       {isEditing && saleErr && <div style={{ fontSize: 9, color: '#ef4444', marginTop: 2 }}>{saleErr}</div>}
@@ -4317,9 +4358,10 @@ function AttendanceTable({ filteredAtt, allEmps, sites, adminUser, adminUsers, o
                       </div>
                     ) : (
                       <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-                        <span style={{ color: r.sales_amount > 0 ? '#10b981' : '#94a3b8', cursor: 'pointer' }}
-                          onClick={() => setEditing({ id: r.id, sales_amount: r.sales_amount || 0, note: r.sales_correction_note || '' })}
-                          title="Click para corregir">
+                        {/* Una falta no tiene fila en la base: no se le puede corregir la venta. */}
+                        <span style={{ color: r.sales_amount > 0 ? '#10b981' : '#94a3b8', cursor: r.es_falta ? 'default' : 'pointer' }}
+                          onClick={() => { if (!r.es_falta) setEditing({ id: r.id, sales_amount: r.sales_amount || 0, note: r.sales_correction_note || '' }) }}
+                          title={r.es_falta ? 'No se presentó' : 'Click para corregir'}>
                           {r.sales_amount > 0 ? '$' + Number(r.sales_amount).toLocaleString('es-MX') : '–'}
                           {wasCorrected && <span style={{ marginLeft: 4, fontSize: 8, color: '#f59e0b' }} title={'Corregido por ' + correctorName(r.sales_corrected_by) + (r.sales_correction_note ? ': ' + r.sales_correction_note : '')}>✏️</span>}
                         </span>
@@ -4337,7 +4379,7 @@ function AttendanceTable({ filteredAtt, allEmps, sites, adminUser, adminUsers, o
                     </span>
                   </td>
                   <td style={{ ...tdS, fontFamily: 'inherit', padding: '4px 8px' }}>
-                    {!isEditing && (
+                    {!isEditing && !r.es_falta && (
                       <button onClick={() => setEditing({ id: r.id, sales_amount: r.sales_amount || 0, note: r.sales_correction_note || '' })}
                         style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 12, opacity: 0.4, padding: 2 }}
                         title="Corregir venta">✏️</button>
