@@ -237,6 +237,13 @@ export default function AdminPage() {
   const [empImportOpen, setEmpImportOpen] = useState(false)
   const [exportOpen, setExportOpen] = useState(false)
   const today = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Cancun' })
+  // Ventana de historial que se descarga. Antes se traía la tabla completa en
+  // cada carga, lo que agotaba el presupuesto de lectura de disco. Se amplía
+  // sola cuando se piden fechas más viejas.
+  const [histDesde, setHistDesde] = useState(() => {
+    const d = new Date(); d.setDate(d.getDate() - 90)
+    return d.toLocaleDateString('en-CA', { timeZone: 'America/Cancun' })
+  })
   useEffect(() => {
     if (typeof window !== 'undefined' && window.innerWidth < 768) setSidebarOpen(false)
   }, [])
@@ -312,7 +319,9 @@ export default function AdminPage() {
     // attendance y schedules pueden superar las 1000 filas → se paginan (ver fetchAllPages).
     // Builders re-invocables: cada página crea un builder nuevo con los mismos filtros.
     const buildAtt = () => {
-      let q = supabase.from('attendance').select('*').order('date', { ascending: false })
+      // Solo la ventana visible: traer la tabla entera en cada carga era lo que
+      // saturaba la lectura de disco de la base.
+      let q = supabase.from('attendance').select('*').gte('date', histDesde).order('date', { ascending: false })
       if (companyId) q = q.eq('company_id', companyId)
       // FIX BUG 1: para gerentes, también cargamos attendance de sus sucursales (no solo de empleados asignados)
       if (!isSuperAdmin && !isCompanyAdmin && permSiteIds) q = q.in('site_id', permSiteIds)
@@ -320,7 +329,8 @@ export default function AdminPage() {
     }
     const buildSched = () => {
       // order por fecha (desc): paginación determinista y la semana visible nunca se corta antes de cargar.
-      let q = supabase.from('schedules').select('*').order('date', { ascending: false })
+      // Desde histDesde en adelante: incluye los turnos futuros del calendario.
+      let q = supabase.from('schedules').select('*').gte('date', histDesde).order('date', { ascending: false })
       // Para gerentes: filtrar por site_id (confiable) en lugar de company_id (muchos registros no lo tienen)
       if (!isSuperAdmin && !isCompanyAdmin && permSiteIds && permSiteIds.length > 0) q = q.in('site_id', permSiteIds)
       else if (companyId) q = q.eq('company_id', companyId)
@@ -385,12 +395,19 @@ export default function AdminPage() {
       }
     }
     setLoading(false)
-  }, [adminUser, isSuperAdmin, isCompanyAdmin, selectedCompanyId])
+  }, [adminUser, isSuperAdmin, isCompanyAdmin, selectedCompanyId, histDesde])
   useEffect(() => { if (adminUser) load() }, [adminUser, load])
   useEffect(() => {
     if (toast) { const t = setTimeout(() => setToast(null), 2500); return () => clearTimeout(t) }
   }, [toast])
-  useEffect(() => { if (adminUser) load() }, [tab])
+  // Antes se recargaba todo al cambiar de pestaña. Era una copia de la carga de
+  // arriba y multiplicaba la lectura de disco sin traer nada nuevo: los datos
+  // ya están en memoria y las acciones que los cambian llaman a load() ellas mismas.
+
+  // Si se piden fechas anteriores a lo ya cargado, se amplía la ventana y se recarga.
+  useEffect(() => {
+    if (filterFrom && filterFrom < histDesde) setHistDesde(filterFrom)
+  }, [filterFrom, histDesde])
 
   // Faltas: turnos asignados que ya pasaron sin ningún registro de entrada.
   // En la base solo nace una fila cuando alguien checa, así que quien no se
@@ -1082,7 +1099,7 @@ export default function AdminPage() {
           onClose={() => setSiteHoursForSite(null)}
         />
       )}
-      {exportOpen && <ExportModal att={attConFaltas} allEmps={allEmps} sites={sites} schedules={schedules} goals={goals} adminUsers={adminUsers} onClose={() => setExportOpen(false)} setToast={setToast} />}
+      {exportOpen && <ExportModal att={attConFaltas} allEmps={allEmps} sites={sites} schedules={schedules} goals={goals} adminUsers={adminUsers} histDesde={histDesde} onNeedRange={setHistDesde} cargando={loading} onClose={() => setExportOpen(false)} setToast={setToast} />}
       {salesImportOpen && <SalesImportModal sites={sites} allEmps={allEmps} att={att} schedules={schedules} adminUser={adminUser} employeeSiteAssignments={employeeSiteAssignments} onClose={() => setSalesImportOpen(false)} onDone={() => { setSalesImportOpen(false); load() }} setToast={setToast} />}
       {empImportOpen && <EmployeeImportModal sites={sites} allEmps={allEmps} companyId={isSuperAdmin ? (selectedCompanyId || companies[0]?.id) : adminUser?.company_id} onClose={() => setEmpImportOpen(false)} onDone={() => { setEmpImportOpen(false); load() }} setToast={setToast} />}
       <FeedbackButton open={feedbackOpen} onClose={() => setFeedbackOpen(false)} adminUser={adminUser} />
@@ -4424,7 +4441,7 @@ const DETAIL_COLS = [
   { id: 'gps_coords', label: 'Coordenadas GPS', default: false },
 ]
 
-function ExportModal({ att, allEmps, sites, schedules, goals, adminUsers, onClose, setToast }) {
+function ExportModal({ att, allEmps, sites, schedules, goals, adminUsers, histDesde, onNeedRange, cargando, onClose, setToast }) {
   const [reportType, setReportType] = useState('detail')
   const [cols, setCols] = useState(() => DETAIL_COLS.filter(c => c.default).map(c => c.id))
   const [fSites, setFSites] = useState([])
@@ -4441,6 +4458,13 @@ function ExportModal({ att, allEmps, sites, schedules, goals, adminUsers, onClos
 
   const toggleCol = (id) => setCols(prev => prev.includes(id) ? prev.filter(c => c !== id) : [...prev, id])
   const toggleArr = (arr, setArr, val) => setArr(prev => prev.includes(val) ? prev.filter(v => v !== val) : [...prev, val])
+
+  // El panel solo trae una ventana de historial. Si se pide algo más viejo,
+  // se amplía y el panel vuelve a cargar con ese rango.
+  const faltaHistorial = !!(histDesde && fFrom && fFrom < histDesde)
+  useEffect(() => {
+    if (faltaHistorial && onNeedRange) onNeedRange(fFrom)
+  }, [faltaHistorial, fFrom, onNeedRange])
 
   const filtered = att.filter(r => {
     if (fSites.length && !fSites.includes(r.site_id)) return false
@@ -4730,6 +4754,11 @@ function ExportModal({ att, allEmps, sites, schedules, goals, adminUsers, onClos
               <span style={lblS}>Hasta</span>
               <input type="date" value={fTo} onChange={e => setFTo(e.target.value)} style={sS} />
             </div>
+            {faltaHistorial && (
+              <div style={{ gridColumn: '1 / -1', fontSize: 11, color: cargando ? '#3b82f6' : '#64748b', background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 6, padding: '7px 10px' }}>
+                {cargando ? 'Trayendo el historial de esas fechas...' : 'Historial de esas fechas ya cargado.'}
+              </div>
+            )}
           </div>
 
           {/* Site filter */}

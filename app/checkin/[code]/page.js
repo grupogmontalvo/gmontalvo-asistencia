@@ -548,7 +548,11 @@ export default function CheckinPage({ params }) {
 
   useEffect(() => {
     async function init() {
-      const { data: siteData } = await supabase.from('sites').select('*').eq('code', siteCode).eq('active', true).single()
+      // Se distingue "no existe" de "no respondió": si el servicio está caído,
+      // decir que el código no existe manda a buscar el problema al QR, que está
+      // bien.
+      const { data: siteData, error: siteErr } = await supabase.from('sites').select('*').eq('code', siteCode).eq('active', true).maybeSingle()
+      if (siteErr) { setStep('sin_conexion'); return }
       if (!siteData) { setStep('error'); return }
       setSite(siteData)
       // Load company birthday message
@@ -569,6 +573,14 @@ export default function CheckinPage({ params }) {
       setStep('email')
     }
     init()
+  }, [siteCode])
+
+  // Si a los 12 segundos seguimos esperando, el servicio no está respondiendo.
+  // Vigila el estado en vez de la petición: una petición colgada nunca termina
+  // y dejaba la pantalla en "Cargando..." indefinidamente.
+  useEffect(() => {
+    const t = setTimeout(() => setStep(s => (s === 'loading' ? 'sin_conexion' : s)), 12000)
+    return () => clearTimeout(t)
   }, [siteCode])
 
   async function loadTodayRecord(empId, siteId, tz) {
@@ -1042,6 +1054,22 @@ export default function CheckinPage({ params }) {
       <div style={S.bar}><img src='/logo.jpeg' style={S.logo} alt='GM' /><span style={{ fontSize: 13, fontWeight: 600 }}>G.Montalvo</span></div>
       <div style={{ ...S.container, alignItems: 'center', justifyContent: 'center', flex: 1 }}>
         <div style={S.err}>Código de sitio no encontrado: <strong>{siteCode}</strong></div>
+      </div>
+    </div>
+  )
+
+  // El servicio no respondió. Antes caía en el mensaje de arriba y parecía que
+  // el QR estaba mal, cuando en realidad el problema era la base de datos.
+  if (step === 'sin_conexion') return (
+    <div style={S.page}>
+      <div style={S.bar}><img src='/logo.jpeg' style={S.logo} alt='GM' /><span style={{ fontSize: 13, fontWeight: 600 }}>G.Montalvo</span></div>
+      <div style={{ ...S.container, alignItems: 'center', justifyContent: 'center', flex: 1, gap: 14 }}>
+        <div style={{ fontSize: 38, textAlign: 'center' }}>📡</div>
+        <div style={{ ...S.err, lineHeight: 1.6 }}>
+          No pudimos conectar con el servicio.<br />
+          <strong>Tu código QR está bien</strong> — vuelve a intentar en unos minutos.
+        </div>
+        <button onClick={() => window.location.reload()} style={S.btnP}>Reintentar</button>
       </div>
     </div>
   )
