@@ -234,6 +234,7 @@ export default function AdminPage() {
   const [feedbackLabel] = useState(() => Math.random() > 0.5 ? ['💡', 'Alguna idea?'] : ['💬', 'Te escuchamos'])
   const [feedbackOpen, setFeedbackOpen] = useState(false)
   const [salesImportOpen, setSalesImportOpen] = useState(false)
+  const [widgetOpen, setWidgetOpen] = useState(false)
   const [empImportOpen, setEmpImportOpen] = useState(false)
   const [exportOpen, setExportOpen] = useState(false)
   const today = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Cancun' })
@@ -680,6 +681,7 @@ export default function AdminPage() {
           </nav>
           <div style={{ flexShrink: 0, padding: '12px 8px', borderTop: '1px solid #e2e8f0' }}>
             <div style={{ fontSize: 10, color: '#94a3b8', padding: '0 8px 6px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{adminUser?.name || authUser?.email}</div>
+            <button onClick={() => setWidgetOpen(true)} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 10px', borderRadius: 6, cursor: 'pointer', fontSize: 12, color: '#10b981', background: 'transparent', border: 'none', width: '100%', textAlign: 'left', fontFamily: 'inherit', fontWeight: 600 }}>📱 Ventas en mi celular</button>
             <button onClick={handleLogout} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 10px', borderRadius: 6, cursor: 'pointer', fontSize: 12, color: '#ef4444', background: 'transparent', border: 'none', width: '100%', textAlign: 'left', fontFamily: 'inherit' }}>Cerrar sesión</button>
           </div>
         </div>
@@ -1100,6 +1102,7 @@ export default function AdminPage() {
         />
       )}
       {exportOpen && <ExportModal att={attConFaltas} allEmps={allEmps} sites={sites} schedules={schedules} goals={goals} adminUsers={adminUsers} histDesde={histDesde} onNeedRange={setHistDesde} cargando={loading} onClose={() => setExportOpen(false)} setToast={setToast} />}
+      {widgetOpen && <WidgetVentasModal onClose={() => setWidgetOpen(false)} setToast={setToast} />}
       {salesImportOpen && <SalesImportModal sites={sites} allEmps={allEmps} att={att} schedules={schedules} adminUser={adminUser} employeeSiteAssignments={employeeSiteAssignments} onClose={() => setSalesImportOpen(false)} onDone={() => { setSalesImportOpen(false); load() }} setToast={setToast} />}
       {empImportOpen && <EmployeeImportModal sites={sites} allEmps={allEmps} companyId={isSuperAdmin ? (selectedCompanyId || companies[0]?.id) : adminUser?.company_id} onClose={() => setEmpImportOpen(false)} onDone={() => { setEmpImportOpen(false); load() }} setToast={setToast} />}
       <FeedbackButton open={feedbackOpen} onClose={() => setFeedbackOpen(false)} adminUser={adminUser} />
@@ -1547,6 +1550,65 @@ function QrModal({ site, url, onClose }) {
           <button onClick={printQR} style={{ padding:'10px 20px',borderRadius:7,border:'none',background:'#3b82f6',color:'#fff',fontSize:12,fontWeight:600,cursor:'pointer',fontFamily:'inherit' }}>Imprimir QR</button>
           <button onClick={() => navigator.clipboard.writeText(url)} style={{ padding:'10px 20px',borderRadius:7,border:'1px solid #e2e8f0',background:'transparent',color:'#64748b',fontSize:12,cursor:'pointer',fontFamily:'inherit' }}>Copiar URL</button>
           <button onClick={onClose} style={{ padding:'10px 20px',borderRadius:7,border:'1px solid #e2e8f0',background:'transparent',color:'#64748b',fontSize:12,cursor:'pointer',fontFamily:'inherit' }}>Cerrar</button>
+        </div>
+      </div>
+    </div>
+  )
+}
+// ─── Widget de ventas (celular) ──────────────────────────────────────────────
+function WidgetVentasModal({ onClose, setToast }) {
+  const [token, setToken] = useState('')
+  const [err, setErr] = useState('')
+  useEffect(() => {
+    (async () => {
+      try {
+        const { data: { session } } = await supabase.auth.getSession()
+        const r = await fetch('/api/widget/token', { method: 'POST', headers: { Authorization: `Bearer ${session?.access_token || ''}` } })
+        const j = await r.json()
+        if (!r.ok) throw new Error(j.error || 'No se pudo generar la liga')
+        setToken(j.token)
+      } catch (e) { setErr(e.message) }
+    })()
+  }, [])
+  const origin = typeof window !== 'undefined' ? window.location.origin : ''
+  const pageUrl = token ? `${origin}/ventas/${token}` : ''
+  const scriptUrl = token ? `${origin}/api/widget/scriptable?t=${encodeURIComponent(token)}` : ''
+  const jsonUrl = token ? `${origin}/api/widget/ventas?t=${encodeURIComponent(token)}` : ''
+  const qr = pageUrl ? `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(pageUrl)}` : ''
+  async function copy(text, msg) {
+    try { await navigator.clipboard.writeText(text); setToast(msg) } catch { setToast('No se pudo copiar') }
+  }
+  async function copyScript() {
+    try { const r = await fetch(scriptUrl); await copy(await r.text(), 'Script copiado') } catch { setToast('No se pudo copiar') }
+  }
+  const h = { fontSize: 11, fontWeight: 700, color: '#0f172a', marginTop: 14, marginBottom: 4 }
+  const p = { fontSize: 11, color: '#64748b', lineHeight: 1.5 }
+  const btn = { padding: '7px 12px', borderRadius: 6, border: '1px solid #e2e8f0', background: '#fff', color: '#334155', fontSize: 11, cursor: 'pointer', fontFamily: 'inherit', fontWeight: 600, marginTop: 6, marginRight: 6 }
+  return (
+    <div onClick={onClose} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.7)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 200, backdropFilter: 'blur(4px)', padding: 16 }}>
+      <div onClick={e => e.stopPropagation()} style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 14, padding: 22, width: '100%', maxWidth: 420, maxHeight: '90vh', overflow: 'auto' }}>
+        <h3 style={{ fontSize: 16, fontWeight: 700, marginBottom: 4 }}>📱 Ventas del día en tu celular</h3>
+        <p style={p}>Una liga personal, solo de lectura, con el total de ventas de hoy de tus sucursales. No la compartas: quien la tenga ve tus ventas.</p>
+        {err && <div style={{ marginTop: 12, color: '#ef4444', fontSize: 12 }}>{err}</div>}
+        {!token && !err && <div style={{ marginTop: 12, ...p }}>Generando liga…</div>}
+        {token && <>
+          <div style={{ textAlign: 'center', marginTop: 12 }}>
+            <img src={qr} alt='QR de la liga' style={{ width: 160, height: 160 }} />
+            <div style={{ ...p, fontSize: 10 }}>Escanéalo con tu celular</div>
+          </div>
+          <div style={h}>1. Acceso directo (iPhone y Android)</div>
+          <div style={p}>Abre la liga en el celular → Compartir / menú ⋮ → <b>Agregar a pantalla de inicio</b>. Queda como app y se actualiza sola.</div>
+          <button style={btn} onClick={() => copy(pageUrl, 'Liga copiada')}>Copiar liga</button>
+          <a href={pageUrl} target='_blank' rel='noreferrer' style={{ ...btn, display: 'inline-block', textDecoration: 'none' }}>Abrir</a>
+          <div style={h}>2. Widget en la pantalla de inicio (iPhone)</div>
+          <div style={p}>Instala la app gratuita <b>Scriptable</b>, crea un script nuevo y pega el código. Luego mantén presionada la pantalla de inicio → + → Scriptable → elige el script. Muestra el total, el % contra la semana pasada y (en tamaño mediano) tus sucursales.</div>
+          <button style={btn} onClick={copyScript}>Copiar código del widget</button>
+          <div style={h}>3. Widget en Android</div>
+          <div style={p}>Con una app de widgets que lea JSON (p. ej. KWGT), usa esta dirección y muestra el campo <code>hoy</code>.</div>
+          <button style={btn} onClick={() => copy(jsonUrl, 'Dirección copiada')}>Copiar dirección JSON</button>
+        </>}
+        <div style={{ textAlign: 'right', marginTop: 16 }}>
+          <button onClick={onClose} style={{ ...btn, marginRight: 0 }}>Cerrar</button>
         </div>
       </div>
     </div>
